@@ -6,7 +6,9 @@ into a staging area, hash them, and produce one `tar.gz` with a JSONL manifest.
 Nothing is parsed on the host; that is the job of the analyst-side tool
 described in the [project README](../README.md).
 
-Covered tools, with how each one's catalog entries were validated:
+Covered tools, with how each one's catalog entries were validated. The
+evidence for every agent, with citations, is one document per agent under
+[research/](research/README.md):
 
 | Tool | Validation |
 | --- | --- |
@@ -133,12 +135,21 @@ Project-level artifacts (`CLAUDE.md`, `.claude/`, `.mcp.json`, `AGENTS.md`,
 ...) are collected from every directory referenced in agent state that can be
 read with grep: Claude Code history and project list, Codex session rollouts,
 Qwen Code chats, Cline sessions and task history, Roo and Kilo task indexes,
-Continue sessions, Gemini CLI's project registry, Crush's project list,
-Goose legacy session files, OpenCode's legacy project store, Cursor CLI chat
-metadata, and VS Code family workspace storage. Each project is attributed to
+Continue sessions, Gemini CLI's project registry, trusted folders and project
+root markers, Antigravity's history, trusted workspaces and project cache,
+Crush's project list, Goose legacy session files and the desktop app's recent
+directories, OpenCode's legacy project store, Cursor CLI chat and ACP session
+metadata, Copilot CLI session workspaces, Amp history, Factory Droid sessions,
+Kiro CLI sessions and workspace roots, and VS Code family workspace storage
+including the remote server data directories. Each project is attributed to
 the user whose state referenced it. Agents that only record the project path
 inside SQLite (Zed, Goose, OpenCode, Kilo Code, Kiro CLI) are left to the
-analyst-side parser.
+analyst-side parser, as are Codex rollouts compressed with zstd.
+
+Remote development state is collected too: `~/.vscode-server`,
+`~/.cursor-server`, `~/.windsurf-server`, `~/.devin-server` and
+`~/.kiro-server` keep the same `User` layout as the desktop editor, on the
+WSL or SSH host rather than the workstation.
 
 In live mode the collector also writes a `live/` directory with the process
 list, agent processes, their environment and working directory from `/proc`
@@ -158,17 +169,28 @@ size, so the investigator knows what was there. Pass `--full` to collect them.
 ### Credentials
 
 OAuth tokens and keys (`~/.claude/.credentials.json`, `~/.codex/auth.json`,
-`~/.gemini/gemini-credentials.json`, `~/.cline/data/settings/providers.json`,
-`~/.local/share/opencode/auth.json`, `~/.config/goose/secrets.yaml`, ...) show
-which account an agent acted as, so they are collected by default and flagged
-`secret: true`. Config files that commonly embed API keys (Continue's
-`config.yaml`, Zed's `settings.json`, Crush's `crush.json`) are flagged the
-same way. Run `--list` for the full pattern list. Cursor and Windsurf keep
-their auth tokens inside the same `state.vscdb` that holds the chat history,
-so that file is collected unflagged; the keys to redact are `cursorAuth/*` and
-`windsurfAuthStatus`. Process environments captured
-under `live/environ/` are flagged the same way. Use `--no-secrets` to leave
-them out; they are then recorded with status `skipped_secret`.
+`~/.gemini/gemini-credentials.json`, `~/.cursor/auth.json`,
+`~/.copilot/config.json`, `~/.cline/data/settings/providers.json`,
+`~/.local/share/opencode/auth.json`, `~/.config/goose/secrets.yaml`,
+`~/.factory/auth.v2.*`, ...) show which account an agent acted as, so they
+are collected by default and flagged `secret: true`. Config files that
+commonly embed API keys or MCP server environments (Continue's `config.yaml`,
+Zed's `settings.json`, Crush's `crush.json`, Claude Code's `.claude.json`,
+Claude Desktop's `claude_desktop_config.json`, Kiro powers' `mcp.json`) are
+flagged the same way, as are the Electron `Local State` files that hold the
+key for encrypted token caches. Run `--list` for the full pattern list.
+Cursor and Windsurf keep their auth tokens inside the same `state.vscdb` that
+holds the chat history, so that file is collected unflagged; the keys to
+redact are `cursorAuth/*` and `windsurfAuthStatus`. Kilo Code's `kilo.db` and
+OpenCode's `opencode.db` embed tokens in their `account` and `credential`
+tables and are flagged whole. Process environments captured under
+`live/environ/` are flagged the same way. Use `--no-secrets` to leave them
+out; they are then recorded with status `skipped_secret`.
+
+Exclusion and credential patterns are matched relative to the directory being
+collected, a home or a discovered project, and `*` in them crosses `/`. The
+same `.claude/worktrees` pattern therefore prunes both `~/.claude/worktrees`
+and a project's `.claude/worktrees`.
 
 ## Output
 

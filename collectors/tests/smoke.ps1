@@ -80,6 +80,30 @@ Mk 'Users/Default/NTUSER.DAT' 'default'
 Mk 'home/bob/.ollama/models/blobs/sha256-abc' 'blob'
 Mk 'home/bob/.ollama/history' 'hist'
 Mk 'home/bob/.bash_history' 'export FOO=1'
+# v1.3 catalog revision fixtures
+Mk 'Users/alice/.factory/cache/session-index/index.db' 'sqlite'
+Mk 'Users/alice/.factory/cache/sounds/done.wav' 'ding'
+Mk 'Users/alice/.factory/sessions/-C-droid/s1.jsonl' '{"type":"session_start","cwd":"C:\\droid"}'
+Mk 'droid/AGENTS.md' '# droid'
+Mk 'Users/alice/.kiro/powers/installed/p1/mcp.json' '{"mcpServers":{}}'
+Mk 'Users/alice/.kiro/sessions/cli/k1.json' '{"id":"k1","cwd":"C:\\kiroproj"}'
+Mk 'kiroproj/.kiroignore' 'steer'
+Mk 'Users/alice/.vscode-server/data/User/globalStorage/state.vscdb' 'sqlite'
+Mk 'Users/alice/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/state/taskHistory.json' '[{"id":"t2","cwdOnTaskInitialization":"C:\\remoteproj"}]'
+Mk 'remoteproj/.clinerules' 'rules'
+Mk 'Users/alice/.gemini/antigravity-ide/conversations/i1.db' 'db'
+Mk 'Users/alice/.gemini/antigravity-cli/history.jsonl' '{"display":"hi","timestamp":1759449600000,"workspace":"C:\\agyproj"}'
+Mk 'agyproj/.antigravityignore' 'ignore'
+Mk 'Users/alice/.cursor/auth.json' '{"accessToken":"x"}'
+Mk 'Users/alice/.copilot/pkg/copilot.exe' 'pkg'
+Mk 'Users/alice/.copilot/config.json' '{"token":"x"}'
+Mk 'Users/alice/.copilot/session-state/s1/workspace.yaml' "cwd: C:\\copproj`nbranch: main"
+Mk 'copproj/AGENTS.md' '# cop'
+Mk 'Users/alice/.claude/.device-keys.json' '{"k":"x"}'
+Mk 'Users/alice/.local/share/amp/history.jsonl' '{"cwd":"C:\\ampproj","prompt":"hi"}'
+Mk 'ampproj/.amp/settings.json' 'amp'
+Mk 'kiloproj/.kilo/worktrees/w1/f' 'wt'
+Mk 'Users/alice/.cline/data/sessions/s1/s2.json' '{"cwd":"C:\\kiloproj"}'
 $linkOk = $false
 try {
   New-Item -ItemType SymbolicLink -Path (P 'Users/alice/.gemini/antigravity-cli/cli.log') -Target (Join-Path 'log' 'cli-1.log') -ErrorAction Stop | Out-Null
@@ -132,7 +156,7 @@ $r = Row 'Users/alice/.gemini/projects.json'
 Check 'enclosing entry still attributed to gemini-cli' { $r -and $r.agent -eq 'gemini-cli' }
 $r = Row 'Users/alice/AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/state/taskHistory.json'
 Check 'cline globalStorage attributed to cline, not vscode' { $r -and $r.agent -eq 'cline' }
-Check 'cline globalStorage collected exactly once' { @($script:Rows | Where-Object { $_.path -like '*saoudrizwan.claude-dev*taskHistory.json' }).Count -eq 1 }
+Check 'cline globalStorage collected exactly once' { @($script:Rows | Where-Object { $_.path -like '*Roaming*Code*User*globalStorage*saoudrizwan.claude-dev*taskHistory.json' }).Count -eq 1 }
 $r = Row 'Users/alice/.claude/cache'
 Check 'cache dir skipped_excluded with size' { $r -and $r.type -eq 'dir' -and $r.size -gt 0 -and $r.status -eq 'skipped_excluded' }
 Check 'cache contents not collected' { $null -eq (Row 'cache/junk.bin') }
@@ -166,7 +190,25 @@ Check 'codex auth.json flagged secret' { (Row 'Users/alice/.codex/auth.json').se
 Check 'home .env flagged secret' { (Row 'Users/alice/.env').secret -eq $true }
 Check 'claude desktop config.json flagged secret' { (Row 'Roaming/Claude/config.json').secret -eq $true }
 $r = Row 'Claude/claude_desktop_config.json'
-Check 'claude desktop mcp config collected unflagged' { $r -and $r.secret -eq $false -and $r.status -eq 'collected' }
+Check 'factory session index not swallowed by cache exclusion' { (StatusOf 'Users/alice/.factory/cache/session-index/index.db') -eq 'collected' }
+Check 'factory cache sounds excluded' { (StatusOf 'Users/alice/.factory/cache/sounds') -eq 'skipped_excluded' }
+Check 'factory session cwd discovers project' { (StatusOf 'droid/AGENTS.md') -eq 'collected' }
+$r2 = Row 'Users/alice/.kiro/powers/installed/p1/mcp.json'
+Check 'kiro power mcp.json collected and flagged' { $r2 -and $r2.secret -eq $true -and $r2.status -eq 'collected' }
+Check 'kiro cli session cwd discovers project' { (StatusOf 'kiroproj/.kiroignore') -eq 'collected' }
+Check 'vscode-server User dir collected as vscode' { (Row 'Users/alice/.vscode-server/data/User/globalStorage/state.vscdb').agent -eq 'vscode' }
+Check 'cline inside vscode-server attributed to cline' { (Row 'Users/alice/.vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/state/taskHistory.json').agent -eq 'cline' }
+Check 'vscode-server taskHistory discovers project' { (StatusOf 'remoteproj/.clinerules') -eq 'collected' }
+Check 'antigravity-ide attributed to antigravity' { (Row 'Users/alice/.gemini/antigravity-ide/conversations/i1.db').agent -eq 'antigravity' }
+Check 'antigravity history workspace discovers project' { (StatusOf 'agyproj/.antigravityignore') -eq 'collected' }
+Check 'cursor auth.json flagged secret' { (Row 'Users/alice/.cursor/auth.json').secret -eq $true }
+Check 'copilot pkg excluded' { (StatusOf 'Users/alice/.copilot/pkg') -eq 'skipped_excluded' }
+Check 'copilot config.json flagged secret' { (Row 'Users/alice/.copilot/config.json').secret -eq $true }
+Check 'copilot workspace.yaml cwd discovers project' { (StatusOf 'copproj/AGENTS.md') -eq 'collected' }
+Check 'claude device keys flagged secret' { (Row 'Users/alice/.claude/.device-keys.json').secret -eq $true }
+Check 'amp history cwd discovers project' { (StatusOf 'ampproj/.amp/settings.json') -eq 'collected' }
+Check 'project-level kilo worktrees excluded' { (StatusOf 'kiloproj/.kilo/worktrees') -eq 'skipped_excluded' }
+Check 'claude desktop mcp config flagged secret' { $r -and $r.secret -eq $true -and $r.status -eq 'collected' }
 Check 'claude desktop Cache excluded' { (StatusOf 'Roaming/Claude/Cache') -eq 'skipped_excluded' }
 Check 'Public profile skipped' { $null -eq (Row 'Public/Desktop/readme.txt') }
 Check 'Default profile skipped' { $null -eq (Row 'Default/NTUSER.DAT') }

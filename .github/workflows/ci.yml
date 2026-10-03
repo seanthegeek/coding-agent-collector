@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  catalog-sync:
+    name: Catalog tables in sync (sh, PowerShell, analyzer copy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Drift test
+        run: collectors/tests/catalog-sync.sh
+      - name: Regenerated copy matches the committed one
+        run: |
+          collectors/collect-agent-artifacts.sh --list > /tmp/catalog.txt
+          if ! cmp -s /tmp/catalog.txt analyzer/agent_analyzer/catalog.txt; then
+            echo "analyzer/agent_analyzer/catalog.txt is stale. Run:"
+            echo "  collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.txt"
+            diff /tmp/catalog.txt analyzer/agent_analyzer/catalog.txt || true
+            exit 1
+          fi
+
+  sh-collector:
+    name: sh collector (shellcheck, smoke under sh, dash, bash, busybox, zsh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shells
+        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck dash busybox-static zsh
+      - name: shellcheck
+        run: shellcheck -s sh collectors/collect-agent-artifacts.sh
+      - name: smoke (sh)
+        run: collectors/tests/smoke.sh sh
+      - name: smoke (dash)
+        run: collectors/tests/smoke.sh dash
+      - name: smoke (bash)
+        run: collectors/tests/smoke.sh bash
+      - name: smoke (busybox ash)
+        run: |
+          printf '#!/bin/sh\nexec busybox ash "$@"\n' > /tmp/ash && chmod +x /tmp/ash
+          collectors/tests/smoke.sh /tmp/ash
+      - name: smoke (zsh --emulate sh)
+        run: |
+          printf '#!/bin/sh\nexec zsh --emulate sh "$@"\n' > /tmp/zsh-sh && chmod +x /tmp/zsh-sh
+          collectors/tests/smoke.sh /tmp/zsh-sh
+
+  powershell-collector:
+    name: PowerShell collector (smoke under PowerShell 7 and Windows PowerShell 5.1)
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: pwsh
+          - os: windows-latest
+            shell: powershell
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: smoke
+        shell: ${{ matrix.shell }}
+        run: ./collectors/tests/smoke.ps1
+
+  analyzer:
+    name: Analyzer tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: unittest
+        run: analyzer/tests/run.sh

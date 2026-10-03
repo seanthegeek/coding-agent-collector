@@ -36,9 +36,12 @@ collectors/
   tests/smoke.ps1              end-to-end test of the PowerShell collector
   tests/catalog-sync.sh        fails if the catalog tables differ between the scripts
                                or from the analyzer's bundled copy
+  research/<agent>.md          where each agent stores state: paths, credentials,
+                               exclusions, project files, discovery; one per agent
 analyzer/
   agent_analyzer/              Python package: cli, inputs, catalog, model, parsers/
   agent_analyzer/catalog.txt   verbatim copy of collect-agent-artifacts.sh --list
+  research/<agent>.md          how each agent records transcripts; one per agent
   README.md                    analyzer user documentation, CSV schema, parser table
   tests/                       unittest suite with synthetic fixtures; tests/run.sh
   pyproject.toml               installable as analyze-agent-artifacts
@@ -131,7 +134,10 @@ between the sh single-quoted strings and the PowerShell `@'...'@`
 here-strings; `collectors/tests/catalog-sync.sh` fails on any drift, and `--list` and
 `-List` must print identical output. Glob semantics are shared: catalog
 globs do not cross `/`, exclusion and secret globs do, and `[...]` classes
-work in both (the PowerShell side converts globs to regexes). An entry nested
+work in both (the PowerShell side converts globs to regexes). Exclusion and secret globs are matched
+relative to the collection base, a home directory or a discovered project,
+so one pattern such as `.claude/worktrees` applies in both places; write them
+without a leading `*/`. An entry nested
 inside another entry's match (`antigravity|.gemini/antigravity-cli` inside
 `gemini-cli|.gemini`) claims its subtree: both collectors expand every entry
 first and prune claimed paths from the enclosing walk, so each file is
@@ -159,7 +165,11 @@ rules are different from the collectors'.
 - **The catalog is shared, not copied by hand.** `agent_analyzer/catalog.txt`
   is generated from `collect-agent-artifacts.sh --list`; both
   `collectors/tests/catalog-sync.sh` and the analyzer tests fail when it is
-  stale. Detection logic lives in `catalog.py` and reads that file. Never
+  stale, the CI workflow in `.github/workflows/ci.yml` runs that check on
+  every push and pull request, and `.githooks/pre-commit` refuses a commit
+  that touches either collector or the copy while they differ (enable it
+  once per clone with `git config core.hooksPath .githooks`). After any
+  catalog edit, regenerate the copy before committing. Detection logic lives in `catalog.py` and reads that file. Never
   hard-code an agent path in a parser's detection; parsers select files by
   their path relative to the home (`artifact.rel`).
 - **Attribution comes from the manifest when there is one.** Host, user, home
@@ -223,11 +233,13 @@ find. The validation for every current entry is recorded in the table in
    `collectors/tests/smoke.ps1` if the layout has anything unusual (symlinks,
    SQLite sidecars, spaces in paths, drive-letter or `file:///` project
    references).
-7. Update the tool list in `collectors/README.md` and close the matching
-   GitHub issue.
+7. Write or update `collectors/research/<agent>.md` with the evidence
+   (the eight sections in the research process below), update the tool list
+   in `collectors/README.md`, and close the matching GitHub issue.
 
 Every catalog entry has been validated against source, a shipped bundle, or
-official documentation; see the table in `collectors/README.md` for which. Real-install checks
+official documentation; `collectors/research/<agent>.md` records the evidence
+for each agent and the collectors README table summarises the level. Real-install checks
 exist for Claude Code, Antigravity CLI, Codex CLI, Copilot CLI and Ollama.
 Agents whose project paths live only in SQLite (Zed, Goose, OpenCode, Kilo
 Code, Kiro CLI) are not covered by `discover_projects`; that is v2 work.
@@ -291,13 +303,17 @@ records it.
 
 **5. Integrate in one commit.** Save each report to the scratchpad as it
 arrives and do not touch the script until all are in, so the tables change
-once. Then split every group report into one document per catalog agent
-under `analyzer/research/<agent>.md`, named exactly as the agent appears in
-`--list`, keeping the numbered section structure, the citations and the
-fixtures. A document covers one agent only; where agents share a lineage,
-each says so and links to the other rather than repeating it. Add a row to
-`analyzer/research/README.md` and put cross-agent observations there, not in
-the per-agent documents. Grouped reports are never committed. Then: rewrite the four tables, extend `discover_projects` with every
+once. Then split every group report into one document per catalog agent,
+named exactly as the agent appears in `--list`, keeping the numbered section
+structure, the citations and the fixtures: path research (where state lives,
+credentials, exclusions, project files, discovery) goes to
+`collectors/research/<agent>.md`, record schema research (how transcripts
+are encoded and how a parser reads them) goes to
+`analyzer/research/<agent>.md`. A document covers one agent only; where
+agents share a lineage, each says so and links to the other rather than
+repeating it. Each directory has a README index that lists every document
+and holds the cross-agent observations. Grouped reports are never
+committed. Then: rewrite the four tables, extend `discover_projects` with every
 new grep-able source, add a fixture and checks to `collectors/tests/smoke.sh`
 for each
 new secret pattern, exclusion and discovery source, run the full shell
@@ -328,7 +344,11 @@ Things the first run taught us, to check for explicitly next time:
 
 ## Validation and testing
 
-Run all of this before committing a change to the collector:
+CI (`.github/workflows/ci.yml`) runs the catalog drift test, shellcheck, the
+sh smoke test under sh, dash, bash, busybox ash and zsh, the PowerShell smoke
+test under PowerShell 7 on Linux and Windows PowerShell 5.1 on Windows, and
+the analyzer tests on Python 3.9 and 3.12. Run the same locally before
+committing a change to the collector:
 
 ```sh
 cd collectors

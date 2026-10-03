@@ -44,8 +44,10 @@ Usage, accepted inputs, the CSV schema and the parser table are in
 ## Repository layout
 
 ```
-collectors/   the sh and PowerShell collectors, their README and smoke tests
-analyzer/     the Python analyzer package, its README and test suite
+collectors/   the sh and PowerShell collectors, their README, research and smoke tests
+analyzer/     the Python analyzer package, its README, research and test suite
+.github/      CI: catalog drift test, shell and PowerShell smoke matrix, analyzer tests
+.githooks/    optional pre-commit hook that refuses a stale catalog copy
 AGENTS.md     standards and process for anyone, human or agent, changing the code
 CLAUDE.md     Claude Code entry point; imports AGENTS.md
 LICENSE       Apache 2.0

@@ -1,0 +1,14 @@
+#!/bin/sh
+# Refuses a commit when the analyzer's catalog copy no longer matches the
+# collector's --list output. Enable once per clone with:
+#   git config core.hooksPath .githooks
+cd "$(git rev-parse --show-toplevel)" || exit 1
+if git diff --cached --name-only | grep -q 'collectors/collect-agent-artifacts.sh\|collectors/Collect-AgentArtifacts.ps1\|analyzer/agent_analyzer/catalog.txt'; then
+  if ! collectors/collect-agent-artifacts.sh --list | cmp -s - analyzer/agent_analyzer/catalog.txt; then
+    echo "pre-commit: analyzer/agent_analyzer/catalog.txt is stale. Regenerate and stage it:" >&2
+    echo "  collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.txt && git add analyzer/agent_analyzer/catalog.txt" >&2
+    exit 1
+  fi
+  collectors/tests/catalog-sync.sh >/dev/null || { echo "pre-commit: catalog tables differ between the collectors; run collectors/tests/catalog-sync.sh" >&2; exit 1; }
+fi
+exit 0

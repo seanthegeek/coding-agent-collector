@@ -65,7 +65,7 @@ param(
 
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
-$ToolVersion = '1.2.0'
+$ToolVersion = '1.3.0'
 $TOOL = 'collect-agent-artifacts'
 
 # ---------------------------------------------------------------------------
@@ -76,6 +76,7 @@ $CATALOG = @'
 # Anthropic
 claude-code|.claude
 claude-code|.claude.json*
+claude-code|.local/share/claude
 claude-desktop|Library/Application Support/Claude
 claude-desktop|Library/Application Support/Claude-3p
 claude-desktop|Library/Logs/Claude
@@ -85,10 +86,16 @@ claude-desktop|.config/Claude-3p
 claude-desktop|AppData/Roaming/Claude
 claude-desktop|AppData/Roaming/Claude-3p
 claude-desktop|AppData/Local/Claude-3p
+claude-desktop|Claude
+claude-desktop|Documents/Claude
 # Google (antigravity-cli lives inside ~/.gemini; the nested entry claims it)
 gemini-cli|.gemini
 gemini-cli|.cache/.gemini
 antigravity|.gemini/antigravity-cli
+antigravity|.gemini/antigravity-ide
+antigravity|.gemini/antigravity
+antigravity|.gemini/antigravity-backup
+antigravity|.gemini/config
 antigravity|.antigravity
 antigravity|.cache/antigravity
 antigravity|.config/Antigravity/User
@@ -97,16 +104,32 @@ antigravity|Library/Application Support/Antigravity/User
 antigravity|Library/Application Support/Antigravity/logs
 antigravity|AppData/Roaming/Antigravity/User
 antigravity|AppData/Roaming/Antigravity/logs
+antigravity|.config/Antigravity IDE/User
+antigravity|.config/Antigravity IDE/logs
+antigravity|Library/Application Support/Antigravity IDE/User
+antigravity|Library/Application Support/Antigravity IDE/logs
+antigravity|AppData/Roaming/Antigravity IDE/User
+antigravity|AppData/Roaming/Antigravity IDE/logs
 # OpenAI
 codex-cli|.codex
+codex-cli|Library/Application Support/com.openai.codex
 chatgpt-desktop|Library/Application Support/com.openai.chat
 chatgpt-desktop|AppData/Local/Packages/OpenAI.ChatGPT-Desktop_*/LocalCache/Roaming/ChatGPT
+chatgpt-desktop|AppData/Local/Packages/OpenAI.ChatGPT-Desktop_*/LocalState
 # GitHub Copilot (CLI, and the OAuth token store used by Copilot plugins)
 copilot-cli|.copilot
+copilot-cli|.config/.copilot
+copilot-cli|.local/state/.copilot
+copilot-cli|.cache/copilot
+copilot-cli|Library/Caches/copilot
+copilot-cli|AppData/Local/copilot
 copilot|.config/github-copilot
 copilot|AppData/Local/github-copilot
 # Cursor
 cursor|.cursor
+cursor|.config/cursor
+cursor|AppData/Roaming/Cursor/auth.json
+cursor|.cursor-server/data/User
 cursor|Library/Application Support/Cursor/User
 cursor|Library/Application Support/Cursor/logs
 cursor|.config/Cursor/User
@@ -121,9 +144,25 @@ vscode|.config/Code*/User
 vscode|.config/Code*/logs
 vscode|AppData/Roaming/Code*/User
 vscode|AppData/Roaming/Code*/logs
-vscode|Library/Application Support/VSCodium/User
-vscode|.config/VSCodium/User
-vscode|AppData/Roaming/VSCodium/User
+vscode|Library/Application Support/VSCodium*/User
+vscode|Library/Application Support/VSCodium*/logs
+vscode|.config/VSCodium*/User
+vscode|.config/VSCodium*/logs
+vscode|AppData/Roaming/VSCodium*/User
+vscode|AppData/Roaming/VSCodium*/logs
+vscode|Library/Application Support/Positron/User
+vscode|.config/Positron/User
+vscode|AppData/Roaming/Positron/User
+vscode|Library/Application Support/Trae*/User
+vscode|.config/Trae*/User
+vscode|AppData/Roaming/Trae*/User
+vscode|.vscode*/argv.json
+vscode|.vscode*/cli/token*.json
+# Remote development servers (WSL, SSH, tunnels) keep the same User layout on the remote host
+vscode|.vscode-server*/data/User
+vscode|.vscode-server*/data/logs
+vscode|.vscodium-server*/data/User
+vscode|.positron-server/data/User
 # VS Code family extension state. Each editor User directory is collected
 # above; these nested entries claim the agent extension globalStorage from
 # that walk so Cline, Roo, Kilo and Continue files are attributed to them.
@@ -139,17 +178,31 @@ kilo-code|AppData/Roaming/*/User/globalStorage/kilocode.kilo-code
 continue|.config/*/User/globalStorage/continue.continue
 continue|Library/Application Support/*/User/globalStorage/continue.continue
 continue|AppData/Roaming/*/User/globalStorage/continue.continue
+cline|.*-server*/data/User/globalStorage/saoudrizwan.claude-dev
+roo-code|.*-server*/data/User/globalStorage/rooveterinaryinc.roo-cline
+kilo-code|.*-server*/data/User/globalStorage/kilocode.kilo-code
+continue|.*-server*/data/User/globalStorage/continue.continue
 # Windsurf (rebranding to Devin)
 windsurf|.codeium
-windsurf|.windsurf/extensions/extensions.json
+windsurf|.windsurf
+windsurf|.devin
 windsurf|.config/devin
+windsurf|.local/share/devin
 windsurf|AppData/Roaming/devin
 windsurf|Library/Application Support/Windsurf/User
+windsurf|Library/Application Support/Windsurf/logs
 windsurf|.config/Windsurf/User
+windsurf|.config/Windsurf/logs
 windsurf|AppData/Roaming/Windsurf/User
+windsurf|AppData/Roaming/Windsurf/logs
 windsurf|Library/Application Support/Devin/User
+windsurf|Library/Application Support/Devin/logs
 windsurf|.config/Devin/User
+windsurf|.config/Devin/logs
 windsurf|AppData/Roaming/Devin/User
+windsurf|AppData/Roaming/Devin/logs
+windsurf|.windsurf-server/data/User
+windsurf|.devin-server/data/User
 # Cline, Roo Code, Kilo Code
 cline|.cline
 cline|Documents/Cline
@@ -184,6 +237,8 @@ opencode|.local/state/opencode
 crush|.config/crush
 crush|.local/share/crush
 crush|AppData/Local/crush
+crush|.crush
+crush|.cache/crush
 # Goose (XDG on macOS too; Electron app dir is separate)
 goose|.config/goose
 goose|.local/share/goose
@@ -191,6 +246,7 @@ goose|.local/state/goose
 goose|.config/Goose
 goose|Library/Application Support/Goose
 goose|AppData/Roaming/Block/goose
+goose|Library/Application Support/Block/goose
 goose|AppData/Roaming/Goose
 goose|.goose
 # Zed (config in ~/.config/zed on macOS too; data under Library)
@@ -200,12 +256,20 @@ zed|Library/Application Support/Zed
 zed|Library/Logs/Zed
 zed|AppData/Roaming/Zed
 zed|AppData/Local/Zed
+zed|.var/app/dev.zed.Zed/config/zed
+zed|.var/app/dev.zed.Zed/data/zed
+zed|.var/app/dev.zed.ZedPreview/config/zed
+zed|.var/app/dev.zed.ZedPreview/data/zed
+zed|.var/app/dev.zed.ZedNightly/config/zed
+zed|.var/app/dev.zed.ZedNightly/data/zed
 # Qwen Code
 qwen-code|.qwen
 # Amp (data dir is ~/.local/share/amp on every OS; threads are server-side)
 amp|.config/amp
 amp|.local/share/amp
 amp|.cache/amp/logs
+amp|.cache/amp/terminal
+amp|.amp
 amp|AppData/Local/amp/logs
 # Factory Droid
 factory-droid|.factory
@@ -235,6 +299,8 @@ shared|.config/agents
 shared|.env
 # Ollama
 ollama|.ollama
+ollama|Library/Application Support/Ollama
+ollama|AppData/Local/Ollama
 # Shell history
 shell-history|.bash_history
 shell-history|.zsh_history
@@ -244,6 +310,8 @@ shell-history|.history
 shell-history|.local/share/fish/fish_history
 shell-history|.config/fish/fish_history
 shell-history|AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt
+shell-history|.local/share/powershell/PSReadLine/ConsoleHost_history.txt
+shell-history|.bash_sessions
 '@
 
 $PROJECT_CATALOG = @'
@@ -268,19 +336,28 @@ project|.cursorignore
 project|.cursorindexingignore
 project|.windsurf
 project|.windsurfrules
+project|.windsurfignore
+project|.codeiumignore
 project|.devin
+project|.devinignore
+project|.antigravityignore
 project|.clinerules
+project|.clineignore
 project|.cline
 project|.roo
 project|.roomodes
 project|.rooignore
+project|.roorules*
+project|.rooprotected
 project|.kilo
 project|.kilocode
 project|.kilocodemodes
 project|.kilocodeignore
+project|.kilocoderules
 project|kilo.json*
 project|.continue
 project|.continuerc.json
+project|.continueignore
 project|.aider.chat.history.md
 project|.aider.input.history
 project|.aider.llm.history
@@ -297,19 +374,35 @@ project|crushrc
 project|.crushrc
 project|.crushignore
 project|CRUSH.md
+project|CRUSH.local.md
+project|crush.md
+project|crush.local.md
+project|Crush.md
+project|Crush.local.md
 project|.goosehints
 project|.goose
 project|.zed
 project|.rules
 project|.github/copilot-instructions.md
+project|.github/git-commit-instructions.md
+project|.github/copilot
+project|.github/instructions
+project|.github/mcp.json
+project|.github/hooks
+project|.github/skills
+project|.github/agents
+project|.github/lsp.json
 project|.vscode/mcp.json
 project|.amp
 project|.factory
+project|.factory-plugin
 project|.droid.yaml
 project|.augment
 project|.augment-guidelines
 project|.augmentignore
+project|.augment-plugin
 project|.kiro
+project|.kiroignore
 project|.amazonq
 project|AmazonQ.md
 project|.env
@@ -318,8 +411,15 @@ project|.env
 $EXCLUDES = @'
 .claude/cache
 .claude/plugins/marketplaces
+.claude/plugins/cache
 .claude/plugins/*/node_modules
+.claude/local/node_modules
+.claude/image-cache
+.claude/paste-cache
+.claude/chrome
 .claude/worktrees
+.claude/checkpoints
+.local/share/claude/versions
 */Claude*/Cache
 */Claude*/Code Cache
 */Claude*/GPUCache
@@ -333,14 +433,17 @@ $EXCLUDES = @'
 .gemini/bin
 .gemini/tmp/bin
 .gemini/extensions/*/node_modules
+.gemini/extensions/*/.git
+.gemini/cli-browser-profile
 .gemini/antigravity-cli/bin
+.gemini/antigravity*/brain/*/.system_generated/worktrees
 .antigravity/extensions
+AppData/Local/agy
 .codex/packages
 .codex/cache
 .codex/.tmp
 .codex/plugins/cache
 .codex/skills/.system
-.codex/db-backups
 .codex/worktrees
 .codex/.sandbox
 .codex/.sandbox-bin
@@ -351,13 +454,24 @@ $EXCLUDES = @'
 */Roaming/ChatGPT/GPUCache
 */Roaming/ChatGPT/DawnGraphiteCache
 */Roaming/ChatGPT/DawnWebGPUCache
+.copilot/pkg
+.copilot/installed-plugins
+.cache/copilot/pkg
+Library/Caches/copilot/pkg
+AppData/Local/copilot/pkg
 .cursor/extensions
 .cursor/worktrees
+.cursor/plugins/marketplaces
+.cursor-server/bin
+.cursor-server/extensions
 */Cursor/User/globalStorage/state.vscdb.backup
 .codeium/windsurf/implicit
 .codeium/*/bin
 .codeium/bin
+.codeium/ws-browser*
 .windsurf/extensions
+.devin/extensions
+AppData/Local/devin/bin
 */User/globalStorage/saoudrizwan.claude-dev/checkpoints
 */User/globalStorage/saoudrizwan.claude-dev/cache
 */User/globalStorage/rooveterinaryinc.roo-cline/checkpoints
@@ -371,19 +485,34 @@ $EXCLUDES = @'
 */User/globalStorage/eamodio*
 */User/globalStorage/golang*
 */User/globalStorage/rust-lang*
+*/User/globalStorage/yzane.markdown-pdf
+*/User/globalStorage/github.copilot-chat/logContextRecordings
+*/User/globalStorage/github.copilot-chat/workspaceRecordings
+*/User/workspaceStorage/*/GitHub.copilot-chat/codebase-external.sqlite*
 */User/workspaceStorage/*/ms-*
 */User/workspaceStorage/*/vscjava*
 */User/workspaceStorage/*/redhat*
 */User/workspaceStorage/*/rust-lang*
 .cline/data/checkpoint-scratch
+.cline/data/workspaces/chat
+.cline/data/agent-plugins
+.cline/plugins
+.cline/worktrees
 .vscode-mock/global-storage/tasks/*/checkpoints
+.vscode-mock/global-storage/checkpoints
+.roo/worktrees
+.roo-code/mcp
+.local/share/Roo-Code/MCP
+AppData/Roaming/Roo-Code/MCP
 .local/share/kilo/snapshot
 .local/share/kilo/repos
 .local/share/kilo/tool-output
 .local/share/kilo/log
+.local/share/kilo/worktree
 .local/state/kilo/indexing
 .local/share/kilo/state/indexing
-.kilocode/worktrees
+.kilo/worktrees
+.kilo/bin
 .continue/index/lancedb
 .continue/index/*.sqlite
 .continue/.utils
@@ -405,9 +534,11 @@ $EXCLUDES = @'
 .opencode/node_modules
 .local/share/goose/models
 .local/share/goose/model_catalog
-.local/share/goose/apps
 .local/state/goose/codex
+.config/goose/mcp-apps-cache
 AppData/Roaming/Block/goose/data/models
+AppData/Roaming/Block/goose/data/model_catalog
+AppData/Roaming/Block/goose/data/codex
 */Goose/Cache
 */Goose/Code Cache
 */Goose/GPUCache
@@ -427,6 +558,7 @@ AppData/Roaming/Block/goose/data/models
 */[Zz]ed/embeddings
 */[Zz]ed/server_state
 */[Zz]ed/hang_traces
+*/[Zz]ed/build_timings
 .qwen/updates
 .qwen/extension-store
 .qwen/extensions/*/node_modules
@@ -434,10 +566,21 @@ AppData/Roaming/Block/goose/data/models
 .qwen/sandbox
 .qwen/scratch-workspaces
 .qwen/locales
+.qwen/arena
+.qwen/artifacts
+.qwen/resources
+.qwen/startup-perf
 .cache/amp/runner-desktop
 .cache/amp/desktop
+.cache/amp/bin
+.cache/amp/obelisk-runs
+.amp/bin
 .factory/updates
-.factory/cache
+.factory/cache/sounds
+.factory/bin
+.factory/tools
+.factory/software-factory/*/*/repos
+.factory/software-factory/*/*/worktrees
 .factory/temp
 .factory/worktrees
 .factory/snapshots
@@ -447,25 +590,48 @@ AppData/Roaming/Block/goose/data/models
 .augment/knowledgebase
 .augment/uploads
 .augment/worktrees
+.augment/plugins/marketplaces
 .aws/amazonq/cli-checkouts
 .aws/amazonq/knowledge_bases
-.kiro/powers
+.kiro/extensions
+.kiro/cloud-cache
+.kiro/sandbox-state
+.kiro/sandbox-curl
 */User/globalStorage/kiro.kiroagent/*lance*
+*/User/globalStorage/kiro.kiroagent/index
 .ollama/models
+AppData/Local/Ollama/updates
+Library/Caches/ollama
+Library/Caches/com.electron.ollama
 '@
 
 $SECRET_GLOBS = @'
 .claude/.credentials.json
+.claude/.device-keys.json
+.claude/hfi-auth.json
+.claude/.session_ingress_token
+.claude/remote/.oauth_token
+.claude/remote/.api_key
+.claude.json
 Library/Application Support/Claude*/config.json
 Library/Application Support/Claude*/Cookies*
 Library/Application Support/Claude*/host-creds-*.json
 Library/Application Support/Claude*/ccd-session-secrets/*
 .config/Claude*/config.json
 .config/Claude*/Cookies*
+.config/Claude*/host-creds-*.json
+.config/Claude*/ccd-session-secrets/*
 AppData/Roaming/Claude*/config.json
 AppData/Roaming/Claude*/Cookies*
+AppData/Roaming/Claude*/host-creds-*.json
+AppData/Roaming/Claude*/ccd-session-secrets/*
 AppData/Local/Claude*/config.json
 AppData/Local/Claude*/Cookies*
+AppData/Local/Claude*/host-creds-*.json
+AppData/Local/Claude*/ccd-session-secrets/*
+*/Claude*/Local State
+*/Claude*/claude_desktop_config.json
+*/Claude*/local-agent-mode-sessions/*/.audit-key
 *.gemini/oauth_creds.json
 *.gemini/gemini-credentials.json
 *.gemini/mcp-oauth-tokens.json
@@ -478,20 +644,49 @@ AppData/Local/Claude*/Cookies*
 .qwen/extension-secrets-v1.json
 .qwen/.env
 .qwen/settings.json
+.qwen/extensions/*/.qwen-extension-git-credentials.json
+.qwen/channels/*.json
 .codex/auth.json
 .codex/.credentials.json
 .codex/secrets/*
+.codex/.sandbox-secrets/*
+.codex/config.toml
 */Roaming/ChatGPT/Network/Cookies*
+*/Roaming/ChatGPT/Local State
 .config/github-copilot/*.json
 AppData/Local/github-copilot/*.json
+.copilot/config.json
+.copilot/mcp-oauth-config*
+.copilot/mcp-config.json
+.cursor/auth.json
+.config/cursor/auth.json
+AppData/Roaming/Cursor/auth.json
+.cursor/mcp.json
+.cursor/projects/*/mcp-auth.json
+.vscode*/cli/token*.json
+*/User/mcp.json
+*/User/profiles/*/mcp.json
 .codeium/config.json
+.codeium/mcp_config.json
+.codeium/windsurf/mcp_config.json
+.config/devin/mcp_config.json
+AppData/Roaming/devin/mcp_config.json
+.local/share/devin/credentials.toml
+AppData/Roaming/devin/credentials.toml
 .cline/data/settings/providers.json
+.cline/data/settings/cline_mcp_settings.json
+.cline/data/settings/composio/*.json
 .cline/data/secrets.json
 .cline/data/connectors/settings.json
 .cline/data/db/connectors.db*
 .vscode-mock/global-storage/secrets.json
 .local/share/kilo/auth.json
 .local/share/kilo/mcp-auth.json
+.local/share/kilo/kilo*.db*
+.local/share/kilo/opencode*.db*
+.config/kilo/kilo.json*
+.config/kilo/opencode.json*
+.config/kilo/config.json
 .kilocode/cli/config.json
 .continue/auth*.json
 .continue/.env
@@ -501,6 +696,7 @@ AppData/Local/github-copilot/*.json
 .continue/.configs/*/config.js*
 .continue/mcpServers/*
 .continue/index/globalContext.json
+*/globalStorage/continue.continue/*.bin
 .aider/oauth-keys.env
 .aider.conf.yml
 .aider.model.settings.yml
@@ -509,9 +705,12 @@ AppData/Local/github-copilot/*.json
 .local/share/opencode/opencode*.db*
 .config/opencode/opencode.json*
 .config/opencode/config.json
+.opencode/opencode.json*
 .local/share/crush/crush.json
+AppData/Local/crush/crush.json
 .config/crush/crush.json
 .config/crush/crushrc
+.config/crush/.crushrc
 .crush/crush.json
 .config/goose/secrets.yaml
 .config/goose/config.yaml
@@ -522,25 +721,56 @@ AppData/Local/github-copilot/*.json
 .config/goose/muse_code/*
 .config/goose/huggingface/*
 .config/goose/databricks/*
+.config/goose/xai_oauth/*
 .config/goose/roaming_node_key
 .config/goose/tls/*
 AppData/Roaming/Block/goose/config/secrets.yaml
+AppData/Roaming/Block/goose/config/config.yaml
+AppData/Roaming/Block/goose/config/githubcopilot/*
+AppData/Roaming/Block/goose/config/chatgpt_codex/*
+AppData/Roaming/Block/goose/config/gemini_oauth/*
+AppData/Roaming/Block/goose/config/kimicode/*
+AppData/Roaming/Block/goose/config/muse_code/*
+AppData/Roaming/Block/goose/config/huggingface/*
+AppData/Roaming/Block/goose/config/databricks/*
+AppData/Roaming/Block/goose/config/xai_oauth/*
+AppData/Roaming/Block/goose/config/roaming_node_key
+AppData/Roaming/Block/goose/config/tls/*
 .local/state/goose/logs/llm_request.*
+AppData/Roaming/Block/goose/data/logs/llm_request.*
 .config/zed/development_credentials
 .config/zed/settings.json
+.config/zed/settings_backup.json
+.config/zed/global_settings.json
 AppData/Roaming/Zed/development_credentials
 AppData/Roaming/Zed/settings.json
+AppData/Roaming/Zed/settings_backup.json
+AppData/Roaming/Zed/global_settings.json
+.var/app/dev.zed.Zed*/config/zed/settings.json
+.var/app/dev.zed.Zed*/config/zed/development_credentials
 .local/share/amp/secrets.json
 .local/share/amp/accounts.json
-.config/amp/secrets.json
+.local/share/amp/accounts/*/secrets.json
+.amp/oauth/*
 .factory/auth.json
+.factory/auth.v2.*
+.factory/auth.encrypted
+.factory/config.json
+.factory/temp/env/*
 .factory/prem-auth/*/credentials.*
 .factory/mcp-oauth*
 .augment/session.json
+.augment/settings.json
+.augment/settings.local.json
 */kiro-cli/data.sqlite3*
 */amazon-q/data.sqlite3*
 .aws/sso/cache/*.json
+.aws/amazonq/mcp.json
 .kiro/settings/mcp.json
+.kiro/powers/installed/*/mcp.json
+.kiro/agents/*.json
+.kiro/web-session/*
+.kiro/secrets.json
 .ollama/id_ed25519
 .env
 '@
@@ -988,6 +1218,21 @@ function Get-JsonKeys([string]$suffix, [string[]]$files) {
     try { foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f), $rx)) { $m.Groups[1].Value } } catch { }
   }
 }
+function Get-PathStrings([string[]]$files) {
+  # every quoted absolute path, drive-letter path or file:// URI in the files
+  $rx = '"((?:file:///|/|[A-Za-z]:\\\\)(?:[^"\\]|\\.)*)"'
+  foreach ($f in $files) {
+    if (-not $f -or -not (Test-PathQuiet $f 'Leaf')) { continue }
+    try { foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f), $rx)) { $m.Groups[1].Value } } catch { }
+  }
+}
+function Get-YamlValues([string]$key, [string[]]$files) {
+  $rx = '(?m)^' + [regex]::Escape($key) + ':[ \t]*["'']?([^"''\r\n]+)["'']?[ \t]*$'
+  foreach ($f in $files) {
+    if (-not $f -or -not (Test-PathQuiet $f 'Leaf')) { continue }
+    try { foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f), $rx)) { $m.Groups[1].Value } } catch { }
+  }
+}
 function Find-Projects {
   $found = @()
   foreach ($u in $UserList) {
@@ -1005,8 +1250,15 @@ function Find-Projects {
     $vals += Get-JsonValues 'worktree' @(Expand-Glob $h '.local/share/opencode/storage/project/*.json')
     $vals += Get-JsonValues 'path' @((Join-PathSafe $h '.local/share/crush/projects.json'))
     $vals += Get-JsonKeys '"' @((Join-PathSafe $h '.gemini/projects.json'))
-    foreach ($pr in (Expand-Glob $h '.gemini/tmp/*/.project_root')) { try { $vals += [System.IO.File]::ReadAllText($pr) } catch { } }
-    foreach ($ws in (@(Expand-Glob $h 'AppData/Roaming/*/User') + @(Expand-Glob $h '.config/*/User') + @(Expand-Glob $h 'Library/Application Support/*/User'))) {
+    $vals += Get-JsonKeys '"' @((Join-PathSafe $h '.gemini/trustedFolders.json'))
+    foreach ($pr in (@(Expand-Glob $h '.gemini/tmp/*/.project_root') + @(Expand-Glob $h '.gemini/history/*/.project_root'))) { try { $vals += [System.IO.File]::ReadAllText($pr) } catch { } }
+    $vals += Get-JsonValues 'workspace' @((Join-PathSafe $h '.gemini/antigravity-cli/history.jsonl'))
+    $vals += Get-PathStrings (@((Join-PathSafe $h '.gemini/antigravity-cli/settings.json'), (Join-PathSafe $h '.gemini/antigravity-cli/cache/projects.json')) + @(Expand-Glob $h '.gemini/config/projects/*.json'))
+    $vals += Get-JsonValues 'cwd' (@((Join-PathSafe $h '.local/share/amp/history.jsonl')) + @(Expand-Glob $h '.factory/sessions/*/*.jsonl') + @(Expand-Glob $h '.factory/sessions/*.jsonl') + @(Expand-Glob $h '.kiro/sessions/cli/*.json') + @(Expand-Glob $h '.cursor/acp-sessions/*/meta.json'))
+    $vals += Get-JsonValues 'root' @(Expand-Glob $h '.kiro/workspace-roots/*/.trust-migration.json')
+    $vals += Get-PathStrings (@(Expand-Glob $h '.kiro/sessions/*/sess_*/session.json') + @((Join-PathSafe $h '.config/Goose/recent-dirs.json'), (Join-PathSafe $h 'Library/Application Support/Goose/recent-dirs.json'), (Join-PathSafe $h 'AppData/Roaming/Goose/recent-dirs.json')))
+    $vals += Get-YamlValues 'cwd' @(Expand-Glob $h '.copilot/session-state/*/workspace.yaml')
+    foreach ($ws in (@(Expand-Glob $h 'AppData/Roaming/*/User') + @(Expand-Glob $h '.config/*/User') + @(Expand-Glob $h 'Library/Application Support/*/User') + @(Expand-Glob $h '.*-server*/data/User'))) {
       $vals += Get-JsonValues 'folder' @(Expand-Glob $ws 'workspaceStorage/*/workspace.json')
       $vals += Get-JsonValues 'cwdOnTaskInitialization' (@(Expand-Glob $ws 'globalStorage/saoudrizwan.claude-dev/state/taskHistory.json') + @(Expand-Glob $ws 'globalStorage/saoudrizwan.claude-dev/tasks/*/task_metadata.json'))
       $vals += Get-JsonValues 'workspace' (@(Expand-Glob $ws 'globalStorage/rooveterinaryinc.roo-cline/tasks/_index.json') + @(Expand-Glob $ws 'globalStorage/kilocode.kilo-code/tasks/_index.json'))
