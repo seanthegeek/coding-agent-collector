@@ -9,7 +9,7 @@ different places and have different dependency rules.
 | Part | Directory | Runs on | Status |
 | --- | --- | --- | --- |
 | Collectors | [`collectors/`](collectors/README.md) | The host under investigation, or an analyst workstation with a mounted image | v1, done |
-| Analyzer | `analyzer/` | The analyst workstation | v2, planned |
+| Analyzer | [`analyzer/`](analyzer/README.md) | The analyst workstation | v2, in progress |
 
 ## Collectors
 
@@ -28,16 +28,24 @@ matrix are in [collectors/README.md](collectors/README.md).
 
 ## Analyzer
 
-The planned v2 component: an analyst-side Python tool that reads a collector
-archive and parses the transcripts in it (Claude Code JSONL, Codex rollouts,
-Gemini and Antigravity SQLite, Cursor `state.vscdb`, and the rest) into a
-normalised CSV timeline of turns, tool calls and file edits. Parsing never
-happens on the host, so the analyzer is free to carry its own requirements.
+A Python tool that reads a collector archive, an extracted collection, or any
+loose directory such as a copied home or a mounted image, detects which agents
+left state in it using the collectors' own catalog, and parses the transcripts
+it understands into a normalised CSV timeline of turns, tool calls and tool
+results, plus a per-session summary. Parsers exist for Claude Code and Codex
+CLI; every other agent in the catalog is detected and reported but not yet
+parsed. Parsing never happens on the host, so the analyzer is free to carry
+its own requirements. It currently needs only Python 3.9 and the standard
+library.
+
+Usage, accepted inputs, the CSV schema and the parser table are in
+[analyzer/README.md](analyzer/README.md).
 
 ## Repository layout
 
 ```
 collectors/   the sh and PowerShell collectors, their README and smoke tests
+analyzer/     the Python analyzer package, its README and test suite
 AGENTS.md     standards and process for anyone, human or agent, changing the code
 CLAUDE.md     Claude Code entry point; imports AGENTS.md
 LICENSE       Apache 2.0

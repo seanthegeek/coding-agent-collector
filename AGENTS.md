@@ -19,9 +19,11 @@ It must work in three situations:
 3. Against a mounted disk image on an analyst workstation, including Windows
    images mounted on Linux or macOS.
 
-Roadmap: v1 (done) collects. A PowerShell 5.1 collector for live Windows hosts
-is planned. v2 is an analyst-side Python tool that parses collected transcripts
-into a CSV timeline. Parsing never happens on the host.
+Roadmap: v1 (done) collects, with sh and PowerShell 5.1 collectors. v2, in
+progress under `analyzer/`, is the analyst-side Python tool that detects agent
+state in any collected directory and parses transcripts into a CSV timeline;
+Claude Code and Codex CLI parsers exist, the rest of the catalog is detected
+but not yet parsed. Parsing never happens on the host.
 
 ## Repository layout
 
@@ -32,17 +34,23 @@ collectors/
   README.md                    collector user documentation, keep in sync with behaviour
   tests/smoke.sh               end-to-end test of the sh collector (fake disk image)
   tests/smoke.ps1              end-to-end test of the PowerShell collector
-  tests/catalog-sync.sh        fails if the four catalog tables differ between scripts
+  tests/catalog-sync.sh        fails if the catalog tables differ between the scripts
+                               or from the analyzer's bundled copy
+analyzer/
+  agent_analyzer/              Python package: cli, inputs, catalog, model, parsers/
+  agent_analyzer/catalog.txt   verbatim copy of collect-agent-artifacts.sh --list
+  README.md                    analyzer user documentation, CSV schema, parser table
+  tests/                       unittest suite with synthetic fixtures; tests/run.sh
+  pyproject.toml               installable as analyze-agent-artifacts
+  requirements.txt             third-party dependencies, none yet
 README.md                      project overview; points at the per-part READMEs
 AGENTS.md                      this file
 CLAUDE.md                      imports this file for Claude Code
 LICENSE                        Apache 2.0
 ```
 
-The analyst-side v2 tool will live in its own top-level directory with its
-own README and, if needed, its own `requirements.txt`. Nothing in
-`collectors/` may depend on it. Paths in this file are relative to the
-repository root unless stated otherwise.
+Nothing in `collectors/` may depend on `analyzer/`. Paths in this file are
+relative to the repository root unless stated otherwise.
 
 ## Non-negotiable standards
 
@@ -131,6 +139,43 @@ work in both (the PowerShell side converts globs to regexes).
 `error_copy`) and the `fs/<original path>` archive layout are documented in the
 collectors README. Add fields if needed, but do not rename or remove them
 without updating that README and noting it in the commit message.
+
+## Analyzer standards
+
+The analyzer runs on the analyst's workstation, never on the host, so the
+rules are different from the collectors'.
+
+- **Python 3.9 or later, standard library first.** Third-party packages are
+  allowed when a format needs them (protobuf, zstandard, a SQLite helper) and
+  go in both `requirements.txt` and `pyproject.toml`. Avoid syntax newer than
+  3.9: no `match`, no `X | Y` in annotations without
+  `from __future__ import annotations`.
+- **The catalog is shared, not copied by hand.** `agent_analyzer/catalog.txt`
+  is generated from `collect-agent-artifacts.sh --list`; both
+  `collectors/tests/catalog-sync.sh` and the analyzer tests fail when it is
+  stale. Detection logic lives in `catalog.py` and reads that file. Never
+  hard-code an agent path in a parser's detection; parsers select files by
+  their path relative to the home (`artifact.rel`).
+- **Attribution comes from the manifest when there is one.** Host, user, home
+  and agent are read from `collection.json` and `manifest.jsonl`. Only loose
+  input without a manifest infers them from paths, and the output says so.
+  Never silently guess when the manifest is present.
+- **Parsers are validated like catalog entries.** Confirm the record shape
+  against source or a real install, list the field names the parser depends
+  on in the module docstring, and build the test fixture from those shapes.
+  Bad lines are reported as a `system` row, never fatal: a transcript cut
+  mid-write by a running agent must still yield its earlier turns.
+- **The CSVs are interfaces.** `timeline.csv` and `sessions.csv` columns are
+  documented in `analyzer/README.md`; add columns at the end and never rename
+  or remove them without updating the README and saying so in the commit.
+  Timestamps are always UTC ISO 8601 with milliseconds and a trailing Z.
+- **Read-only, no surprises.** The analyzer writes only under `-o` and the
+  archive work directory, never follows symlinks, and never materialises
+  symlinks from an archive. Summaries are truncated by default so a CSV can
+  be shared without carrying whole transcripts; `--summary-length 0` is the
+  analyst's choice.
+- **Tests.** `analyzer/tests/run.sh` must pass. Add a fixture and a test
+  class for every parser, and a detection test for every new input shape.
 
 ## Adding an agent to the catalog
 
@@ -275,6 +320,7 @@ tests/smoke.sh ash        # busybox
 printf '#!/bin/sh\nexec zsh --emulate sh "$@"\n' > /tmp/zsh-sh && chmod +x /tmp/zsh-sh && tests/smoke.sh /tmp/zsh-sh
 tests/catalog-sync.sh
 pwsh -NoProfile -File tests/smoke.ps1
+cd ../analyzer && tests/run.sh
 ```
 
 For a change to the PowerShell collector, also run the test under real
@@ -326,11 +372,14 @@ collector itself.
   `collectors/README.md` accurate. Behaviour changes without a README update
   are incomplete. The top-level README is an overview only.
 - Bump `VERSION` in the script for any change to output format or options.
+  For the analyzer, bump `VERSION` in `agent_analyzer/__init__.py` and
+  `pyproject.toml` together.
 
 ## Things to avoid
 
 - Adding Python, jq or any interpreter to the on-host collector.
-- Parsing transcripts on the host. That is v2 and runs on the analyst side.
+- Parsing transcripts on the host. That is the analyzer's job and it runs on
+  the analyst side.
 - Collecting model weights, editor caches or extension binaries by default.
 - Reading files through symlinks or descending into symlinked directories.
 - Writing to `/tmp` by default or anywhere other than `-o`.

@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Fails if the artifact tables embedded in collect-agent-artifacts.sh and
-# Collect-AgentArtifacts.ps1 differ. Both scripts carry the same four tables;
-# this is the drift test that keeps them a single source of truth.
+# Collect-AgentArtifacts.ps1 differ, or if the analyzer's bundled copy of the
+# --list output is stale. All three must stay a single source of truth.
 HERE=$(cd "$(dirname "$0")" && pwd)
 SH="$HERE/../collect-agent-artifacts.sh"
 PS="$HERE/../Collect-AgentArtifacts.ps1"
+ANALYZER_COPY="$HERE/../../analyzer/agent_analyzer/catalog.txt"
 fail=0
 
 sh_table() { # sh_table NAME -> lines of the sh table (blank lines dropped)
@@ -41,6 +42,14 @@ if command -v pwsh >/dev/null 2>&1; then PWSH=pwsh; fi
 if [ -n "$PWSH" ]; then
   if [ "$("$SH" --list)" = "$($PWSH -NoProfile -File "$PS" -List | tr -d '\r')" ]; then printf 'ok   --list output identical under %s\n' "$PWSH"
   else printf 'FAIL --list output differs under %s\n' "$PWSH"; fail=1; fi
+fi
+
+# The analyzer detects agents with a verbatim copy of the --list output.
+if [ -f "$ANALYZER_COPY" ]; then
+  if [ "$("$SH" --list)" = "$(cat "$ANALYZER_COPY")" ]; then printf 'ok   analyzer catalog.txt matches --list\n'
+  else
+    printf 'FAIL analyzer catalog.txt is stale; run: collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.txt\n'; fail=1
+  fi
 fi
 
 [ "$fail" = 0 ] && echo "CATALOGS IN SYNC"
