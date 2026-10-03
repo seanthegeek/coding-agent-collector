@@ -128,6 +128,91 @@ exist for Claude Code, Antigravity CLI, Codex CLI, Copilot CLI and Ollama.
 Agents whose project paths live only in SQLite (Zed, Goose, OpenCode, Kilo
 Code, Kiro CLI) are not covered by `discover_projects`; that is v2 work.
 
+## Validating catalog entries from source
+
+This is the process used for the v1.1 catalog, and the one to repeat when a
+tool is added or a tool's layout is suspected to have changed. It replaces
+installing the tool: source is authoritative, faster, and keeps the
+workstation clean.
+
+**1. Group the tools and fan out.** One researcher per platform group, run in
+parallel. Group forks of the same codebase together (Gemini CLI with Qwen
+Code; Cline with Roo Code and Kilo Code; OpenCode with Crush) because the
+differences are what matter. Put closed-source tools in their own groups since
+the evidence gathering is different.
+
+**2. Give each researcher the same brief.** It should contain: the current
+catalog lines for that tool (from `--list`), the repository to shallow-clone
+into the scratchpad, the grep terms to start with, and the instruction to
+cite file and line for every claim and never rely on memory. Grep terms that
+find the paths module quickly:
+
+```
+homedir  XDG  APPDATA  LOCALAPPDATA  "Application Support"  .config/  .local/share
+.local/state  .cache  sessions  history  checkpoint  snapshot  worktree  sqlite  .db
+auth  token  credential  secrets  keyring  keychain  cache  bin  node_modules
+cwd  workspace  project  worktree  mcp  rules  AGENTS.md
+```
+
+Likely file names: `paths.ts`, `paths.rs`, `global.ts`, `storage.ts`,
+`home.go`, `config/load.go`, `env.ts`, `directories.rs`.
+
+**3. Require a fixed report structure.** Eight numbered sections, under
+about a thousand words:
+
+1. Repo, commit checked, open source or not.
+2. Per-user storage for Linux, macOS and Windows: every directory and file
+   under the home, what each holds, and whether the layout is shared across
+   OSes. Flag tools that use XDG paths on macOS and Windows.
+3. Credentials on disk, by exact file name, and whether the OS keychain is
+   used with a file fallback. Note config files that can embed API keys.
+4. Large or low-value subtrees to exclude, as exact path patterns: binaries,
+   model weights, caches, embedding indexes, shadow git checkpoints,
+   worktrees, marketplace clones, Electron caches.
+5. Project-local files written or read inside repositories. Call out any
+   per-project database, since those are easy to miss.
+6. Where the project or workspace path is recorded, with file and JSON key or
+   table and column, so `discover_projects` or the v2 parser can use it.
+7. Proposed lines in the collector's own formats: `agent|glob` for
+   `CATALOG`, globs for `EXCLUDES` and `SECRET_GLOBS`, `project|glob` for
+   `PROJECT_CATALOG`.
+8. Confidence per item and what could not be determined.
+
+**4. Evidence hierarchy for closed-source tools.** In order: the shipped npm
+tarball or binary (`npm pack`, then grep or `strings`; minified bundles keep
+literal path strings), official docs, vendor forums and issue trackers, then
+published DFIR or reverse-engineering write-ups. The report must say which
+level each claim came from, and the README validation table records it.
+
+**5. Integrate in one commit.** Save each report to the scratchpad as it
+arrives and do not touch the script until all are in, so the tables change
+once. Then: rewrite the four tables, extend `discover_projects` with every
+new grep-able source, add a fixture and checks to `tests/smoke.sh` for each
+new secret pattern, exclusion and discovery source, run the full shell
+matrix, run a live collection and read the `skipped_excluded` and
+`secret: true` rows, update the README tool table, bump `VERSION`.
+
+**6. Close the loop on GitHub.** Close each tool's issue with a comment that
+names the evidence source and commit, the key findings, and the catalog
+changes. Comment on the v2 parser issue with any SQLite-only sources found.
+File new issues for anything out of scope that the research surfaced, such
+as sandboxed install paths or tokens stored inside chat databases.
+
+Things the first run taught us, to check for explicitly next time:
+
+- A library with no platform branching (`xdg-basedir`, `etcetera`,
+  `home.Config()`) means `~/.config` and `~/.local/share` on macOS and
+  Windows too. Do not assume Library or AppData.
+- Exclusions must not swallow credential files. Continue's
+  `index/globalContext.json` sits next to the embedding index it shares a
+  directory with.
+- Some tools store sessions inside the repository (Crush) or gitignore
+  their own state directory, so the project list, not git, is the index.
+- Auth tokens and chat history can share one SQLite file (Cursor, Windsurf);
+  collect it unflagged and document the keys to redact.
+- Forks drift: Kilo Code moved from the Roo layout to an OpenCode fork;
+  Windsurf is rebranding to Devin. Check the current commit, not the name.
+
 ## Validation and testing
 
 Run all of this before committing a change to the collector:
