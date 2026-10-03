@@ -167,8 +167,10 @@ rules are different from the collectors'.
   input without a manifest infers them from paths, and the output says so.
   Never silently guess when the manifest is present.
 - **Parsers are validated like catalog entries.** Confirm the record shape
-  against source or a real install, list the field names the parser depends
-  on in the module docstring, and build the test fixture from those shapes.
+  against source or a real install, write the evidence into
+  `analyzer/research/<agent>.md` (one document per catalog agent, see the
+  research process above), list the field names the parser depends on in
+  the module docstring, and build the test fixture from those shapes.
   For a closed-source agent that stores protobuf, the shipped binary usually
   embeds its descriptors; `analyzer/tools/proto_descriptors.py` extracts
   them, and the parser's schema table cites the proto file they came from.
@@ -289,7 +291,13 @@ records it.
 
 **5. Integrate in one commit.** Save each report to the scratchpad as it
 arrives and do not touch the script until all are in, so the tables change
-once. Then: rewrite the four tables, extend `discover_projects` with every
+once. Then split every group report into one document per catalog agent
+under `analyzer/research/<agent>.md`, named exactly as the agent appears in
+`--list`, keeping the numbered section structure, the citations and the
+fixtures. A document covers one agent only; where agents share a lineage,
+each says so and links to the other rather than repeating it. Add a row to
+`analyzer/research/README.md` and put cross-agent observations there, not in
+the per-agent documents. Grouped reports are never committed. Then: rewrite the four tables, extend `discover_projects` with every
 new grep-able source, add a fixture and checks to `collectors/tests/smoke.sh`
 for each
 new secret pattern, exclusion and discovery source, run the full shell

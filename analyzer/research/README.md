@@ -1,33 +1,52 @@
 # Record schema research
 
-Reports from the October 2026 research round on transcript record schemas,
-produced by the fan-out process described in AGENTS.md. Each report was
-written from a shallow clone of the tool's source at the commit it names, with
-file and line citations (or, for the closed-source Antigravity CLI, from the
-protobuf descriptors embedded in its binary), and ends with a parser plan and synthetic sample
-records intended to become test fixtures. Treat them as the evidence behind
-each parser; the field names a parser actually depends on are repeated in its
-module docstring under `agent_analyzer/parsers/`.
+One document per catalog agent, named after the agent as it appears in
+`collect-agent-artifacts.sh --list`, describing how that agent records
+transcripts on disk and how a parser should read them. Each was written from
+a shallow clone of the tool's source at the commit it names, with file and
+line citations, or for a closed-source tool from the evidence named in its
+first section (for Antigravity, the protobuf descriptors embedded in its
+binary). Each ends with a parser plan mapped to the timeline columns and
+synthetic sample records meant to become test fixtures. Treat them as the
+evidence behind each parser; the field names a parser actually depends on
+are repeated in its module docstring under `agent_analyzer/parsers/`.
 
-| Report | Tools | Store type |
-| --- | --- | --- |
-| [gemini-qwen.md](gemini-qwen.md) | Gemini CLI, Qwen Code | JSONL, with Gemini `$set`/`$patch`/`$rewindTo` operations |
-| [cline-roo-kilo.md](cline-roo-kilo.md) | Cline, Roo Code, Kilo Code | JSON arrays, Cline SDK session files, Kilo SQLite |
-| [opencode-crush.md](opencode-crush.md) | OpenCode, Crush | SQLite (WAL) with JSON columns |
-| [goose-zed.md](goose-zed.md) | Goose, Zed | SQLite; Zed threads are zstd-compressed JSON blobs |
-| [continue-vscode-aider.md](continue-vscode-aider.md) | Continue, VS Code chat (Copilot Chat), Aider | JSON, JSONL mutation log, markdown |
-| [kiro-amazonq.md](kiro-amazonq.md) | Amazon Q CLI, Kiro CLI | SQLite, one JSON blob per working directory |
-| [antigravity.md](antigravity.md) | Antigravity CLI | SQLite of protobuf blobs; schema from descriptors embedded in the `agy` binary |
+The research itself may be done in groups (forks of one codebase are best
+studied together, because the differences are what matter), but the
+findings are split per agent before they land here. Where two agents share
+a lineage, each document says so and links to the other instead of repeating
+it.
 
-Findings that cut across tools:
+| Agent | Document | Store | Parser |
+| --- | --- | --- | --- |
+| `antigravity` | [antigravity.md](antigravity.md) | SQLite of protobuf blobs; schema from the `agy` binary's embedded descriptors | yes |
+| `gemini-cli` | [gemini-cli.md](gemini-cli.md) | JSONL with `$set`/`$patch`/`$rewindTo` operations | planned |
+| `qwen-code` | [qwen-code.md](qwen-code.md) | JSONL, Claude-Code-like records with `cwd` and `gitBranch` | planned |
+| `cline` | [cline.md](cline.md) | JSON arrays per task; SDK session files; SQLite indexes | planned |
+| `roo-code` | [roo-code.md](roo-code.md) | Cline task layout with Roo extensions | planned |
+| `kilo-code` | [kilo-code.md](kilo-code.md) | OpenCode-style SQLite (`kilo.db`) | planned |
+| `opencode` | [opencode.md](opencode.md) | SQLite (WAL) with JSON columns | planned |
+| `crush` | [crush.md](crush.md) | per-project SQLite (WAL), parts as a JSON array | planned |
+| `goose` | [goose.md](goose.md) | SQLite (WAL), `content_json` arrays | planned |
+| `zed` | [zed.md](zed.md) | SQLite with zstd-compressed JSON thread blobs | planned, needs `zstandard` |
+| `continue` | [continue.md](continue.md) | JSON per session, session-level timestamps only | planned |
+| `vscode` | [vscode.md](vscode.md) | VS Code chat sessions (Copilot Chat): JSONL mutation log, legacy JSON | planned |
+| `aider` | [aider.md](aider.md) | markdown and readline-style text in the repository | planned |
+| `kiro` | [kiro.md](kiro.md) | Amazon Q CLI SQLite, one JSON blob per working directory; Kiro CLI unverified | planned |
+
+Claude Code and Codex CLI were validated directly against real installs and
+are documented in their parser modules.
+
+Findings that cut across agents:
 
 - Only Claude Code, Codex CLI, Qwen Code and Zed record a git branch, and Zed
   only at thread start. Every other store leaves `git_branch` empty.
 - Per-message timestamps are missing in Continue sessions, Zed threads and
   Cline's legacy API history; those parsers inherit session-level times.
-- OpenCode, Crush, Goose, Kilo and Zed's sidebar database run SQLite in WAL
-  mode, so the `-wal` sidecar must be collected with the database. Amazon Q
-  and Zed's `threads.db` use the rollback journal and copy cleanly alone.
+- OpenCode, Crush, Goose, Kilo, Antigravity and Zed's sidebar database run
+  SQLite in WAL mode, so the `-wal` sidecar must be collected with the
+  database. Amazon Q and Zed's `threads.db` use the rollback journal and copy
+  cleanly alone.
 - Credentials sit inside transcript databases for OpenCode, Kilo and Amazon
   Q; those files are collected unflagged and the keys to redact are listed in
-  each report's section 7.
+  each document's section 7.
