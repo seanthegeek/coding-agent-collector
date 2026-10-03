@@ -47,21 +47,23 @@ jobs:
           printf '#!/bin/sh\nexec zsh --emulate sh "$@"\n' > /tmp/zsh-sh && chmod +x /tmp/zsh-sh
           collectors/tests/smoke.sh /tmp/zsh-sh
 
-  powershell-collector:
-    name: PowerShell collector (smoke under PowerShell 7 and Windows PowerShell 5.1)
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            shell: pwsh
-          - os: windows-latest
-            shell: powershell
-    runs-on: ${{ matrix.os }}
+  powershell-7:
+    name: PowerShell collector (smoke under PowerShell 7 on Linux)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: smoke
-        shell: ${{ matrix.shell }}
+        shell: pwsh
         run: ./collectors/tests/smoke.ps1
+
+  windows-powershell-51:
+    name: PowerShell collector (smoke under Windows PowerShell 5.1)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: smoke
+        shell: powershell
+        run: .\collectors\tests\smoke.ps1
 
   analyzer:
     name: Analyzer tests
