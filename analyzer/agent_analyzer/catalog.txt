@@ -11,9 +11,10 @@ claude-desktop|.config/Claude-3p
 claude-desktop|AppData/Roaming/Claude
 claude-desktop|AppData/Roaming/Claude-3p
 claude-desktop|AppData/Local/Claude-3p
-# Google
+# Google (antigravity-cli lives inside ~/.gemini; the nested entry claims it)
 gemini-cli|.gemini
 gemini-cli|.cache/.gemini
+antigravity|.gemini/antigravity-cli
 antigravity|.antigravity
 antigravity|.cache/antigravity
 antigravity|.config/Antigravity/User
@@ -49,6 +50,21 @@ vscode|AppData/Roaming/Code*/logs
 vscode|Library/Application Support/VSCodium/User
 vscode|.config/VSCodium/User
 vscode|AppData/Roaming/VSCodium/User
+# VS Code family extension state. Each editor User directory is collected
+# above; these nested entries claim the agent extension globalStorage from
+# that walk so Cline, Roo, Kilo and Continue files are attributed to them.
+cline|.config/*/User/globalStorage/saoudrizwan.claude-dev
+cline|Library/Application Support/*/User/globalStorage/saoudrizwan.claude-dev
+cline|AppData/Roaming/*/User/globalStorage/saoudrizwan.claude-dev
+roo-code|.config/*/User/globalStorage/rooveterinaryinc.roo-cline
+roo-code|Library/Application Support/*/User/globalStorage/rooveterinaryinc.roo-cline
+roo-code|AppData/Roaming/*/User/globalStorage/rooveterinaryinc.roo-cline
+kilo-code|.config/*/User/globalStorage/kilocode.kilo-code
+kilo-code|Library/Application Support/*/User/globalStorage/kilocode.kilo-code
+kilo-code|AppData/Roaming/*/User/globalStorage/kilocode.kilo-code
+continue|.config/*/User/globalStorage/continue.continue
+continue|Library/Application Support/*/User/globalStorage/continue.continue
+continue|AppData/Roaming/*/User/globalStorage/continue.continue
 # Windsurf (rebranding to Devin)
 windsurf|.codeium
 windsurf|.windsurf/extensions/extensions.json

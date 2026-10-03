@@ -22,7 +22,7 @@
 # Exit codes: 0 archive written (per-file errors are recorded in the manifest),
 #             1 usage error, 2 fatal (no output dir, no tar, ...).
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 TOOL="collect-agent-artifacts"
 
 LC_ALL=C
@@ -49,9 +49,10 @@ claude-desktop|.config/Claude-3p
 claude-desktop|AppData/Roaming/Claude
 claude-desktop|AppData/Roaming/Claude-3p
 claude-desktop|AppData/Local/Claude-3p
-# Google
+# Google (antigravity-cli lives inside ~/.gemini; the nested entry claims it)
 gemini-cli|.gemini
 gemini-cli|.cache/.gemini
+antigravity|.gemini/antigravity-cli
 antigravity|.antigravity
 antigravity|.cache/antigravity
 antigravity|.config/Antigravity/User
@@ -87,6 +88,21 @@ vscode|AppData/Roaming/Code*/logs
 vscode|Library/Application Support/VSCodium/User
 vscode|.config/VSCodium/User
 vscode|AppData/Roaming/VSCodium/User
+# VS Code family extension state. Each editor User directory is collected
+# above; these nested entries claim the agent extension globalStorage from
+# that walk so Cline, Roo, Kilo and Continue files are attributed to them.
+cline|.config/*/User/globalStorage/saoudrizwan.claude-dev
+cline|Library/Application Support/*/User/globalStorage/saoudrizwan.claude-dev
+cline|AppData/Roaming/*/User/globalStorage/saoudrizwan.claude-dev
+roo-code|.config/*/User/globalStorage/rooveterinaryinc.roo-cline
+roo-code|Library/Application Support/*/User/globalStorage/rooveterinaryinc.roo-cline
+roo-code|AppData/Roaming/*/User/globalStorage/rooveterinaryinc.roo-cline
+kilo-code|.config/*/User/globalStorage/kilocode.kilo-code
+kilo-code|Library/Application Support/*/User/globalStorage/kilocode.kilo-code
+kilo-code|AppData/Roaming/*/User/globalStorage/kilocode.kilo-code
+continue|.config/*/User/globalStorage/continue.continue
+continue|Library/Application Support/*/User/globalStorage/continue.continue
+continue|AppData/Roaming/*/User/globalStorage/continue.continue
 # Windsurf (rebranding to Devin)
 windsurf|.codeium
 windsurf|.windsurf/extensions/extensions.json
@@ -770,10 +786,20 @@ collect_path() {
   _cp_user=$1; _cp_home=$2; _cp_agent=$3; _cp_m=$4
   if [ -d "$_cp_m" ] && [ ! -L "$_cp_m" ]; then
     set -- "$_cp_m"
-    _cp_first=1
     _cp_ifs=$IFS
     IFS='
 '
+    # Paths claimed by another catalog entry are left to that entry: a nested
+    # entry such as .gemini/antigravity-cli is attributed to its own agent and
+    # collected once, not swept up again by the enclosing .gemini entry.
+    _cp_first=1
+    for _cp_n in $NESTED_CLAIMS; do
+      case "$_cp_n" in "$_cp_m"/*) ;; *) continue ;; esac
+      if [ "$_cp_first" = 1 ]; then set -- "$@" '(' -path "$_cp_n"; _cp_first=0
+      else set -- "$@" -o -path "$_cp_n"; fi
+    done
+    if [ "$_cp_first" = 0 ]; then set -- "$@" ')' -prune -o; fi
+    _cp_first=1
     for _cp_e in $ACTIVE_EXCLUDES; do
       [ -n "$_cp_e" ] || continue
       if [ "$_cp_first" = 1 ]; then set -- "$@" '(' -path "$_cp_home/$_cp_e"; _cp_first=0
@@ -791,14 +817,22 @@ collect_path() {
 }
 
 # collect_tree USER BASE CATALOG
+# Every entry is expanded first so that each matched path can be excluded
+# from the walk of any enclosing match (see NESTED_CLAIMS in collect_path).
 collect_tree() {
-  printf '%s\n' "$3" | while IFS='|' read -r _ct_agent _ct_pat; do
+  _ct_matches=$(printf '%s\n' "$3" | while IFS='|' read -r _ct_agent _ct_pat; do
     case "$_ct_agent" in ''|'#'*) continue ;; esac
     expand_glob "$2" "$_ct_pat" | while IFS= read -r _ct_m; do
-      log_line "  [$_ct_agent] $_ct_m"
-      collect_path "$1" "$2" "$_ct_agent" "$_ct_m" </dev/null
+      printf '%s|%s\n' "$_ct_agent" "$_ct_m"
     done
+  done)
+  NESTED_CLAIMS=$(printf '%s\n' "$_ct_matches" | cut -d'|' -f2-)
+  printf '%s\n' "$_ct_matches" | while IFS='|' read -r _ct_agent _ct_m; do
+    [ -n "$_ct_agent" ] || continue
+    log_line "  [$_ct_agent] $_ct_m"
+    collect_path "$1" "$2" "$_ct_agent" "$_ct_m" </dev/null
   done
+  NESTED_CLAIMS=
 }
 
 # ---------------------------------------------------------------------------

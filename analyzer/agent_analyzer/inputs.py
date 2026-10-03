@@ -272,7 +272,7 @@ def _discover_loose(col: Collection, catalog: Catalog) -> None:
                         host=col.host, inferred=True)
             col.notes.append("root is a %s directory; treating its parent as the home" % e.agent)
             homes.append(home)
-            _add_hits(col, home, [(e, tree)])
+            _add_hits(col, home, [(e, tree)] + list(catalog.nested_matches(tree)))
             col.homes = homes
             return
 
@@ -317,6 +317,10 @@ def _make_home(here: Path, tree: Path, host: str) -> Home:
 
 
 def _add_hits(col: Collection, home: Home, hits) -> None:
+    # The most specific entry wins: .gemini/antigravity-cli claims its files
+    # before the enclosing .gemini entry sweeps the rest, matching the
+    # collectors' nested-claim rule.
+    hits = sorted(hits, key=lambda h: -len(h[0].segments))
     seen: Dict[Path, None] = {}
     for entry, hit in hits:
         for f in _walk_files(hit):

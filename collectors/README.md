@@ -17,8 +17,10 @@ Covered tools, with how each one's catalog entries were validated:
 | Cursor, Windsurf, Claude Desktop, ChatGPT Desktop | Official docs, vendor forums, published DFIR write-ups |
 
 VS Code, VSCodium and their forks are collected through their `User`
-directories, which hold the state of Copilot Chat, Cline, Roo Code, Kilo Code,
-Continue and Augment extensions. Shell histories and shared cross-agent
+directories, which hold Copilot Chat sessions and extension state. The
+globalStorage of the Cline, Roo Code, Kilo Code and Continue extensions is
+claimed by nested catalog entries, so those files are attributed to the
+extension's agent rather than to the editor, whichever editor they sit in. Shell histories and shared cross-agent
 directories such as `~/.agents` and `~/.env` are collected too.
 
 There are two collectors with the same catalog, manifest schema and archive
@@ -111,7 +113,10 @@ home directory, so macOS, Linux and Windows paths coexist and a Windows image
 mounted on a Linux workstation is collected correctly.
 
 Shared directories read by several agents are collected under the `shared`
-agent name. Project `.env` files are collected from discovered project
+agent name. When one tool keeps its state inside another tool's directory, as
+Antigravity CLI does under `~/.gemini/antigravity-cli`, the nested catalog
+entry wins: those files are collected once, attributed to the nested agent,
+and left out of the enclosing agent's walk. Project `.env` files are collected from discovered project
 directories because Aider, Gemini CLI, Qwen Code and Continue read them; they
 are flagged `secret: true` like every other credential file.
 

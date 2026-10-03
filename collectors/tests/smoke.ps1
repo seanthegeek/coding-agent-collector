@@ -125,6 +125,14 @@ Check 'transcript has owner and attributes fields' { $r -and $null -ne $r.owner 
 $r = Row 'Users/alice/.claude/.credentials.json'
 Check 'secret collected and flagged' { $r -and $r.secret -eq $true -and $r.status -eq 'collected' }
 Check 'antigravity token flagged secret' { (Row 'antigravity-cli/antigravity-oauth-token').secret -eq $true }
+$r = Row 'Users/alice/.gemini/antigravity-cli/conversations/c1.db'
+Check 'nested entry attributed to its own agent' { $r -and $r.agent -eq 'antigravity' }
+Check 'nested entry collected exactly once' { @($script:Rows | Where-Object { $_.path -like '*antigravity-cli*conversations*c1.db' }).Count -eq 1 }
+$r = Row 'Users/alice/.gemini/projects.json'
+Check 'enclosing entry still attributed to gemini-cli' { $r -and $r.agent -eq 'gemini-cli' }
+$r = Row 'Users/alice/AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/state/taskHistory.json'
+Check 'cline globalStorage attributed to cline, not vscode' { $r -and $r.agent -eq 'cline' }
+Check 'cline globalStorage collected exactly once' { @($script:Rows | Where-Object { $_.path -like '*saoudrizwan.claude-dev*taskHistory.json' }).Count -eq 1 }
 $r = Row 'Users/alice/.claude/cache'
 Check 'cache dir skipped_excluded with size' { $r -and $r.type -eq 'dir' -and $r.size -gt 0 -and $r.status -eq 'skipped_excluded' }
 Check 'cache contents not collected' { $null -eq (Row 'cache/junk.bin') }

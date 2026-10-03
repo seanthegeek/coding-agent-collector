@@ -65,7 +65,7 @@ param(
 
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
-$ToolVersion = '1.1.0'
+$ToolVersion = '1.2.0'
 $TOOL = 'collect-agent-artifacts'
 
 # ---------------------------------------------------------------------------
@@ -85,9 +85,10 @@ claude-desktop|.config/Claude-3p
 claude-desktop|AppData/Roaming/Claude
 claude-desktop|AppData/Roaming/Claude-3p
 claude-desktop|AppData/Local/Claude-3p
-# Google
+# Google (antigravity-cli lives inside ~/.gemini; the nested entry claims it)
 gemini-cli|.gemini
 gemini-cli|.cache/.gemini
+antigravity|.gemini/antigravity-cli
 antigravity|.antigravity
 antigravity|.cache/antigravity
 antigravity|.config/Antigravity/User
@@ -123,6 +124,21 @@ vscode|AppData/Roaming/Code*/logs
 vscode|Library/Application Support/VSCodium/User
 vscode|.config/VSCodium/User
 vscode|AppData/Roaming/VSCodium/User
+# VS Code family extension state. Each editor User directory is collected
+# above; these nested entries claim the agent extension globalStorage from
+# that walk so Cline, Roo, Kilo and Continue files are attributed to them.
+cline|.config/*/User/globalStorage/saoudrizwan.claude-dev
+cline|Library/Application Support/*/User/globalStorage/saoudrizwan.claude-dev
+cline|AppData/Roaming/*/User/globalStorage/saoudrizwan.claude-dev
+roo-code|.config/*/User/globalStorage/rooveterinaryinc.roo-cline
+roo-code|Library/Application Support/*/User/globalStorage/rooveterinaryinc.roo-cline
+roo-code|AppData/Roaming/*/User/globalStorage/rooveterinaryinc.roo-cline
+kilo-code|.config/*/User/globalStorage/kilocode.kilo-code
+kilo-code|Library/Application Support/*/User/globalStorage/kilocode.kilo-code
+kilo-code|AppData/Roaming/*/User/globalStorage/kilocode.kilo-code
+continue|.config/*/User/globalStorage/continue.continue
+continue|Library/Application Support/*/User/globalStorage/continue.continue
+continue|AppData/Roaming/*/User/globalStorage/continue.continue
 # Windsurf (rebranding to Devin)
 windsurf|.codeium
 windsurf|.windsurf/extensions/extensions.json
@@ -805,6 +821,8 @@ function Add-Tree([string]$user, [string]$homeDir, [string]$agent, [string]$dir)
   try { $children = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop) }
   catch { Write-Log "list failed: ${dir}: $($_.Exception.Message)"; return }
   foreach ($child in $children) {
+    # A path matched by another catalog entry is collected under that entry.
+    if ($script:ClaimedPaths.ContainsKey($child.FullName)) { continue }
     $hrel = Get-RelPath $homeDir $child.FullName
     if (Test-AnyMatch $hrel $script:ExcludeRegexes) { Add-Excluded $user $homeDir $agent $child; continue }
     $isLink = (($child.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
@@ -823,15 +841,27 @@ function Add-Path([string]$user, [string]$homeDir, [string]$agent, [string]$path
 }
 
 function Invoke-CatalogCollection([string]$user, [string]$base, [string]$table) {
+  # Expand every entry first so a nested match (.gemini/antigravity-cli inside
+  # .gemini) is attributed to its own agent and collected once; Add-Tree skips
+  # children that another entry claimed.
+  # ($matches would shadow PowerShell's automatic regex variable.)
+  $claimed = @()
+  $script:ClaimedPaths = @{}
   foreach ($line in (Get-TableLines $table)) {
     $parts = @($line -split '\|', 2)
     if ($parts.Count -lt 2) { continue }
     $agent = $parts[0]; $pattern = $parts[1]
-    foreach ($m in (Expand-Glob $base $pattern)) {
-      Write-Log "  [$agent] $m"
-      Add-Path $user $base $agent $m
+    foreach ($m in @(Expand-Glob $base $pattern)) {
+      $claimed += ,@($agent, $m)
+      $script:ClaimedPaths[$m] = $true
     }
   }
+  foreach ($pair in $claimed) {
+    $agent = $pair[0]; $m = $pair[1]
+    Write-Log "  [$agent] $m"
+    Add-Path $user $base $agent $m
+  }
+  $script:ClaimedPaths = @{}
 }
 
 # ---------------------------------------------------------------------------

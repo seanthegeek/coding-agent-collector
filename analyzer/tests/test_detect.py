@@ -37,12 +37,25 @@ class LooseDetectTests(unittest.TestCase):
         self.assertEqual(col.kind, "loose")
         by_user = self.agents_by_user(col)
         self.assertEqual(set(by_user), {"alice", "bob", "carol"})
-        self.assertEqual(by_user["alice"], {"claude-code", "codex-cli"})
+        self.assertEqual(by_user["alice"], {"claude-code", "codex-cli", "gemini-cli", "antigravity", "vscode", "cline"})
         self.assertEqual(by_user["carol"], {"codex-cli"})
         homes = {h.user: h for h in col.homes}
         self.assertEqual(homes["alice"].original, "/home/alice")
         self.assertEqual(homes["carol"].original, "/Users/carol")
         self.assertTrue(all(h.inferred for h in col.homes))
+
+    def test_nested_entry_wins_over_enclosing_entry(self):
+        home = build_home(self.tmp / "home" / "alice")
+        for root in (self.tmp / "home", home / ".gemini"):
+            col = open_input(root, self.cat)
+            by_rel = {a.rel: a.agent for a in col.artifacts}
+            self.assertEqual(by_rel[".gemini/antigravity-cli/history.jsonl"], "antigravity", root)
+            self.assertEqual(by_rel[".gemini/settings.json"], "gemini-cli", root)
+            self.assertEqual(sum(1 for a in col.artifacts if a.rel == ".gemini/antigravity-cli/history.jsonl"), 1)
+        col = open_input(self.tmp / "home", self.cat)
+        by_rel = {a.rel: a.agent for a in col.artifacts}
+        self.assertEqual(by_rel[".config/Code/User/globalStorage/saoudrizwan.claude-dev/state/taskHistory.json"], "cline")
+        self.assertEqual(by_rel[".config/Code/User/globalStorage/state.vscdb"], "vscode")
 
     def test_project_dirs_inside_home_are_not_homes(self):
         root = build_image(self.tmp / "image")

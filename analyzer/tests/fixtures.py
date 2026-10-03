@@ -114,6 +114,15 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
            codex_rollout_records())
     _jsonl(home / ".codex/history.jsonl", codex_history_records())
     (home / ".codex/config.toml").write_text('model = "gpt-5-codex"\n', encoding="utf-8")
+    # Nested catalog entries: Antigravity CLI inside ~/.gemini, and a Cline
+    # extension inside VS Code's globalStorage. The nested agent must win.
+    _jsonl(home / ".gemini/antigravity-cli/history.jsonl", [{"prompt": "hi"}])
+    (home / ".gemini/settings.json").write_text("{}", encoding="utf-8")
+    gs = home / ".config/Code/User/globalStorage"
+    gs.mkdir(parents=True, exist_ok=True)
+    (gs / "state.vscdb").write_text("sqlite", encoding="utf-8")
+    (gs / "saoudrizwan.claude-dev/state").mkdir(parents=True, exist_ok=True)
+    (gs / "saoudrizwan.claude-dev/state/taskHistory.json").write_text("[]", encoding="utf-8")
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")

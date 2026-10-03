@@ -55,6 +55,17 @@ class Catalog:
             seen.setdefault(e.first_segment, e.regexes[0])
         return list(seen.values())
 
+    def nested_matches(self, agent_dir: Path) -> Iterator[Tuple[Entry, Path]]:
+        """Yield (entry, path) for catalog globs that live inside agent_dir
+        when agent_dir itself is the first segment of their glob, for example
+        .gemini/antigravity-cli inside a .gemini directory given as the root."""
+        listing_cache: Dict[Path, List[str]] = {}
+        for entry in self.entries:
+            if len(entry.segments) < 2 or entry.regexes[0].fullmatch(agent_dir.name) is None:
+                continue
+            for hit in _expand(agent_dir, entry.regexes[1:], listing_cache):
+                yield entry, hit
+
     def matches_in_home(self, home: Path) -> Iterator[Tuple[Entry, Path]]:
         """Yield (entry, path) for every catalog glob that exists under home.
 

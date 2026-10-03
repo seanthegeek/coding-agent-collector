@@ -131,7 +131,13 @@ between the sh single-quoted strings and the PowerShell `@'...'@`
 here-strings; `collectors/tests/catalog-sync.sh` fails on any drift, and `--list` and
 `-List` must print identical output. Glob semantics are shared: catalog
 globs do not cross `/`, exclusion and secret globs do, and `[...]` classes
-work in both (the PowerShell side converts globs to regexes).
+work in both (the PowerShell side converts globs to regexes). An entry nested
+inside another entry's match (`antigravity|.gemini/antigravity-cli` inside
+`gemini-cli|.gemini`) claims its subtree: both collectors expand every entry
+first and prune claimed paths from the enclosing walk, so each file is
+collected once under the most specific agent, and the analyzer applies the
+same rule in loose mode. Use a nested entry whenever one tool stores its state
+inside another tool's directory.
 
 **Manifest schema is an interface.** The v2 parser and analysts depend on
 `manifest.jsonl` and `collection.json`. Fields, status values

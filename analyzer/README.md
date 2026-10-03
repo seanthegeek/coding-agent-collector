@@ -60,7 +60,10 @@ collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.t
 ```
 
 Every agent the collectors know is therefore detected, whether or not a
-parser exists for it. `python3 -m agent_analyzer catalog --agents` lists the
+parser exists for it. When two entries match the same file, the more specific
+one wins, so Antigravity CLI state under `.gemini/antigravity-cli` is
+attributed to `antigravity`, not to the enclosing `gemini-cli` entry, in both
+loose mode and the collectors' manifests. `python3 -m agent_analyzer catalog --agents` lists the
 agents and which have parsers.
 
 ## Parsers
