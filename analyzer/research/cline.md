@@ -171,7 +171,7 @@ history because it has `ts`), one per content block of SDK messages.
 | model | `modelInfo.modelId` or `task_metadata.model_usage` | `modelInfo.id` or manifest `model` |
 | tool_name | `ClineSayTool.tool` / `use_mcp_server.toolName` | `tool_use.name` |
 | tool_use_id | `ts` | `tool_use.id` / `tool_use_id` |
-| summary | `text` | first text or tool input |
+| text | `text` | first text or tool input |
 
 Fixtures (invented content, real field names):
 

@@ -441,7 +441,7 @@ class AntigravityParser(Parser):
             row.timestamp_utc = to_utc(rec.get("timestamp"))
             row.project_path = uri_to_path(str(rec.get("workspace") or ""))
             row.turn_type = "user"
-            row.summary = compact(rec.get("display"), opts.summary_length)
+            row.text = compact(rec.get("display"), opts.max_text_length)
             yield row
 
     # -- conversation_summaries.db ----------------------------------------------
@@ -463,12 +463,12 @@ class AntigravityParser(Parser):
                     uris = []
                 row.project_path = uri_to_path(uris[0]) if uris else ""
                 row.turn_type = "system"
-                row.summary = compact(_join(
+                row.text = compact(_join(
                     "conversation summary", r.get("title") or r.get("preview") or "",
                     str(r.get("status") or ""), "%s steps" % r.get("step_count", 0),
                     "agent=%s" % r["agent_name"] if r.get("agent_name") else "",
                     "parent=%s" % r["parent_conversation_id"] if r.get("parent_conversation_id") else "",
-                ), opts.summary_length)
+                ), opts.max_text_length)
                 yield row
 
     # -- conversations/<id>.db -----------------------------------------------------
@@ -500,11 +500,11 @@ class AntigravityParser(Parser):
                         row = self._row(artifact, 0, session_id, project_path, branch)
                         row.timestamp_utc = meta["created_at"]
                         row.turn_type = "system"
-                        row.summary = compact(_join(
+                        row.text = compact(_join(
                             "session start", "source=%s" % source if source else "",
                             "project_id=%s" % meta["project_id"] if meta.get("project_id") else "",
                             "parent=%s" % meta["parent_conversation_id"] if meta.get("parent_conversation_id") else "",
-                        ), opts.summary_length)
+                        ), opts.max_text_length)
                         yield row
             models: Dict[int, str] = {}
             if "gen_metadata" in tables:
@@ -532,7 +532,7 @@ class AntigravityParser(Parser):
             if bad:
                 row = self._row(artifact, 0, session_id, project_path, branch)
                 row.turn_type = "system"
-                row.summary = "parser: %d step(s) could not be decoded" % bad
+                row.text = "parser: %d step(s) could not be decoded" % bad
                 yield row
 
     def _row(self, artifact: Artifact, idx: int, session_id: str, project_path: str, branch: str) -> Row:
@@ -565,7 +565,7 @@ class AntigravityParser(Parser):
             text = payload.get("query") or payload.get("user_response") or ""
             if payload.get("is_queued_message"):
                 text = "[queued] " + text
-            row.summary = compact(text, opts.summary_length)
+            row.text = compact(text, opts.max_text_length)
             yield row
             return
 
@@ -574,20 +574,20 @@ class AntigravityParser(Parser):
             if thinking and opts.include_thinking:
                 row = base(created)
                 row.turn_type = "thinking"
-                row.summary = compact(thinking, opts.summary_length)
+                row.text = compact(thinking, opts.max_text_length)
                 yield row
             text = payload.get("modified_response") or payload.get("response")
             if text:
                 row = base(completed)
                 row.turn_type = "assistant"
-                row.summary = compact(text, opts.summary_length)
+                row.text = compact(text, opts.max_text_length)
                 yield row
             for tc in payload.get("tool_calls", []):
                 row = base(completed)
                 row.turn_type = "tool_use"
                 row.tool_name = tc.get("name") or tc.get("original_name", "")
                 row.tool_use_id = tc.get("id", "")
-                row.summary = compact(tool_args_summary(tc.get("arguments_json", "")), opts.summary_length)
+                row.text = compact(tool_args_summary(tc.get("arguments_json", "")), opts.max_text_length)
                 yield row
             return
 
@@ -603,5 +603,5 @@ class AntigravityParser(Parser):
         else:
             row = base(created)
             row.turn_type = "system"
-        row.summary = compact(text, opts.summary_length)
+        row.text = compact(text, opts.max_text_length)
         yield row

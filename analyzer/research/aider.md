@@ -88,7 +88,7 @@ Rows: one per `#### ` block (user), per assistant run, per `> ` run
 | git_branch | empty |
 | model | empty |
 | tool_name, tool_use_id | empty |
-| summary | prompt text, assistant text, blockquote text |
+| text | prompt text, assistant text, blockquote text |
 
 Fixture `.aider.chat.history.md`:
 

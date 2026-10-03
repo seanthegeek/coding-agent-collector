@@ -18,7 +18,7 @@ TIMELINE_COLUMNS = [
     "model",
     "tool_name",
     "tool_use_id",
-    "summary",
+    "text",
     "source_file",
     "source_line",
 ]
@@ -54,7 +54,7 @@ class Row:
     model: str = ""
     tool_name: str = ""
     tool_use_id: str = ""
-    summary: str = ""
+    text: str = ""
     source_file: str = ""
     source_line: int = 0
 
@@ -126,7 +126,7 @@ def summarise(rows: List[Row]) -> List[SessionSummary]:
 
 
 def compact(text: Optional[object], limit: int) -> str:
-    """One-line, length-capped summary text. Whitespace runs collapse so the
+    """One-line text, optionally length-capped. Whitespace runs collapse so the
     CSV stays one row per record; the full content is at source_file:line."""
     if text is None:
         return ""

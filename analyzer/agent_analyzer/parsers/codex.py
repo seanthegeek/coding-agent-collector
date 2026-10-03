@@ -89,7 +89,7 @@ class CodexParser(Parser):
             row.timestamp_utc = to_utc(rec.get("ts"))
             row.session_id = str(rec.get("session_id") or "")
             row.turn_type = "user"
-            row.summary = compact(rec.get("text"), opts.summary_length)
+            row.text = compact(rec.get("text"), opts.max_text_length)
             yield row
 
     def _parse_rollout(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
@@ -123,9 +123,9 @@ class CodexParser(Parser):
                 row = base()
                 row.timestamp_utc = to_utc(payload.get("timestamp") or rec.get("timestamp"))
                 row.turn_type = "system"
-                row.summary = compact("session start: %s %s provider=%s cwd=%s" % (
+                row.text = compact("session start: %s %s provider=%s cwd=%s" % (
                     payload.get("originator") or "codex", payload.get("cli_version") or "",
-                    payload.get("model_provider") or "", cwd), opts.summary_length)
+                    payload.get("model_provider") or "", cwd), opts.max_text_length)
                 yield row
             elif rtype == "turn_context":
                 cwd = str(payload.get("cwd") or cwd)
@@ -173,10 +173,10 @@ class CodexParser(Parser):
             row.session_id = session_id
             row.turn_type = "system"
             row.source_line = errors[0][0]
-            row.summary = "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0])
+            row.text = "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0])
             yield row
 
     @staticmethod
     def _fill(row: Row, text: str, opts: Options) -> Row:
-        row.summary = compact(text, opts.summary_length)
+        row.text = compact(text, opts.max_text_length)
         return row

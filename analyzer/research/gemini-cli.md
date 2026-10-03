@@ -143,7 +143,7 @@ file covers that `sessionId`.
 | turn_type | user → user; gemini → assistant; info/error/warning → system; toolCalls → tool_use/tool_result; thoughts → thinking |
 | model | `model` |
 | tool_name, tool_use_id | `toolCalls[].name`, `toolCalls[].id` |
-| summary | `content` text; for tool_use `displayName` plus args; `summary` on `$set` |
+| text | `content` text; for tool_use `displayName` plus args; `summary` on `$set` |
 
 Fixture (one JSON object per line):
 

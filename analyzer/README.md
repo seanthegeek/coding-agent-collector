@@ -18,6 +18,9 @@ python3 -m agent_analyzer detect /cases/host01/host01_20261003T165531Z_agent-art
 # Build the timeline
 python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/analysis
 
+# Shorter rows for a spreadsheet
+python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/short --max-text-length 200
+
 # A home directory copied off a host by other means, or a mounted image
 python3 -m agent_analyzer timeline /mnt/evidence -o /cases/host02/analysis --host host02
 
@@ -76,7 +79,9 @@ agents and which have parsers.
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
-unless `--include-thinking` is passed. History files are parsed even when the
+unless `--include-thinking` is passed. The `text` column carries the full
+text of each event by default, so the timeline is a complete transcript, one
+event per row; `--max-text-length` shortens it for a spreadsheet view. History files are parsed even when the
 matching session transcript exists, because they survive session deletion;
 filter on `source_file` to drop them.
 
@@ -119,7 +124,7 @@ detect.json     what detect would have printed, for the record
 | `model` | Model that produced the turn, where recorded. |
 | `tool_name` | For `tool_use` rows: the tool. Codex shell calls are `shell`. |
 | `tool_use_id` | Links a `tool_use` row to its `tool_result`. |
-| `summary` | The prompt, response, command, file path or output, whitespace collapsed and cut to `--summary-length` characters (default 400, `0` for unlimited). For tool calls it is the most identifying argument: the Bash command, the edited file, the search pattern, the fetched URL. Everything else is JSON. |
+| `text` | The event's text with whitespace runs collapsed: the prompt, the response, the tool output, or for a tool call its most identifying argument (the Bash command, the edited file, the search pattern, the fetched URL), else the arguments as JSON. Full length by default; `--max-text-length` cuts it. |
 | `source_file` | Path of the record on the source host, as in the manifest. In loose mode it is relative to the input root. |
 | `source_line` | Line number in that file, so the full record can be read. |
 
@@ -148,7 +153,7 @@ existing ones, but existing columns keep their names, order and meaning.
 | `--user NAME` | User to record for a home whose owner cannot be inferred. |
 | `--work-dir DIR` | Where to extract an archive. Default is a temporary directory. |
 | `--keep-extracted` | Keep the extracted archive and print its path. |
-| `--summary-length N` | Cap on the `summary` column. Default 400, `0` disables. |
+| `--max-text-length N` | Cut the `text` column to N characters, marking the cut with an ellipsis. Default `0`, the full text. |
 | `--include-thinking` | Emit thinking and reasoning blocks as `thinking` rows. |
 | `--agent NAME` | Parse only this agent. Repeatable. |
 
@@ -176,7 +181,8 @@ collector on the fake image and analyses the resulting archive end to end.
 2. Subclass `Parser` in `agent_analyzer/parsers/<agent>.py`: set `agent` to
    the catalog name, implement `wants` on `artifact.rel` and `parse` yielding
    `Row` objects. Use `iter_jsonl` so a truncated line is reported, not fatal.
-   Timestamps go through `to_utc`; text through `compact`.
+   Timestamps go through `to_utc`; text through `compact`, which collapses
+   whitespace and applies `--max-text-length`.
 3. Register it in `agent_analyzer/parsers/__init__.py`.
 4. Add fixture records to `tests/fixtures.py` and a test class to
    `tests/test_parsers.py`. Then add the row to the table above.

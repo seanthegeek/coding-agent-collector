@@ -89,7 +89,7 @@ class ClaudeCodeParser(Parser):
             row.session_id = str(rec.get("sessionId") or "")
             row.project_path = str(rec.get("project") or "")
             row.turn_type = "user"
-            row.summary = compact(rec.get("display"), opts.summary_length)
+            row.text = compact(rec.get("display"), opts.max_text_length)
             yield row
 
     def _parse_session(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
@@ -126,17 +126,17 @@ class ClaudeCodeParser(Parser):
                             text = text_of(block.get("content"))
                             if block.get("is_error"):
                                 text = "[error] " + text
-                            row.summary = compact(text, opts.summary_length)
+                            row.text = compact(text, opts.max_text_length)
                             yield row
                         elif btype in ("text", "image"):
                             row = base()
                             row.turn_type = "system" if is_meta else "user"
-                            row.summary = compact(text_of([block]), opts.summary_length)
+                            row.text = compact(text_of([block]), opts.max_text_length)
                             yield row
                 else:
                     row = base()
                     row.turn_type = "system" if is_meta else "user"
-                    row.summary = compact(text_of(content), opts.summary_length)
+                    row.text = compact(text_of(content), opts.max_text_length)
                     yield row
             elif rtype == "assistant":
                 msg = rec.get("message") or {}
@@ -153,7 +153,7 @@ class ClaudeCodeParser(Parser):
                         row.model = model
                         row.tool_name = str(block.get("name") or "")
                         row.tool_use_id = str(block.get("id") or "")
-                        row.summary = compact(tool_summary(row.tool_name, block.get("input")), opts.summary_length)
+                        row.text = compact(tool_summary(row.tool_name, block.get("input")), opts.max_text_length)
                         yield row
                     elif btype == "text":
                         text = block.get("text")
@@ -162,13 +162,13 @@ class ClaudeCodeParser(Parser):
                         row = base()
                         row.turn_type = "assistant"
                         row.model = model
-                        row.summary = compact(text, opts.summary_length)
+                        row.text = compact(text, opts.max_text_length)
                         yield row
                     elif btype in ("thinking", "redacted_thinking") and opts.include_thinking:
                         row = base()
                         row.turn_type = "thinking"
                         row.model = model
-                        row.summary = compact(block.get("thinking") or "[redacted]", opts.summary_length)
+                        row.text = compact(block.get("thinking") or "[redacted]", opts.max_text_length)
                         yield row
             elif rtype == "system":
                 row = base()
@@ -177,22 +177,22 @@ class ClaudeCodeParser(Parser):
                 detail = rec.get("content")
                 if subtype == "turn_duration":
                     detail = "%s ms, %s messages" % (rec.get("durationMs"), rec.get("messageCount"))
-                row.summary = compact("%s: %s" % (subtype, text_of(detail)) if detail else subtype, opts.summary_length)
+                row.text = compact("%s: %s" % (subtype, text_of(detail)) if detail else subtype, opts.max_text_length)
                 yield row
             elif rtype == "pr-link":
                 row = base()
                 row.turn_type = "system"
-                row.summary = compact("pr-link: %s" % (rec.get("prUrl") or rec.get("prNumber")), opts.summary_length)
+                row.text = compact("pr-link: %s" % (rec.get("prUrl") or rec.get("prNumber")), opts.max_text_length)
                 yield row
             elif rtype == "queue-operation":
                 row = base()
                 row.turn_type = "system"
-                row.summary = compact("queue %s: %s" % (rec.get("operation"), rec.get("content") or ""), opts.summary_length)
+                row.text = compact("queue %s: %s" % (rec.get("operation"), rec.get("content") or ""), opts.max_text_length)
                 yield row
         if errors:
             row = self.base_row(artifact)
             row.session_id = session_id
             row.turn_type = "system"
             row.source_line = errors[0][0]
-            row.summary = "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0])
+            row.text = "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0])
             yield row

@@ -58,26 +58,26 @@ class ClaudeCodeTests(ParserBase):
             self.assertEqual(r.source_file, "/alice/" + self.REL)   # original path is relative to the input root
             self.assertTrue(r.timestamp_utc.endswith("Z"), r)
         user, use, result, asst, dur, meta, pr = rows
-        self.assertEqual(user.summary, "delete the logs in /var/log please")
+        self.assertEqual(user.text, "delete the logs in /var/log please")
         self.assertEqual((user.project_path, user.git_branch), ("/srv/proj", "main"))
         self.assertEqual((use.tool_name, use.tool_use_id, use.model), ("Bash", "toolu_01", "claude-fable-5-1"))
-        self.assertEqual(use.summary, "rm -rf /var/log/*.log")
-        self.assertEqual((result.tool_use_id, result.summary), ("toolu_01", "removed 3 files"))
-        self.assertEqual(asst.summary, "Done. Three log files were removed.")
-        self.assertEqual(dur.summary, "turn_duration: 4000 ms, 5 messages")
-        self.assertTrue(meta.summary.startswith("<local-command-stdout>"))
-        self.assertEqual(pr.summary, "pr-link: https://github.com/x/y/pull/7")
+        self.assertEqual(use.text, "rm -rf /var/log/*.log")
+        self.assertEqual((result.tool_use_id, result.text), ("toolu_01", "removed 3 files"))
+        self.assertEqual(asst.text, "Done. Three log files were removed.")
+        self.assertEqual(dur.text, "turn_duration: 4000 ms, 5 messages")
+        self.assertTrue(meta.text.startswith("<local-command-stdout>"))
+        self.assertEqual(pr.text, "pr-link: https://github.com/x/y/pull/7")
         self.assertEqual([r.source_line for r in rows], [2, 4, 5, 6, 7, 8, 9])
 
     def test_thinking_opt_in(self):
         rows = self.rows_for(ClaudeCodeParser(), self.REL, include_thinking=True)
         self.assertIn("thinking", [r.turn_type for r in rows])
-        self.assertEqual(next(r for r in rows if r.turn_type == "thinking").summary, "private reasoning")
+        self.assertEqual(next(r for r in rows if r.turn_type == "thinking").text, "private reasoning")
 
-    def test_summary_length(self):
-        rows = self.rows_for(ClaudeCodeParser(), self.REL, summary_length=10)
-        self.assertTrue(all(len(r.summary) <= 10 for r in rows))
-        self.assertTrue(rows[0].summary.endswith("…"))
+    def test_max_text_length(self):
+        rows = self.rows_for(ClaudeCodeParser(), self.REL, max_text_length=10)
+        self.assertTrue(all(len(r.text) <= 10 for r in rows))
+        self.assertTrue(rows[0].text.endswith("…"))
 
     def test_history(self):
         rows = self.rows_for(ClaudeCodeParser(), ".claude/history.jsonl")
@@ -106,7 +106,7 @@ class ClaudeCodeTests(ParserBase):
         write_bad_line(self.home / self.REL)
         rows = self.rows_for(ClaudeCodeParser(), self.REL)
         self.assertEqual(len(rows), 8)
-        self.assertIn("1 unparseable line", rows[-1].summary)
+        self.assertIn("1 unparseable line", rows[-1].text)
         self.assertEqual(rows[-1].source_line, 11)
 
 
@@ -124,20 +124,20 @@ class CodexTests(ParserBase):
             self.assertEqual(r.project_path, "/srv/proj")
             self.assertEqual(r.git_branch, "feature/x")
         start, started, dev, user, sh, shout, patch, patchout, asst, done = rows
-        self.assertIn("session start: codex_cli_rs 0.99.0", start.summary)
+        self.assertIn("session start: codex_cli_rs 0.99.0", start.text)
         self.assertEqual(start.model, "")                      # model unknown until turn_context
         self.assertEqual(user.model, "gpt-5-codex")
-        self.assertTrue(dev.summary.startswith("developer: You are Codex."))
-        self.assertEqual((sh.tool_name, sh.tool_use_id, sh.summary), ("shell", "call_1", "ls -la ~"))
-        self.assertEqual((shout.tool_use_id, shout.summary), ("call_1", "total 42"))
-        self.assertEqual((patch.tool_name, patch.summary), ("apply_patch", '{"patch":"*** Begin Patch"}'))
-        self.assertEqual(patchout.summary, "Done")
-        self.assertEqual(asst.summary, "Listed the home directory.")
-        self.assertEqual(done.summary, "task_complete turn=t1 duration_ms=7000")
+        self.assertTrue(dev.text.startswith("developer: You are Codex."))
+        self.assertEqual((sh.tool_name, sh.tool_use_id, sh.text), ("shell", "call_1", "ls -la ~"))
+        self.assertEqual((shout.tool_use_id, shout.text), ("call_1", "total 42"))
+        self.assertEqual((patch.tool_name, patch.text), ("apply_patch", '{"patch":"*** Begin Patch"}'))
+        self.assertEqual(patchout.text, "Done")
+        self.assertEqual(asst.text, "Listed the home directory.")
+        self.assertEqual(done.text, "task_complete turn=t1 duration_ms=7000")
 
     def test_reasoning_opt_in(self):
         rows = self.rows_for(CodexParser(), self.REL, include_thinking=True)
-        self.assertEqual([r.summary for r in rows if r.turn_type == "thinking"], ["thinking"])
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["thinking"])
 
     def test_history(self):
         rows = self.rows_for(CodexParser(), ".codex/history.jsonl")
@@ -256,37 +256,37 @@ class AntigravityTests(ParserBase):
             self.assertEqual((r.project_path, r.git_branch), ("/home/u/proj", "main"))
             self.assertTrue(r.timestamp_utc.endswith("Z"), r)
         start, user, asst, use1, res1, use2, res2, use3, res3, injected, final, ckpt = rows
-        self.assertIn("session start", start.summary)
-        self.assertIn("project_id=default-cli-project", start.summary)
-        self.assertEqual(user.summary, "clean the logs")
+        self.assertIn("session start", start.text)
+        self.assertIn("project_id=default-cli-project", start.text)
+        self.assertEqual(user.text, "clean the logs")
         self.assertEqual(user.timestamp_utc, "2026-10-01T10:00:00.000Z")
-        self.assertEqual((asst.summary, asst.model), ("I will read the README first.", "gemini-3.8-flash"))
-        self.assertEqual((use1.tool_name, use1.tool_use_id, use1.summary), ("view_file", "call_1", "/home/u/proj/README.md"))
+        self.assertEqual((asst.text, asst.model), ("I will read the README first.", "gemini-3.8-flash"))
+        self.assertEqual((use1.tool_name, use1.tool_use_id, use1.text), ("view_file", "call_1", "/home/u/proj/README.md"))
         self.assertEqual((res1.tool_name, res1.tool_use_id), ("view_file", "call_1"))
-        self.assertTrue(res1.summary.startswith("File Path: README.md"))
+        self.assertTrue(res1.text.startswith("File Path: README.md"))
         self.assertEqual(res1.timestamp_utc, "2026-10-01T10:00:04.000Z")      # completed_at, not created_at
-        self.assertEqual((use2.tool_name, use2.summary), ("run_command", "rm -rf /var/log/*.log"))
-        self.assertEqual(res2.summary, "rm -rf /var/log/*.log | exit=0 | removed 3 files")
-        self.assertEqual(use3.summary, "/home/u/proj/notes.md")
-        self.assertEqual(res3.summary, "[error] /home/u/proj/notes.md [created]")
+        self.assertEqual((use2.tool_name, use2.text), ("run_command", "rm -rf /var/log/*.log"))
+        self.assertEqual(res2.text, "rm -rf /var/log/*.log | exit=0 | removed 3 files")
+        self.assertEqual(use3.text, "/home/u/proj/notes.md")
+        self.assertEqual(res3.text, "[error] /home/u/proj/notes.md [created]")
         self.assertEqual(injected.turn_type, "system")                        # USER_IMPLICIT source
-        self.assertEqual(final.summary, "Done. Three log files were removed.")
-        self.assertEqual(ckpt.summary, "checkpoint: Clean logs")
+        self.assertEqual(final.text, "Done. Three log files were removed.")
+        self.assertEqual(ckpt.text, "checkpoint: Clean logs")
         self.assertEqual([r.source_line for r in rows], [0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
     def test_thinking_opt_in(self):
         rows = self.rows_for(AntigravityParser(), self.REL, include_thinking=True)
-        self.assertEqual([r.summary for r in rows if r.turn_type == "thinking"], ["look before leaping"])
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["look before leaping"])
 
     def test_summaries_and_history(self):
         rows = self.rows_for(AntigravityParser(), ".gemini/antigravity-cli/conversation_summaries.db")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].session_id, AGY_CONVERSATION)
         self.assertEqual(rows[0].timestamp_utc, "2026-10-01T10:00:13.002Z")
-        self.assertIn("CASCADE_RUN_STATUS_IDLE", rows[0].summary)
+        self.assertIn("CASCADE_RUN_STATUS_IDLE", rows[0].text)
         self.assertEqual(rows[0].project_path, "/home/u/proj")
         rows = self.rows_for(AntigravityParser(), ".gemini/antigravity-cli/history.jsonl")
-        self.assertEqual((rows[0].turn_type, rows[0].summary, rows[0].project_path), ("user", "clean the logs", "/home/u/proj"))
+        self.assertEqual((rows[0].turn_type, rows[0].text, rows[0].project_path), ("user", "clean the logs", "/home/u/proj"))
 
     def test_sidecars_and_token_not_wanted(self):
         p = AntigravityParser()

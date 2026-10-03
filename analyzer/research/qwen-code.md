@@ -131,7 +131,7 @@ row per `functionCall` part and a `thinking` row per `thought:true` part.
 | model | `model` |
 | tool_name | `functionCall.name` / `functionResponse.name` |
 | tool_use_id | `functionCall.id` / `toolCallResult.callId` |
-| summary | text parts, `systemPayload.displayText`, `rawCommand`, `toolCallResult.status` plus `errorType` |
+| text | text parts, `systemPayload.displayText`, `rawCommand`, `toolCallResult.status` plus `errorType` |
 
 Fixture:
 

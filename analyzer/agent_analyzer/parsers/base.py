@@ -12,7 +12,7 @@ from ..model import Row
 
 @dataclass
 class Options:
-    summary_length: int = 400
+    max_text_length: int = 0   # 0 means unlimited
     include_thinking: bool = False
 
 

@@ -188,7 +188,7 @@ Rows: one per user prompt, assistant message, `tool_uses[]` entry and
 | model | `request_metadata.model_id`, else `model_info.model_id`, else `model` |
 | tool_name | `tool_uses[].name` (keep `orig_name` for MCP); result rows look the name up by id |
 | tool_use_id | `id` / `tool_use_id` |
-| summary | prompt, content, `json.dumps(args)` or result text, with status appended for results |
+| text | prompt, content, `json.dumps(args)` or result text, with status appended for results |
 
 Fixture:
 

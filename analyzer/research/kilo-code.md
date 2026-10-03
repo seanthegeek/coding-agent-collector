@@ -116,7 +116,7 @@ Rows: one per V1 `part`, or per V2 `session_message` content item.
 | turn_type | text → by role; reasoning → thinking; tool → tool_use plus tool_result; step-*/compaction → system |
 | model | `assistant.modelID` |
 | tool_name, tool_use_id | `part.data.tool`, `callID` |
-| summary | `text` or `state.title` |
+| text | `text` or `state.title` |
 
 Fixtures:
 

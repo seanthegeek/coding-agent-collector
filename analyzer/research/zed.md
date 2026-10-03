@@ -156,7 +156,7 @@ no transcript).
 | turn_type | `User.Text/Mention/Image` → user; `Agent.Text` → assistant; `Thinking`/`RedactedThinking` → thinking; `ToolUse` → tool_use; `tool_results[*]` → tool_result; `Resume`/`Compaction` → system |
 | model | `model.provider/model.model` |
 | tool_name, tool_use_id | `ToolUse.name` / `tool_name`, `ToolUse.id` / `tool_use_id` |
-| summary | text, `arguments` JSON, result text; `Mention.uri` for mentions |
+| text | text, `arguments` JSON, result text; `Mention.uri` for mentions |
 
 Fixtures. `threads.db` (`data` is the zstd of the JSON below,
 `data_type='zstd'`):

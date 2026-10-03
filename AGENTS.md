@@ -195,9 +195,9 @@ rules are different from the collectors'.
   Timestamps are always UTC ISO 8601 with milliseconds and a trailing Z.
 - **Read-only, no surprises.** The analyzer writes only under `-o` and the
   archive work directory, never follows symlinks, and never materialises
-  symlinks from an archive. Summaries are truncated by default so a CSV can
-  be shared without carrying whole transcripts; `--summary-length 0` is the
-  analyst's choice.
+  symlinks from an archive. The `text` column carries the full event text by
+  default; `--max-text-length` is the analyst's choice when a shorter CSV is
+  wanted.
 - **Tests.** `analyzer/tests/run.sh` must pass. Add a fixture and a test
   class for every parser, and a detection test for every new input shape.
 

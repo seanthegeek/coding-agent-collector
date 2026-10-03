@@ -139,7 +139,7 @@ one `thinking` per thinking part, one `tool_use` plus `tool_result` per
 | git_branch | empty |
 | model | `modelId` |
 | tool_name, tool_use_id | `toolId`, `toolCallId` |
-| summary | text, `invocationMessage` or `commandLine.original` |
+| text | text, `invocationMessage` or `commandLine.original` |
 
 Fixture `chatSessions/9ab.jsonl`:
 

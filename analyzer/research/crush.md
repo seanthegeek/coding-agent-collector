@@ -105,7 +105,7 @@ Rows: one per part in `parts`.
 | turn_type | `user`/`assistant` text; `reasoning` → thinking; `tool_call` → tool_use; `tool_result` → tool_result; role `system`, `finish`, `shell_command` → system |
 | model | `provider`/`model` (or `prism_model_id`) |
 | tool_name, tool_use_id | `data.name`, `data.id` or `data.tool_call_id` |
-| summary | text, input JSON, output |
+| text | text, input JSON, output |
 
 Fixture rows:
 

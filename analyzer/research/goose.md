@@ -160,7 +160,7 @@ Rows: one per `content_json` block, plus one `system` row per session from
 | model | `metadata_json.inference.requestedModel`, else `model_config_json.model_name` prefixed with `provider_name/` |
 | tool_name | `toolCall.value.name` (responses look the name up by id) |
 | tool_use_id | `toolRequest.id` / `toolResponse.id` |
-| summary | text, `arguments` JSON, result text |
+| text | text, `arguments` JSON, result text |
 
 Fixture:
 

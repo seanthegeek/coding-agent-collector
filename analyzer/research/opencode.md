@@ -147,7 +147,7 @@ Rows: one per `part`, plus a `user` row per user message.
 | turn_type | user message → user; `text` → assistant; `reasoning` → thinking; `tool` pending/running → tool_use; `tool` completed/error → tool_use plus tool_result; `step-*` → system |
 | model | `data.providerID/modelID` |
 | tool_name, tool_use_id | `data.tool`, `data.callID` |
-| summary | text, input JSON, output or error |
+| text | text, input JSON, output or error |
 
 Fixture rows:
 

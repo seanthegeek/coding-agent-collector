@@ -125,7 +125,7 @@ Rows: one per `history[]` item (user, assistant, thinking, tool), plus one
 | turn_type | by `message.role`; `thinking` → thinking; `tool` → tool_result |
 | model | `chatModelTitle` or `promptLogs[].modelTitle` |
 | tool_name, tool_use_id | `toolCall.function.name`, `toolCallId` |
-| summary | text, `function.arguments`, output `content` |
+| text | text, `function.arguments`, output `content` |
 
 Fixture `sessions/0f1e.json`:
 

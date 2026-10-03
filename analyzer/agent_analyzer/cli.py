@@ -43,8 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
     t = sub.add_parser("timeline", help="parse transcripts into timeline.csv and sessions.csv")
     add_input(t)
     t.add_argument("-o", "--output", type=Path, required=True, help="output directory")
-    t.add_argument("--summary-length", type=int, default=400,
-                   help="maximum characters in the summary column, 0 for unlimited (default 400)")
+    t.add_argument("--max-text-length", type=int, default=0,
+                   help="cut the text column to this many characters; 0 keeps the full text (default)")
     t.add_argument("--include-thinking", action="store_true",
                    help="emit thinking and reasoning blocks as rows of type thinking")
     t.add_argument("--agent", action="append", default=[],
@@ -183,7 +183,7 @@ def write_csv(path: Path, header: List[str], rows) -> None:
 
 
 def cmd_timeline(args: argparse.Namespace, col: Collection) -> int:
-    opts = Options(summary_length=args.summary_length, include_thinking=args.include_thinking)
+    opts = Options(max_text_length=args.max_text_length, include_thinking=args.include_thinking)
     args.output.mkdir(parents=True, exist_ok=True)
     rows, counts, problems = collect_rows(col, opts, args.agent)
     sessions = summarise(rows)
