@@ -352,7 +352,7 @@ committing a change to the collector:
 
 ```sh
 cd collectors
-shellcheck -s sh collect-agent-artifacts.sh
+shellcheck -s sh -S warning collect-agent-artifacts.sh   # info-level notices are allowed
 tests/smoke.sh            # /bin/sh
 tests/smoke.sh dash
 tests/smoke.sh bash

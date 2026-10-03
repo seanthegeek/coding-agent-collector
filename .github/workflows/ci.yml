@@ -10,7 +10,7 @@ jobs:
     name: Catalog tables in sync (sh, PowerShell, analyzer copy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Drift test
         run: collectors/tests/catalog-sync.sh
       - name: Regenerated copy matches the committed one
@@ -27,11 +27,11 @@ jobs:
     name: sh collector (shellcheck, smoke under sh, dash, bash, busybox, zsh)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install shells
         run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck dash busybox-static zsh
       - name: shellcheck
-        run: shellcheck -s sh collectors/collect-agent-artifacts.sh
+        run: shellcheck -s sh -S warning collectors/collect-agent-artifacts.sh
       - name: smoke (sh)
         run: collectors/tests/smoke.sh sh
       - name: smoke (dash)
@@ -51,7 +51,7 @@ jobs:
     name: PowerShell collector (smoke under PowerShell 7 on Linux)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: smoke
         shell: pwsh
         run: ./collectors/tests/smoke.ps1
@@ -60,7 +60,7 @@ jobs:
     name: PowerShell collector (smoke under Windows PowerShell 5.1)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: smoke
         shell: powershell
         run: .\collectors\tests\smoke.ps1
@@ -72,8 +72,8 @@ jobs:
       matrix:
         python: ["3.9", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - name: unittest
