@@ -94,11 +94,24 @@ updating the README and noting it in the commit message.
 
 ## Adding an agent to the catalog
 
-1. Install the tool and run a short session that uses its agent or chat
-   feature, so real transcripts exist.
-2. Inspect the home directory: `find ~/.tool -maxdepth 3`, `du -sk ~/.tool/*`.
-   Identify transcripts, history, config, credentials, and anything large
-   (binaries, model weights, caches, indexes, git clones of marketplaces).
+Prefer reading the tool's source over installing it. Most agents are open
+source even when their models are not, and the path constants are easy to
+find. The validation for every current entry is recorded in the README table.
+
+1. Shallow-clone the repository into the scratchpad and grep for `homedir`,
+   `XDG`, `APPDATA`, `Application Support`, `.config/`, `.local/share`,
+   `sessions`, `history`, `sqlite`, `auth`, `token`, `secrets`, `cache`,
+   `cwd`, `workspace`. Read the paths module (`paths.ts`, `paths.rs`,
+   `global.ts`, `storage.ts`, `home.go`) and cite file and line in the issue.
+   For closed-source tools, grep the shipped npm bundle or binary for literal
+   path strings (`npm pack`, `strings`), then fall back to official docs,
+   vendor forums and published DFIR write-ups, and say which was used.
+2. From that, identify transcripts, history, config, credentials, and
+   anything large (binaries, model weights, caches, indexes, shadow git
+   checkpoints, worktrees, git clones of marketplaces). Note which OSes share
+   a layout: many tools use `~/.config` and `~/.local/share` on macOS and
+   Windows too, and several keep credentials in the OS keychain with a file
+   fallback that only appears on headless hosts.
 3. Add `agent|path` lines to `CATALOG` for every platform path the tool uses,
    including the Windows `AppData` location so images are covered.
 4. Add large or irrelevant subtrees to `EXCLUDES` and credential files to
@@ -109,8 +122,11 @@ updating the README and noting it in the commit message.
    unusual (symlinks, SQLite sidecars, spaces in paths).
 7. Update the README's tool list and close the matching GitHub issue.
 
-Verified against real installs so far: Claude Code, Gemini CLI, Antigravity
-CLI, Codex CLI, Copilot CLI, Ollama. Everything else has an open issue.
+Every catalog entry has been validated against source, a shipped bundle, or
+official documentation; see the README table for which. Real-install checks
+exist for Claude Code, Antigravity CLI, Codex CLI, Copilot CLI and Ollama.
+Agents whose project paths live only in SQLite (Zed, Goose, OpenCode, Kilo
+Code, Kiro CLI) are not covered by `discover_projects`; that is v2 work.
 
 ## Validation and testing
 

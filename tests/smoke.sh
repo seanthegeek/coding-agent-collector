@@ -50,6 +50,38 @@ printf 'rules\n' >"$ROOT/Users/bob/Documents/app/.cursorrules"
 printf '{"cwd":"/Users/bob/Documents/app"}\n' >"$ROOT/Users/bob/.codex/sessions/2026/10/03/rollout-1.jsonl"
 printf 'blob\n' >"$ROOT/home/ollama/.ollama/models/blobs/sha256-abc"
 printf 'hist\n' >"$ROOT/home/ollama/.ollama/history"
+# --- source-verified layouts for the per-platform catalog entries ---
+mkdir -p "$ROOT/home/alice/.continue/sessions" "$ROOT/home/alice/.continue/index/lancedb" "$ROOT/srv/cont" \
+  "$ROOT/home/alice/.local/share/crush" "$ROOT/srv/crushproj/.crush" "$ROOT/srv/gem" "$ROOT/home/alice/.gemini/tmp/gem" \
+  "$ROOT/home/alice/.cline/data/settings" "$ROOT/home/alice/.cline/data/sessions/s1" "$ROOT/srv/clineproj" \
+  "$ROOT/home/alice/.local/share/opencode" \
+  "$ROOT/Users/bob/Library/Application Support/Claude/Cache" "$ROOT/Users/bob/Library/Application Support/Zed/extensions" \
+  "$ROOT/Users/bob/Library/Application Support/Zed/threads" "$ROOT/Users/bob/.config/zed" \
+  "$ROOT/Users/bob/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/state" \
+  "$ROOT/Users/bob/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/checkpoints" "$ROOT/Users/bob/clineproj"
+printf '[{"sessionId":"a","workspaceDirectory":"/srv/cont"}]\n' >"$ROOT/home/alice/.continue/sessions/sessions.json"
+printf '{"mcpOauthStorage":{}}\n' >"$ROOT/home/alice/.continue/index/globalContext.json"
+printf 'vec\n' >"$ROOT/home/alice/.continue/index/lancedb/data.lance"
+printf '{}\n' >"$ROOT/srv/cont/.continuerc.json"
+printf '{"projects":[{"path":"/srv/crushproj","data_dir":"/srv/crushproj/.crush"}]}\n' >"$ROOT/home/alice/.local/share/crush/projects.json"
+printf 'sqlite\n' >"$ROOT/srv/crushproj/.crush/crush.db"
+printf '{"projects":{"/srv/gem":"gem"}}\n' >"$ROOT/home/alice/.gemini/projects.json"
+printf '/srv/gem\n' >"$ROOT/home/alice/.gemini/tmp/gem/.project_root"
+printf '# gem\n' >"$ROOT/srv/gem/GEMINI.md"
+printf '{"anthropic":{"apiKey":"sk-x"}}\n' >"$ROOT/home/alice/.cline/data/settings/providers.json"
+printf '{"id":"s1","cwd":"/srv/clineproj","workspace_root":"/srv/clineproj"}\n' >"$ROOT/home/alice/.cline/data/sessions/s1/s1.json"
+printf 'rules\n' >"$ROOT/srv/clineproj/.clinerules"
+printf '{"openai":{"type":"api","key":"x"}}\n' >"$ROOT/home/alice/.local/share/opencode/auth.json"
+printf 'TOKEN=1\n' >"$ROOT/home/alice/.env"
+printf '{"oauth:tokenCache":"enc"}\n' >"$ROOT/Users/bob/Library/Application Support/Claude/config.json"
+printf '{"mcpServers":{}}\n' >"$ROOT/Users/bob/Library/Application Support/Claude/claude_desktop_config.json"
+printf 'cache\n' >"$ROOT/Users/bob/Library/Application Support/Claude/Cache/index"
+printf 'ext\n' >"$ROOT/Users/bob/Library/Application Support/Zed/extensions/foo.wasm"
+printf 'db\n' >"$ROOT/Users/bob/Library/Application Support/Zed/threads/threads.db"
+printf '{"language_models":{}}\n' >"$ROOT/Users/bob/.config/zed/settings.json"
+printf '[{"id":"t1","cwdOnTaskInitialization":"/Users/bob/clineproj"}]\n' >"$ROOT/Users/bob/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/state/taskHistory.json"
+printf 'ckpt\n' >"$ROOT/Users/bob/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/checkpoints/x"
+printf 'rules\n' >"$ROOT/Users/bob/clineproj/.clinerules"
 
 run() { # run NAME ARGS...
   _n=$1; shift
@@ -91,6 +123,23 @@ check "project from cursor workspace.json collected" "[ \"\$(status_of \"$ROOT/U
 check "bob (no passwd entry) found via /Users glob" "grep -q '\"user\":\"bob\"' \"\$M\""
 check "nobody home skipped" "! grep -q '\"home\":\"$ROOT/nonexistent\"' \"\$M\""
 check "shell history collected" "[ \"\$(status_of \"$ROOT/home/alice/.bash_history\")\" = collected ]"
+check "continue sessions.json discovers project" "[ \"\$(status_of \"$ROOT/srv/cont/.continuerc.json\")\" = collected ]"
+check "continue globalContext flagged secret" "row \"$ROOT/home/alice/.continue/index/globalContext.json\" | grep -q '\"secret\":true,\"status\":\"collected\"'"
+check "continue lancedb excluded" "[ \"\$(status_of \"$ROOT/home/alice/.continue/index/lancedb\")\" = skipped_excluded ]"
+check "crush projects.json discovers project-local crush.db" "[ \"\$(status_of \"$ROOT/srv/crushproj/.crush/crush.db\")\" = collected ]"
+check "gemini projects.json / .project_root discovers project" "[ \"\$(status_of \"$ROOT/srv/gem/GEMINI.md\")\" = collected ]"
+check "cline session cwd discovers project" "[ \"\$(status_of \"$ROOT/srv/clineproj/.clinerules\")\" = collected ]"
+check "cline providers.json flagged secret" "row \"$ROOT/home/alice/.cline/data/settings/providers.json\" | grep -q '\"secret\":true'"
+check "opencode auth.json flagged secret" "row \"$ROOT/home/alice/.local/share/opencode/auth.json\" | grep -q '\"secret\":true'"
+check "home .env flagged secret" "row \"$ROOT/home/alice/.env\" | grep -q '\"secret\":true'"
+check "claude desktop config.json flagged secret" "row \"$ROOT/Users/bob/Library/Application Support/Claude/config.json\" | grep -q '\"secret\":true'"
+check "claude desktop mcp config collected unflagged" "row \"$ROOT/Users/bob/Library/Application Support/Claude/claude_desktop_config.json\" | grep -q '\"secret\":false,\"status\":\"collected\"'"
+check "claude desktop Cache excluded" "[ \"\$(status_of \"$ROOT/Users/bob/Library/Application Support/Claude/Cache\")\" = skipped_excluded ]"
+check "zed extensions excluded via [Zz]ed glob" "[ \"\$(status_of \"$ROOT/Users/bob/Library/Application Support/Zed/extensions\")\" = skipped_excluded ]"
+check "zed threads.db collected" "[ \"\$(status_of \"$ROOT/Users/bob/Library/Application Support/Zed/threads/threads.db\")\" = collected ]"
+check "zed settings.json flagged secret" "row \"$ROOT/Users/bob/.config/zed/settings.json\" | grep -q '\"secret\":true'"
+check "cline taskHistory in globalStorage discovers project" "[ \"\$(status_of \"$ROOT/Users/bob/clineproj/.clinerules\")\" = collected ]"
+check "cline checkpoints in globalStorage excluded" "[ \"\$(status_of \"$ROOT/Users/bob/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/checkpoints\")\" = skipped_excluded ]"
 check "no live dir in image mode" "! tar -tzf \"\$A\" | grep -q '^./live/'"
 check "manifest and summary inside archive" "tar -tzf \"\$A\" | grep -q '^./manifest.jsonl' && tar -tzf \"\$A\" | grep -q '^./collection.json'"
 check "staging removed" "[ -z \"\$(ls -d \"$OUT/default\"/.stage-* 2>/dev/null)\" ]"

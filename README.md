@@ -1,11 +1,23 @@
 # coding-agent-collector
 
-Forensic collector for the on-disk artifacts of AI coding agents: Claude Code,
-Claude Desktop, Gemini CLI, Antigravity, Codex CLI, GitHub Copilot CLI, Cursor,
-VS Code chat extensions (Copilot Chat, Cline, Roo Code, Continue), Windsurf,
-Aider, OpenCode, Amp, Goose, Zed, Qwen Code, Kiro, Ollama, ChatGPT Desktop, and
-shell histories. It walks every user's home directory, copies the artifacts into
-a staging area, hashes them, and produces one `tar.gz` with a JSONL manifest.
+Forensic collector for the on-disk artifacts of AI coding agents and
+assistants. It walks every user's home directory, copies the artifacts into a
+staging area, hashes them, and produces one `tar.gz` with a JSONL manifest.
+
+Covered tools, with how each one's catalog entries were validated:
+
+| Tool | Validation |
+| --- | --- |
+| Claude Code, Antigravity CLI, Codex CLI, Copilot CLI, Ollama | Real install plus source |
+| Gemini CLI, Qwen Code, Aider, Continue, Goose, Zed, OpenCode, Crush, Cline, Roo Code, Kilo Code | Source code of the project |
+| Amp, Factory Droid, Augment | Shipped npm bundle strings plus official docs |
+| Kiro | Amazon Q CLI source, Kiro CLI binary strings, official docs |
+| Cursor, Windsurf, Claude Desktop, ChatGPT Desktop | Official docs, vendor forums, published DFIR write-ups |
+
+VS Code, VSCodium and their forks are collected through their `User`
+directories, which hold the state of Copilot Chat, Cline, Roo Code, Kilo Code,
+Continue and Augment extensions. Shell histories and shared cross-agent
+directories such as `~/.agents` and `~/.env` are collected too.
 
 The collector is a single POSIX `sh` script with no dependencies beyond the base
 system. It runs under bash 3.2 (macOS `/bin/sh`), dash, ash and busybox,
@@ -65,6 +77,11 @@ Run `--list` for the full catalog. Every catalog entry is tried against every
 home directory, so macOS, Linux and Windows paths coexist and a Windows image
 mounted on a Linux workstation is collected correctly.
 
+Shared directories read by several agents are collected under the `shared`
+agent name. Project `.env` files are collected from discovered project
+directories because Aider, Gemini CLI, Qwen Code and Continue read them; they
+are flagged `secret: true` like every other credential file.
+
 Home directories come from `getent passwd` or `/etc/passwd` (prefixed with the
 root in image mode), `dscl` on macOS, and globbing `home/*`, `Users/*`, `root`,
 `var/root`, `usr/home/*` and `export/home/*` under the root. Service accounts
@@ -72,10 +89,16 @@ with real homes are included because agents run as them too, for example the
 `ollama` system user.
 
 Project-level artifacts (`CLAUDE.md`, `.claude/`, `.mcp.json`, `AGENTS.md`,
-`.cursorrules`, `.aider.chat.history.md`, ...) are collected from every
-directory referenced in Claude Code's history and project list, Codex session
-rollouts, and Cursor or VS Code workspace storage. Each project is attributed
-to the user whose state referenced it.
+`.cursorrules`, `.aider.chat.history.md`, Crush's per-project `.crush/crush.db`,
+...) are collected from every directory referenced in agent state that can be
+read with grep: Claude Code history and project list, Codex session rollouts,
+Qwen Code chats, Cline sessions and task history, Roo and Kilo task indexes,
+Continue sessions, Gemini CLI's project registry, Crush's project list,
+Goose legacy session files, OpenCode's legacy project store, Cursor CLI chat
+metadata, and VS Code family workspace storage. Each project is attributed to
+the user whose state referenced it. Agents that only record the project path
+inside SQLite (Zed, Goose, OpenCode, Kilo Code, Kiro CLI) are left to the
+analyst-side parser.
 
 In live mode the collector also writes a `live/` directory with the process
 list, agent processes, their environment and working directory from `/proc`
@@ -83,17 +106,24 @@ on Linux, users, logins, mounts, network sockets and services.
 
 ### Default exclusions
 
-Model weights, Electron and editor caches, extension and daemon binaries, and
-git clones of plugin marketplaces are skipped by default. Each skipped path is
+Model weights, Electron and editor caches, extension and daemon binaries,
+embedding indexes, shadow git checkpoints, agent worktrees, and git clones of
+plugin marketplaces are skipped by default. Each skipped path is
 still recorded in the manifest with status `skipped_excluded` and its on-disk
 size, so the investigator knows what was there. Pass `--full` to collect them.
 
 ### Credentials
 
-OAuth tokens and keys (`~/.claude/.credentials.json`, `~/.gemini/oauth_creds.json`,
-`~/.gemini/antigravity-cli/antigravity-oauth-token`, `~/.codex/auth.json`,
-`~/.ollama/id_ed25519`, ...) show which account an agent acted as, so they are
-collected by default and flagged `secret: true`. Process environments captured
+OAuth tokens and keys (`~/.claude/.credentials.json`, `~/.codex/auth.json`,
+`~/.gemini/gemini-credentials.json`, `~/.cline/data/settings/providers.json`,
+`~/.local/share/opencode/auth.json`, `~/.config/goose/secrets.yaml`, ...) show
+which account an agent acted as, so they are collected by default and flagged
+`secret: true`. Config files that commonly embed API keys (Continue's
+`config.yaml`, Zed's `settings.json`, Crush's `crush.json`) are flagged the
+same way. Run `--list` for the full pattern list. Cursor and Windsurf keep
+their auth tokens inside the same `state.vscdb` that holds the chat history,
+so that file is collected unflagged; the keys to redact are `cursorAuth/*` and
+`windsurfAuthStatus`. Process environments captured
 under `live/environ/` are flagged the same way. Use `--no-secrets` to leave
 them out; they are then recorded with status `skipped_secret`.
 
