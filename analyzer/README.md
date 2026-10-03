@@ -133,7 +133,9 @@ rows are what the person typed.
 (space separated), `user_turns`, `assistant_turns`, `tool_calls`,
 `source_file` (the file that contributed most rows).
 
-Both CSVs are interfaces. Columns are only added, at the end.
+The two CSV layouts are a compatibility contract with the analysts and
+tooling that consume them. A future version may append new columns after the
+existing ones, but existing columns keep their names, order and meaning.
 
 ## Options
 
