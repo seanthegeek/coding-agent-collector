@@ -13,7 +13,8 @@ live system snapshot, into one archive with a hashed manifest.
 It must work in three situations:
 
 1. Remotely through an EDR remote shell (CrowdStrike RTR, SentinelOne
-   RemoteOps, Defender Live Response).
+   RemoteOps, Defender Live Response, Palo Alto Networks Cortex XDR Live
+   Terminal).
 2. Locally on the host by a responder.
 3. Against a mounted disk image on an analyst workstation, including Windows
    images mounted on Linux or macOS.
@@ -25,16 +26,23 @@ into a CSV timeline. Parsing never happens on the host.
 ## Repository layout
 
 ```
-collect-agent-artifacts.sh   the macOS/Linux/BSD collector, single POSIX sh file
-Collect-AgentArtifacts.ps1   the Windows collector, single PowerShell 5.1 file
-tests/smoke.sh               end-to-end test of the sh collector (fake disk image)
-tests/smoke.ps1              end-to-end test of the PowerShell collector
-tests/catalog-sync.sh        fails if the four catalog tables differ between scripts
-README.md                    user documentation, keep in sync with behaviour
-AGENTS.md                    this file
-CLAUDE.md                    imports this file for Claude Code
-LICENSE                      Apache 2.0
+collectors/
+  collect-agent-artifacts.sh   the macOS/Linux/BSD collector, single POSIX sh file
+  Collect-AgentArtifacts.ps1   the Windows collector, single PowerShell 5.1 file
+  README.md                    collector user documentation, keep in sync with behaviour
+  tests/smoke.sh               end-to-end test of the sh collector (fake disk image)
+  tests/smoke.ps1              end-to-end test of the PowerShell collector
+  tests/catalog-sync.sh        fails if the four catalog tables differ between scripts
+README.md                      project overview; points at the per-part READMEs
+AGENTS.md                      this file
+CLAUDE.md                      imports this file for Claude Code
+LICENSE                        Apache 2.0
 ```
+
+The analyst-side v2 tool will live in its own top-level directory with its
+own README and, if needed, its own `requirements.txt`. Nothing in
+`collectors/` may depend on it. Paths in this file are relative to the
+repository root unless stated otherwise.
 
 ## Non-negotiable standards
 
@@ -112,7 +120,7 @@ scripts. Adding a tool means adding the same lines to both, never new code
 paths. Every entry is tried against every home directory so one table covers
 macOS, Linux, Windows and disk images of each. The tables are byte-identical
 between the sh single-quoted strings and the PowerShell `@'...'@`
-here-strings; `tests/catalog-sync.sh` fails on any drift, and `--list` and
+here-strings; `collectors/tests/catalog-sync.sh` fails on any drift, and `--list` and
 `-List` must print identical output. Glob semantics are shared: catalog
 globs do not cross `/`, exclusion and secret globs do, and `[...]` classes
 work in both (the PowerShell side converts globs to regexes).
@@ -121,14 +129,15 @@ work in both (the PowerShell side converts globs to regexes).
 `manifest.jsonl` and `collection.json`. Fields, status values
 (`collected`, `symlink`, `skipped_excluded`, `skipped_size`, `skipped_secret`,
 `error_copy`) and the `fs/<original path>` archive layout are documented in the
-README. Add fields if needed, but do not rename or remove them without
-updating the README and noting it in the commit message.
+collectors README. Add fields if needed, but do not rename or remove them
+without updating that README and noting it in the commit message.
 
 ## Adding an agent to the catalog
 
 Prefer reading the tool's source over installing it. Most agents are open
 source even when their models are not, and the path constants are easy to
-find. The validation for every current entry is recorded in the README table.
+find. The validation for every current entry is recorded in the table in
+`collectors/README.md`.
 
 1. Shallow-clone the repository into the scratchpad and grep for `homedir`,
    `XDG`, `APPDATA`, `Application Support`, `.config/`, `.local/share`,
@@ -146,18 +155,20 @@ find. The validation for every current entry is recorded in the README table.
    fallback that only appears on headless hosts.
 3. Add `agent|path` lines to `CATALOG` in both scripts for every platform
    path the tool uses, including the Windows `AppData` location so images are
-   covered. Run `tests/catalog-sync.sh`.
+   covered. Run `collectors/tests/catalog-sync.sh`.
 4. Add large or irrelevant subtrees to `EXCLUDES` and credential files to
    `SECRET_GLOBS`.
 5. If the tool records project paths, add extraction to `discover_projects`
    and any per-project files to `PROJECT_CATALOG`.
-6. Add a fixture and assertions to `tests/smoke.sh` and `tests/smoke.ps1` if
-   the layout has anything unusual (symlinks, SQLite sidecars, spaces in
-   paths, drive-letter or `file:///` project references).
-7. Update the README's tool list and close the matching GitHub issue.
+6. Add a fixture and assertions to `collectors/tests/smoke.sh` and
+   `collectors/tests/smoke.ps1` if the layout has anything unusual (symlinks,
+   SQLite sidecars, spaces in paths, drive-letter or `file:///` project
+   references).
+7. Update the tool list in `collectors/README.md` and close the matching
+   GitHub issue.
 
 Every catalog entry has been validated against source, a shipped bundle, or
-official documentation; see the README table for which. Real-install checks
+official documentation; see the table in `collectors/README.md` for which. Real-install checks
 exist for Claude Code, Antigravity CLI, Codex CLI, Copilot CLI and Ollama.
 Agents whose project paths live only in SQLite (Zed, Goose, OpenCode, Kilo
 Code, Kiro CLI) are not covered by `discover_projects`; that is v2 work.
@@ -216,15 +227,18 @@ about a thousand words:
 tarball or binary (`npm pack`, then grep or `strings`; minified bundles keep
 literal path strings), official docs, vendor forums and issue trackers, then
 published DFIR or reverse-engineering write-ups. The report must say which
-level each claim came from, and the README validation table records it.
+level each claim came from, and the validation table in `collectors/README.md`
+records it.
 
 **5. Integrate in one commit.** Save each report to the scratchpad as it
 arrives and do not touch the script until all are in, so the tables change
 once. Then: rewrite the four tables, extend `discover_projects` with every
-new grep-able source, add a fixture and checks to `tests/smoke.sh` for each
+new grep-able source, add a fixture and checks to `collectors/tests/smoke.sh`
+for each
 new secret pattern, exclusion and discovery source, run the full shell
 matrix, run a live collection and read the `skipped_excluded` and
-`secret: true` rows, update the README tool table, bump `VERSION`.
+`secret: true` rows, update the tool table in `collectors/README.md`, bump
+`VERSION`.
 
 **6. Close the loop on GitHub.** Close each tool's issue with a comment that
 names the evidence source and commit, the key findings, and the catalog
@@ -252,6 +266,7 @@ Things the first run taught us, to check for explicitly next time:
 Run all of this before committing a change to the collector:
 
 ```sh
+cd collectors
 shellcheck -s sh collect-agent-artifacts.sh
 tests/smoke.sh            # /bin/sh
 tests/smoke.sh dash
@@ -267,8 +282,8 @@ Windows PowerShell 5.1. From this WSL checkout that is:
 
 ```sh
 /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -ExecutionPolicy Bypass \
-  -File '\\wsl.localhost\Ubuntu\home\sean\dev\coding-agent-collector\tests\smoke.ps1' \
-  -Collector '\\wsl.localhost\Ubuntu\home\sean\dev\coding-agent-collector\Collect-AgentArtifacts.ps1'
+  -File '\\wsl.localhost\Ubuntu\home\sean\dev\coding-agent-collector\collectors\tests\smoke.ps1' \
+  -Collector '\\wsl.localhost\Ubuntu\home\sean\dev\coding-agent-collector\collectors\Collect-AgentArtifacts.ps1'
 ```
 
 Symlink creation needs a privilege the test may not have on Windows; it
@@ -288,8 +303,8 @@ problem.
 Then run a live collection against your own host and read the summary:
 
 ```sh
-./collect-agent-artifacts.sh -o /tmp/live -q
-powershell.exe -ExecutionPolicy Bypass -File Collect-AgentArtifacts.ps1 -OutputDir $env:TEMP\live -Quiet
+collectors/collect-agent-artifacts.sh -o /tmp/live -q
+powershell.exe -ExecutionPolicy Bypass -File collectors\Collect-AgentArtifacts.ps1 -OutputDir $env:TEMP\live -Quiet
 ```
 
 Check the error count, look at the `skipped_excluded` rows for anything new
@@ -307,8 +322,9 @@ collector itself.
 - Work on `main` directly for now; branch when a change spans several commits.
 - Outstanding work is tracked as GitHub issues labelled `enhancement`. File
   one when you find something out of scope rather than widening a change.
-- Keep the README's option table, output layout and status list accurate.
-  Behaviour changes without a README update are incomplete.
+- Keep the option table, output layout and status list in
+  `collectors/README.md` accurate. Behaviour changes without a README update
+  are incomplete. The top-level README is an overview only.
 - Bump `VERSION` in the script for any change to output format or options.
 
 ## Things to avoid
