@@ -1,0 +1,6 @@
+.stage-*/
+*.tar.gz
+*.tar.gz.sha256
+*.manifest.jsonl
+*.collection.json
+*.log
