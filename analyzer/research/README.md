@@ -3,7 +3,8 @@
 Reports from the October 2026 research round on transcript record schemas,
 produced by the fan-out process described in AGENTS.md. Each report was
 written from a shallow clone of the tool's source at the commit it names, with
-file and line citations, and ends with a parser plan and synthetic sample
+file and line citations (or, for the closed-source Antigravity CLI, from the
+protobuf descriptors embedded in its binary), and ends with a parser plan and synthetic sample
 records intended to become test fixtures. Treat them as the evidence behind
 each parser; the field names a parser actually depends on are repeated in its
 module docstring under `agent_analyzer/parsers/`.
@@ -16,6 +17,7 @@ module docstring under `agent_analyzer/parsers/`.
 | [goose-zed.md](goose-zed.md) | Goose, Zed | SQLite; Zed threads are zstd-compressed JSON blobs |
 | [continue-vscode-aider.md](continue-vscode-aider.md) | Continue, VS Code chat (Copilot Chat), Aider | JSON, JSONL mutation log, markdown |
 | [kiro-amazonq.md](kiro-amazonq.md) | Amazon Q CLI, Kiro CLI | SQLite, one JSON blob per working directory |
+| [antigravity.md](antigravity.md) | Antigravity CLI | SQLite of protobuf blobs; schema from descriptors embedded in the `agy` binary |
 
 Findings that cut across tools:
 

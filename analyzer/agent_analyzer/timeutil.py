@@ -3,10 +3,12 @@ with millisecond precision and a trailing Z, so rows from different agents
 sort together."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Optional, Union
 
 OUT_FMT = "%Y-%m-%dT%H:%M:%S.%f"
+_FRACTION_RX = re.compile(r"(\.\d{7,})")
 
 
 def to_utc(value: Union[str, int, float, None]) -> str:
@@ -29,6 +31,11 @@ def to_utc(value: Union[str, int, float, None]) -> str:
             return _from_epoch(float(s))
         if s.endswith("Z") or s.endswith("z"):
             s = s[:-1] + "+00:00"
+        # SQLite CURRENT_TIMESTAMP text and nanosecond fractions (Go) are not
+        # accepted by fromisoformat before Python 3.11.
+        if len(s) > 10 and s[10] == " ":
+            s = s[:10] + "T" + s[11:]
+        s = _FRACTION_RX.sub(lambda m: m.group(1)[:7], s)
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)

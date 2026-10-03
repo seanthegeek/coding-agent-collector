@@ -169,6 +169,12 @@ rules are different from the collectors'.
 - **Parsers are validated like catalog entries.** Confirm the record shape
   against source or a real install, list the field names the parser depends
   on in the module docstring, and build the test fixture from those shapes.
+  For a closed-source agent that stores protobuf, the shipped binary usually
+  embeds its descriptors; `analyzer/tools/proto_descriptors.py` extracts
+  them, and the parser's schema table cites the proto file they came from.
+  Decode protobuf with `agent_analyzer/protobuf.py` and open SQLite through
+  `agent_analyzer/sqlite_util.py` so WAL sidecars are read and the evidence
+  copy is never opened directly.
   Bad lines are reported as a `system` row, never fatal: a transcript cut
   mid-write by a running agent must still yield its earlier turns.
 - **The CSVs are interfaces.** `timeline.csv` and `sessions.csv` columns are

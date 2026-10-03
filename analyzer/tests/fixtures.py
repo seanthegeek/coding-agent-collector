@@ -5,7 +5,11 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from pathlib import Path
+
+from agent_analyzer.parsers.antigravity import SCHEMA as AGY
+from agent_analyzer.protobuf import encode
 
 CLAUDE_SESSION = "11111111-2222-4333-8444-555555555555"
 CODEX_SESSION = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
@@ -116,7 +120,7 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     (home / ".codex/config.toml").write_text('model = "gpt-5-codex"\n', encoding="utf-8")
     # Nested catalog entries: Antigravity CLI inside ~/.gemini, and a Cline
     # extension inside VS Code's globalStorage. The nested agent must win.
-    _jsonl(home / ".gemini/antigravity-cli/history.jsonl", [{"prompt": "hi"}])
+    build_antigravity(home / ".gemini/antigravity-cli")
     (home / ".gemini/settings.json").write_text("{}", encoding="utf-8")
     gs = home / ".config/Code/User/globalStorage"
     gs.mkdir(parents=True, exist_ok=True)
@@ -148,3 +152,91 @@ def build_image(root: Path) -> Path:
 def write_bad_line(path: Path) -> None:
     with open(path, "a", encoding="utf-8") as fh:
         fh.write('{"type": "user", "truncated": tr')
+
+
+AGY_CONVERSATION = "799062d5-0000-4000-8000-000000000099"
+AGY_T0 = 1790848800  # 2026-10-01T10:00:00Z
+
+
+def _step(kind: str, payload: dict, created: float, completed: float = None, tool_call: dict = None,
+          source: int = 2, status: int = 3) -> dict:
+    md = {"created_at": created, "source": source}
+    if completed is not None:
+        md["completed_at"] = completed
+        md["finished_generating_at"] = completed
+    if tool_call:
+        md["tool_call"] = tool_call
+    return {"metadata": md, kind: payload, "status": status}
+
+
+def antigravity_steps():
+    """(step_type, status, Step dict) in the shapes seen on a real install:
+    user_input, planner_response with tool calls, generic and typed tool steps."""
+    tc1 = {"id": "call_1", "name": "view_file", "arguments_json": json.dumps({"AbsolutePath": "/home/u/proj/README.md"})}
+    tc2 = {"id": "call_2", "name": "run_command", "arguments_json": json.dumps({"CommandLine": "rm -rf /var/log/*.log", "Cwd": "/home/u/proj"})}
+    tc3 = {"id": "call_3", "name": "write_to_file", "arguments_json": json.dumps({"TargetFile": "/home/u/proj/notes.md"})}
+    t = AGY_T0
+    return [
+        (14, 3, dict(_step("user_input", {"query": "clean the logs"}, t, source=4), type=14)),
+        (15, 3, dict(_step("planner_response", {"response": "I will read the README first.", "thinking": "look before leaping",
+                                                "tool_calls": [tc1]}, t + 1, t + 3), type=15)),
+        (132, 3, dict(_step("generic", {"args": [{"key": "AbsolutePath", "value": "/home/u/proj/README.md"}],
+                                        "result": {"result": "File Path: README.md\n# proj"}}, t + 3, t + 4, tool_call=tc1), type=132)),
+        (15, 3, dict(_step("planner_response", {"response": "", "tool_calls": [tc2]}, t + 4, t + 6), type=15)),
+        (28, 3, dict(_step("run_command", {"command_line": "rm -rf /var/log/*.log", "cwd": "/home/u/proj", "exit_code": 0,
+                                           "combined_output": {"full": "removed 3 files"}}, t + 6, t + 7, tool_call=tc2), type=28)),
+        (15, 3, dict(_step("planner_response", {"response": "", "tool_calls": [tc3]}, t + 7, t + 8), type=15)),
+        (23, 7, dict(_step("write_to_file", {"target_file_uri": "file:///home/u/proj/notes.md", "file_created": True},
+                           t + 8, t + 9, tool_call=tc3, status=7), type=23)),
+        (14, 3, dict(_step("user_input", {"query": "<injected reminder>"}, t + 9, source=3), type=14)),
+        (15, 3, dict(_step("planner_response", {"response": "Done. Three log files were removed."}, t + 10, t + 12), type=15)),
+        (23, 3, dict(_step("checkpoint", {"conversation_title": "Clean logs"}, t + 13), type=23)),
+    ]
+
+
+def build_antigravity(base: Path) -> None:
+    conv = base / "conversations"
+    conv.mkdir(parents=True, exist_ok=True)
+    db = conv / (AGY_CONVERSATION + ".db")
+    con = sqlite3.connect(str(db))
+    con.executescript("""
+    CREATE TABLE trajectory_meta (trajectory_id text, cascade_id text, trajectory_type integer, source integer, PRIMARY KEY (trajectory_id));
+    CREATE TABLE steps (idx integer, step_type integer NOT NULL DEFAULT 0, status integer NOT NULL DEFAULT 0,
+      has_subtrajectory numeric NOT NULL DEFAULT false, metadata blob, error_details blob, permissions blob, task_details blob,
+      render_info blob, step_payload blob, step_format integer NOT NULL DEFAULT 0, PRIMARY KEY (idx));
+    CREATE TABLE gen_metadata (idx integer, data blob, size integer NOT NULL DEFAULT 0, PRIMARY KEY (idx));
+    CREATE TABLE trajectory_metadata_blob (id text DEFAULT "main", data blob, PRIMARY KEY (id));
+    """)
+    con.execute("INSERT INTO trajectory_meta VALUES (?,?,?,?)", ("traj-1", AGY_CONVERSATION, 4, 17))
+    meta = encode({"workspaces": [{"workspace_folder_absolute_uri": "file:///home/u/proj", "branch_name": "main"}],
+                   "created_at": AGY_T0 - 1, "workspace_uris": ["file:///home/u/proj"], "project_id": "default-cli-project"},
+                  "CortexTrajectoryMetadata", AGY)
+    con.execute("INSERT INTO trajectory_metadata_blob VALUES ('main', ?)", (meta,))
+    for idx, (step_type, status, step) in enumerate(antigravity_steps()):
+        payload = encode(step, "Step", AGY)
+        md = encode(step["metadata"], "CortexStepMetadata", AGY)
+        con.execute("INSERT INTO steps (idx, step_type, status, metadata, step_payload) VALUES (?,?,?,?,?)",
+                    (idx, step_type, status, md, payload))
+    gen = encode({"chat_model": {"response_model": "gemini-3.8-flash"}, "step_indices": [1, 3, 5, 8]}, "CortexStepGeneratorMetadata", AGY)
+    con.execute("INSERT INTO gen_metadata VALUES (0, ?, ?)", (gen, len(gen)))
+    con.commit()
+    con.close()
+    summ = sqlite3.connect(str(base / "conversation_summaries.db"))
+    summ.executescript("""
+    CREATE TABLE conversation_summaries (conversation_id text, title text NOT NULL DEFAULT "", preview text NOT NULL DEFAULT "",
+      step_count integer NOT NULL DEFAULT 0, last_modified_time datetime NOT NULL, workspace_uris text NOT NULL,
+      status text NOT NULL DEFAULT "", source text NOT NULL DEFAULT "", project_id text NOT NULL DEFAULT "",
+      agent_name text NOT NULL DEFAULT "", parent_conversation_id text NOT NULL DEFAULT "", nesting_depth integer NOT NULL DEFAULT 0,
+      battle_id text NOT NULL DEFAULT "", winning_conversation_id text NOT NULL DEFAULT "", not_fully_idle numeric NOT NULL DEFAULT false,
+      killed numeric NOT NULL DEFAULT false, last_user_input_time datetime NOT NULL, last_user_input_step_index integer NOT NULL DEFAULT -1,
+      app_data_dir text NOT NULL DEFAULT "", raw_summary blob, group_id text NOT NULL DEFAULT "", PRIMARY KEY (conversation_id));
+    """)
+    summ.execute("INSERT INTO conversation_summaries (conversation_id, title, preview, step_count, last_modified_time, workspace_uris, status, "
+                 "project_id, last_user_input_time, app_data_dir) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                 (AGY_CONVERSATION, "", "clean the logs", 10, "2026-10-01 10:00:13.002530482+00:00",
+                  json.dumps(["file:///home/u/proj"]), "CASCADE_RUN_STATUS_IDLE", "default-cli-project",
+                  "2026-10-01 10:00:00.000000000+00:00", "antigravity-cli"))
+    summ.commit()
+    summ.close()
+    _jsonl(base / "history.jsonl", [{"display": "clean the logs", "timestamp": AGY_T0 * 1000, "workspace": "/home/u/proj"}])
+    (base / "antigravity-oauth-token").write_text("secret", encoding="utf-8")

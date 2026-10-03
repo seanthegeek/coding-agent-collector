@@ -4,10 +4,11 @@ from __future__ import annotations
 from typing import Dict, List
 
 from .base import Options, Parser
+from .antigravity import AntigravityParser
 from .claude_code import ClaudeCodeParser
 from .codex import CodexParser
 
-ALL: List[Parser] = [ClaudeCodeParser(), CodexParser()]
+ALL: List[Parser] = [ClaudeCodeParser(), CodexParser(), AntigravityParser()]
 
 
 def by_agent() -> Dict[str, List[Parser]]:
