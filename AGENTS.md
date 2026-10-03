@@ -25,8 +25,11 @@ into a CSV timeline. Parsing never happens on the host.
 ## Repository layout
 
 ```
-collect-agent-artifacts.sh   the collector, single POSIX sh file
-tests/smoke.sh               end-to-end test against a fake disk image
+collect-agent-artifacts.sh   the macOS/Linux/BSD collector, single POSIX sh file
+Collect-AgentArtifacts.ps1   the Windows collector, single PowerShell 5.1 file
+tests/smoke.sh               end-to-end test of the sh collector (fake disk image)
+tests/smoke.ps1              end-to-end test of the PowerShell collector
+tests/catalog-sync.sh        fails if the four catalog tables differ between scripts
 README.md                    user documentation, keep in sync with behaviour
 AGENTS.md                    this file
 CLAUDE.md                    imports this file for Claude Code
@@ -60,6 +63,32 @@ OpenBSD sh, and `zsh --emulate sh`. Concretely:
   `expand_glob`. Pattern matching uses `case`.
 - `shellcheck -s sh` must be clean apart from info-level notices.
 
+**Windows PowerShell 5.1, not PowerShell 7.** `Collect-AgentArtifacts.ps1`
+must run under the PowerShell that ships with Windows 10, 11 and Server 2016+,
+and also under PowerShell 7 on any OS so the test can run in Linux CI.
+Concretely:
+
+- No ternary operator, no `??`, no `-AsHashtable`, no three-argument
+  `Join-Path`, no `[System.IO.Path]::GetRelativePath`, no `.NET Core`-only
+  APIs. `Get-FileHash`, `ConvertTo-Json -Compress`, `[DateTimeOffset]` and
+  `System.IO.Compression.FileSystem` are fine.
+- Never name a variable after an automatic variable: `$home`, `$host`,
+  `$args`, `$input`, `$error`, `$pid`, `$profile` are read-only or special
+  and fail silently or loudly. Use `$homeDir`, `$HostName`, `$cargs`.
+- Under `Set-StrictMode -Version 2` on 5.1 a scalar has no `.Count` and a
+  missing property throws. Wrap anything that may be a single item in `@()`.
+- Array splatting to a script file binds positionally; use a hashtable splat
+  to pass named parameters.
+- Hidden items (every dotfile under PowerShell 7 on Linux, `AppData` on
+  Windows) need `-Force` on `Get-Item` and `Get-ChildItem`.
+- Use `tar.exe` only when `$env:OS` is `Windows_NT`; under WSL, PowerShell 7
+  on Linux can find the Windows `tar.exe` through interop and produce a
+  broken archive. Fall back to `ZipFile` elsewhere.
+- Write files through `StreamWriter` with UTF-8 and no BOM; `Add-Content` on
+  5.1 defaults to ASCII and mangles non-ASCII paths.
+- Open source files with `FileShare.ReadWrite | Delete` so stores locked by a
+  running editor still copy.
+
 **Single file, non-interactive.** No prompts, nothing read from stdin, all
 output under `-o`, concise stdout, exit `0` when an archive was written even if
 individual files failed. EDR consoles upload one file and run it once.
@@ -78,12 +107,15 @@ individual files failed. EDR consoles upload one file and run it once.
 - Never print secrets or file contents to stdout or the log.
 
 **Catalog is data, not code.** Agent paths live in the `CATALOG`,
-`PROJECT_CATALOG`, `EXCLUDES` and `SECRET_GLOBS` tables at the top of the
-script. Adding a tool means adding lines there, never new code paths. Every
-entry is tried against every home directory so one table covers macOS, Linux,
-Windows and disk images of each. When the PowerShell collector exists, both
-scripts' tables must be generated from one source with a test that fails on
-drift.
+`PROJECT_CATALOG`, `EXCLUDES` and `SECRET_GLOBS` tables at the top of both
+scripts. Adding a tool means adding the same lines to both, never new code
+paths. Every entry is tried against every home directory so one table covers
+macOS, Linux, Windows and disk images of each. The tables are byte-identical
+between the sh single-quoted strings and the PowerShell `@'...'@`
+here-strings; `tests/catalog-sync.sh` fails on any drift, and `--list` and
+`-List` must print identical output. Glob semantics are shared: catalog
+globs do not cross `/`, exclusion and secret globs do, and `[...]` classes
+work in both (the PowerShell side converts globs to regexes).
 
 **Manifest schema is an interface.** The v2 parser and analysts depend on
 `manifest.jsonl` and `collection.json`. Fields, status values
@@ -112,14 +144,16 @@ find. The validation for every current entry is recorded in the README table.
    a layout: many tools use `~/.config` and `~/.local/share` on macOS and
    Windows too, and several keep credentials in the OS keychain with a file
    fallback that only appears on headless hosts.
-3. Add `agent|path` lines to `CATALOG` for every platform path the tool uses,
-   including the Windows `AppData` location so images are covered.
+3. Add `agent|path` lines to `CATALOG` in both scripts for every platform
+   path the tool uses, including the Windows `AppData` location so images are
+   covered. Run `tests/catalog-sync.sh`.
 4. Add large or irrelevant subtrees to `EXCLUDES` and credential files to
    `SECRET_GLOBS`.
 5. If the tool records project paths, add extraction to `discover_projects`
    and any per-project files to `PROJECT_CATALOG`.
-6. Add a fixture and assertions to `tests/smoke.sh` if the layout has anything
-   unusual (symlinks, SQLite sidecars, spaces in paths).
+6. Add a fixture and assertions to `tests/smoke.sh` and `tests/smoke.ps1` if
+   the layout has anything unusual (symlinks, SQLite sidecars, spaces in
+   paths, drive-letter or `file:///` project references).
 7. Update the README's tool list and close the matching GitHub issue.
 
 Every catalog entry has been validated against source, a shipped bundle, or
@@ -224,7 +258,22 @@ tests/smoke.sh dash
 tests/smoke.sh bash
 tests/smoke.sh ash        # busybox
 printf '#!/bin/sh\nexec zsh --emulate sh "$@"\n' > /tmp/zsh-sh && chmod +x /tmp/zsh-sh && tests/smoke.sh /tmp/zsh-sh
+tests/catalog-sync.sh
+pwsh -NoProfile -File tests/smoke.ps1
 ```
+
+For a change to the PowerShell collector, also run the test under real
+Windows PowerShell 5.1. From this WSL checkout that is:
+
+```sh
+/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -ExecutionPolicy Bypass \
+  -File '\\wsl.localhost\Ubuntu\home\sean\dev\coding-agent-collector\tests\smoke.ps1' \
+  -Collector '\\wsl.localhost\Ubuntu\home\sean\dev\coding-agent-collector\Collect-AgentArtifacts.ps1'
+```
+
+Symlink creation needs a privilege the test may not have on Windows; it
+skips the symlink checks and says so. A pass under PowerShell 7 alone is not
+enough: 5.1 is stricter about `.Count` on scalars and lacks several APIs.
 
 The smoke test builds a fake disk image under `$TMPDIR` with two users, a
 service account, a `nobody` account to skip, awkward filenames (quotes,
@@ -240,6 +289,7 @@ Then run a live collection against your own host and read the summary:
 
 ```sh
 ./collect-agent-artifacts.sh -o /tmp/live -q
+powershell.exe -ExecutionPolicy Bypass -File Collect-AgentArtifacts.ps1 -OutputDir $env:TEMP\live -Quiet
 ```
 
 Check the error count, look at the `skipped_excluded` rows for anything new

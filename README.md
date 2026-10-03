@@ -19,11 +19,18 @@ directories, which hold the state of Copilot Chat, Cline, Roo Code, Kilo Code,
 Continue and Augment extensions. Shell histories and shared cross-agent
 directories such as `~/.agents` and `~/.env` are collected too.
 
-The collector is a single POSIX `sh` script with no dependencies beyond the base
-system. It runs under bash 3.2 (macOS `/bin/sh`), dash, ash and busybox,
-FreeBSD and OpenBSD `sh`, and zsh in sh emulation. A PowerShell equivalent for
-Windows hosts is planned; Windows disk images are already handled by the sh
-script (see below).
+There are two collectors with the same catalog, manifest schema and archive
+layout:
+
+- `collect-agent-artifacts.sh` is a single POSIX `sh` script with no
+  dependencies beyond the base system. It runs under bash 3.2 (macOS
+  `/bin/sh`), dash, ash and busybox, FreeBSD and OpenBSD `sh`, and zsh in sh
+  emulation.
+- `Collect-AgentArtifacts.ps1` is a single Windows PowerShell 5.1 script with
+  no modules, for live Windows hosts. It also runs under PowerShell 7 on any OS.
+
+Either script can collect a mounted disk image of any of the three platforms,
+because every catalog entry is tried against every home directory.
 
 ## Quick start
 
@@ -48,6 +55,27 @@ collected:  5985 files, 110669230 bytes
 skipped:    7 excluded, 0 too large, 0 secret
 errors:     2
 ```
+
+### Windows
+
+```powershell
+# Live host, all profiles (run elevated to read other users' profiles)
+powershell.exe -ExecutionPolicy Bypass -File Collect-AgentArtifacts.ps1 -OutputDir C:\ir
+
+# Mounted image or offline volume
+powershell.exe -ExecutionPolicy Bypass -File Collect-AgentArtifacts.ps1 -Root E:\ -OutputDir C:\cases\host01
+```
+
+`-ExecutionPolicy Bypass` is needed because fresh Windows installs default to
+`Restricted`; it affects only that process and does not change machine policy.
+The parameters mirror the sh options: `-OutputDir`, `-Root`, `-Users`,
+`-Project`, `-Full`, `-NoSecrets`, `-NoLive`, `-NoProjects`, `-MaxFileSizeMB`,
+`-KeepStaging`, `-List`, `-Quiet`, `-Version`.
+
+On Windows 10 1803 and later, Windows 11, and Server 2019 and later the script
+writes a `tar.gz` through the built-in `tar.exe`, so the archive is identical in
+form to the sh collector's. Older hosts fall back to `System.IO.Compression`
+and produce a `.zip`; the summary's `capabilities.archiver` says which.
 
 ## Options
 
@@ -83,8 +111,10 @@ directories because Aider, Gemini CLI, Qwen Code and Continue read them; they
 are flagged `secret: true` like every other credential file.
 
 Home directories come from `getent passwd` or `/etc/passwd` (prefixed with the
-root in image mode), `dscl` on macOS, and globbing `home/*`, `Users/*`, `root`,
-`var/root`, `usr/home/*` and `export/home/*` under the root. Service accounts
+root in image mode), `dscl` on macOS, the registry `ProfileList` on Windows,
+and globbing `home/*`, `Users/*`, `root`, `var/root`, `usr/home/*` and
+`export/home/*` under the root. The `Public`, `Default` and `All Users`
+profile directories are skipped. Service accounts
 with real homes are included because agents run as them too, for example the
 `ollama` system user.
 
@@ -102,7 +132,10 @@ analyst-side parser.
 
 In live mode the collector also writes a `live/` directory with the process
 list, agent processes, their environment and working directory from `/proc`
-on Linux, users, logins, mounts, network sockets and services.
+on Linux, users, logins, mounts, network sockets and services. On Windows the
+snapshot uses CIM: processes with command lines and owners, logged-on users,
+TCP connections with owning process, services, and scheduled task actions.
+Process environment blocks are not captured on Windows.
 
 ### Default exclusions
 
@@ -160,7 +193,13 @@ Each manifest row is one JSON object:
 
 `status` is one of `collected`, `symlink`, `skipped_excluded`, `skipped_size`,
 `skipped_secret` or `error_copy`. Timestamps are epoch seconds from `lstat` on
-the original file; `btime` is `0` where the platform cannot report it.
+the original file; `btime` is `0` where the platform cannot report it. Rows
+written by the Windows collector add `owner` (account name or SID) and
+`attributes` (NTFS attribute list), set `uid`, `gid` and `mode` to `0` and
+`""`, and set `ctime` to `0` because Windows does not expose the change time.
+On a live Windows host the archive path is `fs/<drive letter>/<path>`, for
+example `fs/C/Users/alice/.claude/history.jsonl`; in image mode it is relative
+to the root as on other platforms.
 Symlinks are recreated in the archive and their target recorded, never
 followed. The copy of each file is hashed after staging, so the hash matches
 the bytes in the archive even if a running agent appended to the source
@@ -175,6 +214,13 @@ pointing at a directory you can retrieve from, then pull the `tar.gz`. Use `-q`
 to keep the console output to the final summary. Runtime on a developer
 workstation with several agents installed is well under a minute.
 
+On Windows, files held open by a running editor (Cursor's `state.vscdb`,
+Electron LevelDB stores) are read with shared access so they still copy.
+Reparse points (symlinks and junctions) are recorded with their target and
+never followed. Paths longer than 260 characters fail to copy under Windows
+PowerShell 5.1 unless long paths are enabled on the host; the failure is
+recorded as `error_copy`.
+
 Note on access times: copying a file updates its `atime` on filesystems that
 track it. The manifest records the pre-copy `atime` from `lstat`, taken before
 the copy. On a disk image, mount it read-only with `noatime`.
@@ -187,18 +233,23 @@ tests/smoke.sh dash
 tests/smoke.sh bash
 tests/smoke.sh ash      # busybox
 shellcheck -s sh collect-agent-artifacts.sh
+tests/catalog-sync.sh   # the four tables match between the sh and ps1 scripts
+pwsh -File tests/smoke.ps1
+powershell.exe -ExecutionPolicy Bypass -File tests\smoke.ps1   # on Windows
 ```
 
-The smoke test builds a fake disk image with two users, a service account,
+Each smoke test builds a fake disk image with two users, a service account,
 awkward filenames, a symlink, credential files, excluded directories, an
 oversized file and projects referenced from agent state, then checks the
-manifest, hashes and archive contents. It is POSIX sh too; the JSON validity
-and hash cross-check steps use `python3` when available.
+manifest, hashes and archive contents. The sh test is POSIX sh too; its JSON
+validity and hash cross-check steps use `python3` when available. The
+PowerShell test uses a Windows profile tree with drive-letter and `file:///`
+project references and runs under both PowerShell 5.1 and 7. The catalog drift
+test extracts the four tables from both scripts and fails if they differ.
 
 ## Roadmap
 
-- v1 (this): collection.
-- Windows: a PowerShell 5.1 collector generated from the same catalog.
+- v1 (done): sh and PowerShell collectors with a shared, source-validated catalog.
 - v2: an analyst-side Python tool that parses the collected transcripts
   (Claude Code JSONL, Codex rollouts, Gemini and Antigravity SQLite, Cursor
   `state.vscdb`) into a normalised CSV timeline of turns and tool calls.
