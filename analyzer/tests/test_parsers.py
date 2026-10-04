@@ -181,6 +181,7 @@ class TimelineTests(ParserBase):
             "pi", "little-coder", "letta",
             "hermes", "agent-zero",
             "open-interpreter",
+            "openclaw", "nanobot",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -197,6 +198,7 @@ class TimelineTests(ParserBase):
             "0199a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a1b", "local-conv-1", "conv-9f",
             "20261001_120000_a1b2c3d4", "20261001_130000_0badf00d", "AbCd1234",
             OI_SESSION, OI_IMPORTED,
+            "7d0c2a8e-1111-4000-8000-000000000001", "telegram:123456789",
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -2296,3 +2298,186 @@ class OpenInterpreterTests(ParserBase):
         rows = self.rows_for(OpenInterpreterParser(), rel)
         self.assertEqual(len(rows), 6)
         self.assertEqual({r.agent for r in rows}, {"open-interpreter"})
+from agent_analyzer.parsers import openclaw as openclaw_mod  # noqa: E402
+from agent_analyzer.parsers.nanobot import NanobotParser, decode_stem  # noqa: E402
+from agent_analyzer.parsers.openclaw import OpenClawParser  # noqa: E402
+from fixtures import (NANOBOT_HISTORY_REL, NANOBOT_KEY, NANOBOT_LEGACY_REL, NANOBOT_REL,  # noqa: E402
+                      OPENCLAW_AGENT, OPENCLAW_COLD_SESSION, OPENCLAW_DELETED, OPENCLAW_KEY, OPENCLAW_LEGACY,
+                      OPENCLAW_RESET_SESSION, OPENCLAW_SESSION, OPENCLAW_TOKEN)
+
+
+class OpenClawTests(ParserBase):
+    DB = OPENCLAW_AGENT + "/agent/openclaw-agent.sqlite"
+    LEGACY = OPENCLAW_AGENT + "/sessions/%s.jsonl" % OPENCLAW_LEGACY
+
+    def test_rows(self):
+        rows = [r for r in self.rows_for(OpenClawParser(), self.DB) if r.session_id == OPENCLAW_SESSION]
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "user", "assistant", "tool_use", "tool_result", "system"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent), ("h1", "alice", "openclaw"))
+            self.assertEqual((r.project_path, r.git_branch), ("/srv/proj", ""))
+            self.assertEqual(r.source_file, "/alice/" + self.DB)
+        start, user, asst, use, result, change = rows
+        self.assertIn("key=" + OPENCLAW_KEY, start.text)
+        self.assertIn("channel=telegram", start.text)
+        self.assertIn("chat_type=direct", start.text)
+        self.assertEqual(start.timestamp_utc, "2026-10-01T09:00:00.000Z")
+        self.assertEqual((user.text, user.timestamp_utc), ("check disk space on the server", "2026-10-01T09:00:01.000Z"))
+        self.assertEqual((asst.text, asst.model), ("Checking.", "claude-sonnet-4-5"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("exec", "call_01", "df -h"))
+        self.assertEqual((result.tool_name, result.tool_use_id, result.text),
+                         ("exec", "call_01", "/dev/sda1 50G 20G 30G 40% /"))
+        self.assertEqual((change.text, change.model), ("model change: openai/gpt-5", "gpt-5"))
+        self.assertEqual([r.source_line for r in rows], [1, 2, 3, 3, 4, 5])   # transcript_events rowid
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(OpenClawParser(), self.DB, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["Use exec with df."])
+
+    def test_archives_in_database(self):
+        rows = self.rows_for(OpenClawParser(), self.DB)
+        reset = [r for r in rows if r.session_id == OPENCLAW_RESET_SESSION]
+        self.assertEqual([(r.turn_type, r.text.split(":")[0]) for r in reset],
+                         [("system", "session start"), ("user", "check disk space on the server"), ("system", "reset")])
+        self.assertIn("archive=reset", reset[0].text)
+        published = [r for r in rows if r.session_id == OPENCLAW_DELETED]
+        self.assertEqual(len(published), 1)          # the file is parsed instead
+        self.assertIn(".jsonl.deleted.2026-10-02T08-00-00.000Z", published[0].text)
+        cold = [r for r in rows if r.session_id == OPENCLAW_COLD_SESSION]
+        self.assertEqual([r.turn_type for r in cold], ["system", "user"])
+        self.assertEqual(cold[1].project_path, "/srv/proj")
+
+    def test_legacy_jsonl(self):
+        rows = self.rows_for(OpenClawParser(), self.LEGACY)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "system", "tool_use", "tool_result", "system", "assistant", "system"])
+        start, ctx, bash, out, compaction, asst, err = rows
+        self.assertEqual({r.session_id for r in rows}, {OPENCLAW_LEGACY})
+        self.assertIn("key=" + OPENCLAW_KEY, start.text)              # from the legacy sessions.json
+        self.assertTrue(ctx.text.startswith("runtime context:"))
+        self.assertEqual((bash.tool_name, bash.text, out.tool_use_id), ("bash", "uptime", bash.tool_use_id))
+        self.assertEqual(out.text, "[exit=0] up 3 days")
+        self.assertEqual(compaction.text, "compaction (tokens_before=5000): checked uptime")
+        self.assertEqual(asst.timestamp_utc, "2026-09-20T08:05:10.000Z")   # message ms timestamp
+        self.assertEqual((err.text, err.model), ("assistant error: rate limited", "gpt-5"))
+        self.assertEqual([r.source_line for r in rows], [1, 2, 3, 3, 4, 5, 5])
+
+    def test_deleted_archive_file(self):
+        rel = next(a.rel for a in self.col.artifacts if ".jsonl.deleted." in a.rel)
+        rows = self.rows_for(OpenClawParser(), rel)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user"])
+        self.assertEqual({r.session_id for r in rows}, {OPENCLAW_DELETED})
+        self.assertIn("archive=deleted.2026-10-02T08-00-00.000Z", rows[0].text)
+
+    def test_not_wanted(self):
+        p = OpenClawParser()
+        for a in self.col.artifacts:
+            if a.agent == "openclaw" and a.rel not in (self.DB, self.LEGACY) and ".jsonl.deleted." not in a.rel:
+                self.assertFalse(p.wants(a), a.rel)       # config, credentials, sidecars, checkpoint, trajectory
+        for rel in (".openclaw-work/agents/ops/agent/openclaw-agent.sqlite", ".clawdbot/agents/main/sessions/x.jsonl",
+                    ".openclaw/sessions/x.jsonl", ".openclaw/agents/main/sessions/x.jsonl.reset.2026-10-01T09-30-00Z",
+                    ".openclaw/agents/main/sessions/cold/" + "a" * 64 + ".jsonl.zst"):
+            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+        for rel in (".openclaw/agents/main/sessions/x.jsonl.migrated", ".openclaw/agents/main/sessions/x.jsonl.bak",
+                    ".openclaw/state/openclaw.sqlite", ".openclaw/logs/raw-stream.jsonl"):
+            self.assertFalse(p.wants(SimpleNamespace(rel=rel)), rel)
+
+    def test_credentials_never_emitted(self):
+        rows = self.rows_for(OpenClawParser(), self.DB, include_thinking=True)
+        self.assertTrue(rows)
+        self.assertFalse([r for r in rows if OPENCLAW_TOKEN in "|".join(str(v) for v in r.as_list())])
+        out = self.tmp / "out"
+        import contextlib
+        with contextlib.redirect_stdout(io.StringIO()):
+            cli.main(["timeline", str(self.tmp / "home"), "-o", str(out), "--include-thinking"])
+        for f in out.iterdir():
+            if f.is_file():
+                self.assertNotIn(OPENCLAW_TOKEN, f.read_text(encoding="utf-8", errors="replace"), f.name)
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.LEGACY)
+        rows = self.rows_for(OpenClawParser(), self.LEGACY)
+        self.assertEqual(len(rows), 8)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("parser:", rows[-1].text)
+
+    def test_bad_event_row_is_reported_not_fatal(self):
+        con = sqlite3.connect(str(self.home / self.DB))
+        con.execute("INSERT INTO transcript_events VALUES (?,?,?,?,NULL,NULL,NULL)",
+                    (OPENCLAW_SESSION, 9, '{"type":"message","trunc', 1790845300000))
+        con.commit()
+        con.close()
+        rows = [r for r in self.rows_for(OpenClawParser(), self.DB) if r.session_id == OPENCLAW_SESSION]
+        self.assertEqual(len(rows), 7)
+        self.assertEqual((rows[-1].turn_type, rows[-1].timestamp_utc), ("system", "2026-10-01T09:01:40.000Z"))
+        self.assertIn("event seq 9 unreadable", rows[-1].text)
+
+    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
+    def test_missing_zstandard_is_one_row_per_event(self):
+        with mock.patch.object(openclaw_mod, "_zstd_module", return_value=None):
+            rows = [r for r in self.rows_for(OpenClawParser(), self.DB) if r.session_id == OPENCLAW_SESSION]
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "system", "tool_result", "system"])
+        self.assertIn("zstandard package not installed", rows[2].text)
+
+
+class NanobotTests(ParserBase):
+    def test_rows(self):
+        rows = self.rows_for(NanobotParser(), NANOBOT_REL)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "system", "user", "tool_use", "tool_result", "assistant"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "nanobot", NANOBOT_KEY))
+            self.assertEqual((r.project_path, r.git_branch, r.model), ("/srv/proj", "", ""))
+        start, hidden, user, use, result, asst = rows
+        self.assertIn("last_channel=telegram:123456789", start.text)
+        self.assertEqual(start.timestamp_utc, "2026-10-01T10:15:00.000Z")
+        self.assertTrue(hidden.text.startswith("summarised history:"))
+        self.assertEqual((user.text, user.timestamp_utc), ("what is using port 8080?", "2026-10-01T10:15:01.200Z"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("exec", "call_abc123", "ss -ltnp | grep 8080"))
+        self.assertEqual((result.tool_use_id, result.timestamp_utc), ("call_abc123", "2026-10-01T10:15:05.000Z"))
+        self.assertEqual(asst.text, "python3 (pid 4242) is listening on 8080.")
+        self.assertEqual([r.source_line for r in rows], [1, 3, 4, 5, 6, 7])
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(NanobotParser(), NANOBOT_REL, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["Check listening sockets."])
+
+    def test_memory_history(self):
+        rows = self.rows_for(NanobotParser(), NANOBOT_HISTORY_REL)
+        self.assertEqual([(r.turn_type, r.session_id, r.timestamp_utc) for r in rows],
+                         [("system", NANOBOT_KEY, "2026-09-30T22:10:00.000Z"), ("system", "", "2026-10-01T10:20:00.000Z")])
+        self.assertEqual(rows[0].text, "memory history #1: User asked about disk usage.")
+        self.assertEqual(rows[0].project_path, "/alice/.nanobot/workspace")   # loose input: original path
+
+    def test_legacy_file(self):
+        rows = self.rows_for(NanobotParser(), NANOBOT_LEGACY_REL)
+        self.assertEqual([(r.turn_type, r.session_id, r.model) for r in rows],
+                         [("system", "cli:direct", "fast"), ("user", "cli:direct", "fast"),
+                          ("assistant", "cli:direct", "fast")])
+        self.assertEqual(rows[2].timestamp_utc, "2026-09-01T08:00:01.000Z")    # inherits the previous message
+        self.assertEqual(rows[0].project_path, "")
+
+    def test_decode_stem(self):
+        self.assertEqual(decode_stem("dGVsZWdyYW06MTIzNDU2Nzg5"), NANOBOT_KEY)
+        self.assertEqual(decode_stem("Y2xpOmRpcmVjdA"), "cli:direct")
+        self.assertEqual(decode_stem("cli_direct"), "cli_direct")
+
+    def test_not_wanted(self):
+        p = NanobotParser()
+        for rel in (".nanobot/config.json", ".nanobot/sessions/%s/.workspace" % "0123456789abcdef0123456789abcdef",
+                    ".nanobot/sessions/0123456789abcdef0123456789abcdef/dGVsZWdyYW06MTIzNDU2Nzg5.checkpoint.json"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(p.wants(art), rel)
+        for rel in (".nanobot-work/sessions/0123456789abcdef0123456789abcdef/Y2xpOmRpcmVjdA.jsonl",
+                    ".nanobot/sessions/0123456789abcdef0123456789abcdef/.migration-conflicts/Y2xpOmRpcmVjdA.jsonl"):
+            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+        for rel in (".nanobot/webui/cli_direct.jsonl", ".nanobot/webui/x.segments/000001.jsonl"):
+            self.assertFalse(p.wants(SimpleNamespace(rel=rel)), rel)
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / NANOBOT_REL)
+        rows = self.rows_for(NanobotParser(), NANOBOT_REL)
+        self.assertEqual(len(rows), 7)
+        self.assertEqual((rows[-1].turn_type, rows[-1].session_id), ("system", NANOBOT_KEY))
+        self.assertIn("parser:", rows[-1].text)

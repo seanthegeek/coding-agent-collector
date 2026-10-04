@@ -104,6 +104,8 @@ agents and which have parsers.
 | `hermes` | `state.db` (SQLite with WAL sidecars; `sessions` and `messages`, rewound or compacted `active = 0` rows kept with a `[rewound]` prefix) and the fallback `sessions/<id>.jsonl` under `.hermes`, `.hermes_<suffix>`, `AppData/Local/hermes` and their `profiles/<name>/` homes | Source at 8b66a51, synthetic fixture |
 | `agent-zero` | `usr/chats/<ctxid>/chat.json` (UI log for timestamps, each agent's history for full text and model, `messages/<n>.txt` for long tool results; history-only turns without timestamps when the log was trimmed at 1000 items) under `agent-zero`, `agent-zero/<instance>` or `Desktop/agent-zero`, also the legacy `chats/<ctxid>.json` and `tmp/chats`; project path is the container path `/a0/usr/projects/<name>` | Source at e3051fb, synthetic fixture |
 | `open-interpreter` | Codex rollouts (Codex parser, Open Interpreter paths): `.openinterpreter/sessions/**/rollout-*.jsonl` and `archived_sessions/`, also as `.jsonl.zst`, `.openinterpreter/history.jsonl`, and `external_agent_session_imports.json` (one `system` row per `/import`ed thread, naming the Claude Code or Cursor source file; that thread's record times are import time) | Source at 2767e5f, synthetic fixture |
+| `openclaw` | `agents/<id>/agent/openclaw-agent.sqlite` (SQLite with WAL sidecars: `transcript_events`, zstd `event_zstd` rows need `zstandard`; unpublished reset/deleted archives and SQLite cold archives), legacy `agents/<id>/sessions/<id>.jsonl` and `sessions/*.jsonl`, reset and deleted archives `*.jsonl.reset.*` / `*.jsonl.deleted.*` (optionally `.zst`) and `sessions/cold/*.jsonl.zst`, under `.openclaw`, `.openclaw-<profile>`, `.clawdbot` or `.moltbot`. The session key (channel and sender) is in each session's start row; `auth_profile_store` is never read | Source at 3b16db7, synthetic fixture |
+| `nanobot` | `.nanobot*/sessions/<workspace-id>/<key>.jsonl` (project path from the sibling `.workspace`), legacy `sessions/*.jsonl` and `.migration-conflicts/`, and `memory/history.jsonl`; times are host local time, emitted as if UTC | Source at acdae3d, synthetic fixture |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
@@ -123,7 +125,7 @@ Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
 `augment`, `ollama`, `pearai`, `cody`, `twinny`,
 `open-interpreter`, `openhands`, `pi`, `little-coder`, `letta`, `hermes`,
-`openclaw`, `nanobot`, `agent-zero`, `shellgpt` and `local-deep-research`,
+`agent-zero`, `shellgpt` and `local-deep-research`,
 plus the `shared` and `shell-history` entries, which are not agents.
 Windsurf and Cursor need format work first.
 
