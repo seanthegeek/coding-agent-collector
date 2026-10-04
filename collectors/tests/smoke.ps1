@@ -808,7 +808,8 @@ $errFile = Join-Path $Out 'inv-child.stderr'
 $childOut = @(& $self -NoProfile -ExecutionPolicy Bypass -File $Collector -Root $Root -Inventory -OutputDir $invO 2>$errFile)
 Check 'Inventory without -Quiet: stdout is pure JSON Lines, log on stderr' { $childOut.Count -gt 10 -and @($childOut | Where-Object { $_ -notmatch '^\{"type":"(host|agent)",' }).Count -eq 0 -and (Get-Content -LiteralPath $errFile -Raw) -match 'User ' }
 Check 'Inventory child stdout parses line by line' { @($childOut | Where-Object { $_ -ne '' } | ForEach-Object { try { $null = $_ | ConvertFrom-Json; $true } catch { $false } } | Where-Object { -not $_ }).Count -eq 0 }
-Check 'Inventory -OutputDir noted on stderr' { (Get-Content -LiteralPath $errFile -Raw) -match 'NOTE: -Inventory writes nothing; -OutputDir .*inv-o ignored' }
+# Windows PowerShell 5.1 wraps redirected error-stream text at the console width, so a long path splits across lines.
+Check 'Inventory -OutputDir noted on stderr' { ((Get-Content -LiteralPath $errFile -Raw) -replace '\s+', ' ') -match 'NOTE: -Inventory writes nothing; -OutputDir .*inv-o ignored' }
 $childQ = @(& $self -NoProfile -ExecutionPolicy Bypass -File $Collector -Root $Root -Inventory -Quiet 2>$errFile)
 Check 'Inventory -Quiet leaves stderr empty' { $childQ.Count -gt 10 -and -not ((Get-Content -LiteralPath $errFile -Raw) -match '\S') }
 Remove-Item -LiteralPath (P 'home/bob/.gemini') -Recurse -Force
