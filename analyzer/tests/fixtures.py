@@ -140,6 +140,8 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     build_kilo(home)
     build_cline(home)
     build_roo_code(home)
+    build_openhands(home)
+    build_shellgpt(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -1302,3 +1304,124 @@ def build_roo_code(home: Path) -> None:
     _json(mock / "tasks" / ROO_CLI_TASK / "history_item.json",
           roo_history_item(ROO_CLI_TASK, CLINE_T0 + 303000, "fix tests"))
     _json(mock / "secrets.json", {"roo_cline_config_api_config": "{\"apiKey\":\"sk-not-real\"}"})
+
+
+OPENHANDS_CONV = "0f0e0d0c111140008000000000000001"
+OPENHANDS_CLI_CONV = "0f0e0d0c111140008000000000000002"
+OPENHANDS_LEGACY = "legacy-sid-1"
+
+
+def openhands_meta(cwd="/srv/proj"):
+    return {"id": "0f0e0d0c-1111-4000-8000-000000000001", "title": "List files",
+            "created_at": "2026-10-01T10:00:00Z", "updated_at": "2026-10-01T10:00:05Z",
+            "workspace": {"kind": "LocalWorkspace", "working_dir": cwd},
+            "secrets": {"GITHUB_TOKEN": "**********"}}
+
+
+def openhands_base_state(conv_id, cwd="/srv/proj"):
+    return {"id": conv_id, "execution_status": "finished",
+            "agent": {"kind": "Agent", "llm": {"model": "litellm_proxy/claude-sonnet-4-5", "api_key": "**********"}},
+            "workspace": {"kind": "LocalWorkspace", "working_dir": cwd}}
+
+
+def openhands_events(prefix="6b1d5c2e-0000-4000-8000-00000000000", day="2026-10-01T12:00:"):
+    return [
+        {"kind": "SystemPromptEvent", "id": prefix + "0", "timestamp": day + "00.500000", "source": "agent",
+         "system_prompt": {"type": "text", "text": "You are OpenHands agent."},
+         "tools": [{"kind": "TerminalTool"}, {"kind": "FileEditorTool"}]},
+        {"kind": "MessageEvent", "id": prefix + "1", "timestamp": day + "01.000000", "source": "user",
+         "llm_message": {"role": "user", "content": [{"type": "text", "text": "list the files"}]},
+         "activated_skills": [], "extended_content": []},
+        {"kind": "ActionEvent", "id": prefix + "2", "timestamp": day + "03.000000", "source": "agent",
+         "thought": [{"type": "text", "text": "I will run ls."}],
+         "action": {"kind": "TerminalAction", "command": "ls"}, "tool_name": "terminal",
+         "tool_call_id": "call_1", "tool_call": {"id": "call_1", "name": "terminal",
+                                                 "arguments": "{\"command\":\"ls\"}", "origin": "completion"},
+         "llm_response_id": "resp_1", "security_risk": "LOW"},
+        {"kind": "ObservationEvent", "id": prefix + "3", "timestamp": day + "04.000000", "source": "environment",
+         "tool_name": "terminal", "tool_call_id": "call_1", "action_id": prefix + "2",
+         "observation": {"kind": "TerminalObservation", "content": [{"type": "text", "text": "README.md"}],
+                         "is_error": False, "command": "ls", "exit_code": 0}},
+        {"kind": "ActionEvent", "id": prefix + "4", "timestamp": day + "05.000000", "source": "agent",
+         "thought": [], "reasoning_content": "check the readme",
+         "action": {"kind": "FileEditorAction", "command": "view", "path": "/srv/proj/README.md"},
+         "tool_name": "file_editor", "tool_call_id": "call_2",
+         "tool_call": {"id": "call_2", "name": "file_editor",
+                       "arguments": "{\"command\":\"view\",\"path\":\"/srv/proj/README.md\"}",
+                       "origin": "completion"}},
+        {"kind": "UserRejectObservation", "id": prefix + "5", "timestamp": day + "06.000000", "source": "user",
+         "tool_name": "file_editor", "tool_call_id": "call_2", "action_id": prefix + "4",
+         "rejection_reason": "not that file", "rejection_source": "user"},
+        {"kind": "MessageEvent", "id": prefix + "6", "timestamp": day + "07.000000", "source": "agent",
+         "llm_message": {"role": "assistant", "content": [{"type": "text", "text": "The project has a README."}]},
+         "activated_skills": [], "extended_content": []},
+    ]
+
+
+def _openhands_conversation(cdir: Path, events) -> None:
+    for n, ev in enumerate(events):
+        path = cdir / "events" / ("event-%05d-%s.json" % (n, ev["id"]))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(ev, separators=(",", ":")), encoding="utf-8")
+    (cdir / "events" / (".eventlog-len-%d.marker" % len(events))).write_text("", encoding="utf-8")
+
+
+def build_openhands(home: Path) -> None:
+    oh = home / ".openhands"
+    conv = oh / "agent-canvas/dev_conversations" / OPENHANDS_CONV
+    _openhands_conversation(conv, openhands_events())
+    _json_file(conv / "meta.json", openhands_meta())
+    _json_file(conv / "base_state.json", openhands_base_state(OPENHANDS_CONV))
+    # CLI conversation with no meta.json: naive times are emitted as if UTC.
+    cli = oh / "conversations" / OPENHANDS_CLI_CONV
+    _openhands_conversation(cli, openhands_events("7c2e6d3f-0000-4000-8000-00000000000", "2026-10-02T08:30:")[:4])
+    _json_file(cli / "base_state.json", openhands_base_state(OPENHANDS_CLI_CONV))
+    legacy = oh / "sessions" / OPENHANDS_LEGACY / "events"
+    for n in range(3):
+        _json_file(legacy / ("%d.json" % n), {"id": n, "timestamp": "2026-03-01T09:00:0%d.000000" % n,
+                                               "source": "user", "action": "message", "args": {"content": "hi"}})
+    _json_file(oh / "settings.json", {"llm_model": "anthropic/claude-sonnet-4-5", "llm_api_key": "sk-not-real"})
+    _json_file(oh / "secrets.json", {"custom_secrets": {"X": {"secret": "not-real"}}})
+
+
+SHELLGPT_CHAT = "deploy-check"
+SHELLGPT_LEGACY_CHAT = "old-functions"
+
+
+def shellgpt_messages():
+    return [
+        {"role": "system", "content": "You are ShellGPT\nYou are programming and system administration assistant."},
+        {"role": "user", "content": "what is listening on port 8080"},
+        {"role": "assistant", "content": None, "tool_calls": [{"id": "call_Q1w2e3r4", "type": "function", "function": {
+            "name": "execute_shell_command", "arguments": "{\"shell_command\": \"ss -ltnp | grep 8080\"}"}}]},
+        {"role": "tool", "content": "Exit code: 0, Output:\nLISTEN 0 4096 0.0.0.0:8080 users:((\"python3\",pid=4242))\n",
+         "tool_call_id": "call_Q1w2e3r4"},
+        {"role": "assistant", "content": "\n> @FunctionCall `execute_shell_command(shell_command=\"ss -ltnp | grep 8080\")` "
+                                         "\n\nA python3 process (PID 4242) is listening on 8080."},
+    ]
+
+
+def shellgpt_legacy_messages():
+    return [
+        {"role": "system", "content": "You are ShellGPT"},
+        {"role": "user", "content": "how much disk is free"},
+        {"role": "assistant", "content": "", "function_call": {
+            "name": "execute_shell_command", "arguments": "{\"shell_command\": \"df -h /\"}"}},
+        {"role": "function", "content": "Exit code: 0, Output:\n/dev/sda1 50G 20G 30G 40% /\n",
+         "name": "execute_shell_command"},
+        {"role": "assistant", "content": "30G is free on /."},
+    ]
+
+
+def build_shellgpt(home: Path) -> None:
+    temp = home / "AppData/Local/Temp"
+    (temp / "chat_cache").mkdir(parents=True, exist_ok=True)
+    (temp / "chat_cache" / SHELLGPT_CHAT).write_text(json.dumps(shellgpt_messages()), encoding="utf-8")
+    (temp / "shell_gpt/chat_cache").mkdir(parents=True, exist_ok=True)
+    (temp / "shell_gpt/chat_cache" / SHELLGPT_LEGACY_CHAT).write_text(json.dumps(shellgpt_legacy_messages()),
+                                                                     encoding="utf-8")
+    (temp / "shell_gpt/cache").mkdir(parents=True, exist_ok=True)
+    (temp / "shell_gpt/cache/0cc175b9c0f1b6a831c399e269772661").write_text("a cached response", encoding="utf-8")
+    cfg = home / ".config/shell_gpt"
+    cfg.mkdir(parents=True, exist_ok=True)
+    (cfg / ".sgptrc").write_text("OPENAI_API_KEY=sk-not-real\nDEFAULT_MODEL=gpt-4o\n", encoding="utf-8")

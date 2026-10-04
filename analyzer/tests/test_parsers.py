@@ -176,6 +176,7 @@ class TimelineTests(ParserBase):
             "crush", "goose",
             "zed", "vscode",
             "cline", "roo-code",
+            "openhands", "shellgpt",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -188,6 +189,7 @@ class TimelineTests(ParserBase):
             GEMINI_SESSION, GEMINI_RESUMED, GEMINI_LEGACY, GEMINI_SUBAGENT,
             CRUSH_SESSION, GOOSE_SESSION, "20260301_090000",
             ZED_THREAD, ZED_EXTERNAL, VSCODE_SESSION, VSCODE_LEGACY_SESSION,
+            OPENHANDS_CONV, OPENHANDS_CLI_CONV, SHELLGPT_CHAT,
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -1529,3 +1531,138 @@ class RooCodeTests(ParserBase):
         self.assertEqual(len(rows), 10)
         self.assertEqual(rows[-1].turn_type, "system")
         self.assertIn("parser:", rows[-1].text)
+
+
+from agent_analyzer.parsers.openhands import OpenHandsParser
+from agent_analyzer.parsers.shellgpt import ShellGptParser, load_messages
+from fixtures import OPENHANDS_CLI_CONV, OPENHANDS_CONV, OPENHANDS_LEGACY, SHELLGPT_CHAT, SHELLGPT_LEGACY_CHAT
+
+
+class OpenHandsTests(ParserBase):
+    CANVAS = ".openhands/agent-canvas/dev_conversations/%s/events/" % OPENHANDS_CONV
+    CLI = ".openhands/conversations/%s/events/" % OPENHANDS_CLI_CONV
+
+    def event(self, base, n):
+        return next(a.rel for a in self.col.artifacts
+                    if a.rel.startswith(base + "event-%05d-" % n))
+
+    def conversation(self, base, **kw):
+        rows = []
+        for a in sorted(self.col.artifacts, key=lambda a: a.rel):
+            if a.rel.startswith(base) and OpenHandsParser().wants(a):
+                rows.extend(OpenHandsParser().parse(a, Options(**kw)))
+        return rows
+
+    def test_rows(self):
+        rows = self.conversation(self.CANVAS)
+        self.assertEqual([r.turn_type for r in rows], ["system", "system", "user", "tool_use", "tool_result",
+                                                       "tool_use", "tool_result", "assistant"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "openhands", OPENHANDS_CONV))
+            self.assertEqual((r.project_path, r.git_branch, r.model),
+                             ("/srv/proj", "", "litellm_proxy/claude-sonnet-4-5"))
+            self.assertEqual(r.source_line, 1)
+        header, prompt, user, ls, out, view, reject, asst = rows
+        self.assertTrue(header.text.startswith("conversation start | List files"), header.text)
+        self.assertIn("corrected by UTC+02:00", header.text)
+        self.assertEqual(header.timestamp_utc, "2026-10-01T10:00:00.000Z")
+        self.assertEqual(prompt.text, "system prompt, 2 tools: You are OpenHands agent.")
+        # Naive local 12:00:01 anchored by meta.json created_at 10:00:00Z.
+        self.assertEqual((user.text, user.timestamp_utc), ("list the files", "2026-10-01T10:00:01.000Z"))
+        self.assertEqual((ls.tool_name, ls.tool_use_id, ls.text), ("terminal", "call_1", "ls"))
+        self.assertEqual((out.tool_use_id, out.text, out.timestamp_utc),
+                         ("call_1", "README.md", "2026-10-01T10:00:04.000Z"))
+        self.assertEqual((view.tool_name, view.text), ("file_editor", "view /srv/proj/README.md"))
+        self.assertEqual((reject.tool_use_id, reject.text), ("call_2", "[rejected by user] not that file"))
+        self.assertEqual(asst.text, "The project has a README.")
+        self.assertTrue(asst.source_file.endswith(".json"))
+
+    def test_no_meta_emits_naive_time_as_utc(self):
+        rows = self.conversation(self.CLI)
+        self.assertEqual(rows[0].turn_type, "system")
+        self.assertIn("emitted as if UTC", rows[0].text)
+        self.assertEqual(rows[2].timestamp_utc, "2026-10-02T08:30:01.000Z")
+        self.assertEqual({r.session_id for r in rows}, {OPENHANDS_CLI_CONV})
+
+    def test_thinking_opt_in(self):
+        self.assertNotIn("thinking", [r.turn_type for r in self.conversation(self.CANVAS)])
+        rows = self.conversation(self.CANVAS, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["I will run ls.", "check the readme"])
+
+    def test_legacy_session_reported_once(self):
+        rows = [r for a in self.col.artifacts if OpenHandsParser().wants(a) and "/sessions/" in a.rel
+                for r in OpenHandsParser().parse(a, Options())]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0].session_id, rows[0].turn_type), (OPENHANDS_LEGACY, "system"))
+        self.assertIn("3 event files, not parsed", rows[0].text)
+
+    def test_secrets_not_wanted(self):
+        for rel in (".openhands/settings.json", ".openhands/secrets.json",
+                    ".openhands/agent-canvas/dev_conversations/%s/meta.json" % OPENHANDS_CONV,
+                    ".openhands/agent-canvas/dev_conversations/%s/base_state.json" % OPENHANDS_CONV):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(OpenHandsParser().wants(art), rel)
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        rel = self.event(self.CANVAS, 6)
+        write_bad_line(self.home / rel)
+        rows = self.rows_for(OpenHandsParser(), rel)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].turn_type, "system")
+        self.assertIn("parser:", rows[0].text)
+        self.assertEqual(len(self.conversation(self.CANVAS)), 8)   # the other events still parse
+
+
+class ShellGptTests(ParserBase):
+    CHAT = "AppData/Local/Temp/chat_cache/" + SHELLGPT_CHAT
+    LEGACY = "AppData/Local/Temp/shell_gpt/chat_cache/" + SHELLGPT_LEGACY_CHAT
+
+    def test_rows(self):
+        rows = self.rows_for(ShellGptParser(), self.CHAT)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result", "assistant"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "shellgpt", SHELLGPT_CHAT))
+            self.assertEqual((r.timestamp_utc, r.project_path, r.git_branch, r.model, r.source_line),
+                             ("", "", "", "", 1))
+        system, user, use, result, asst = rows
+        self.assertTrue(system.text.startswith("You are ShellGPT"))
+        self.assertEqual(user.text, "what is listening on port 8080")
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text),
+                         ("execute_shell_command", "call_Q1w2e3r4", "ss -ltnp | grep 8080"))
+        self.assertEqual((result.tool_name, result.tool_use_id), ("execute_shell_command", "call_Q1w2e3r4"))
+        self.assertTrue(result.text.startswith("Exit code: 0, Output: LISTEN"))
+        self.assertTrue(asst.text.endswith("is listening on 8080."))
+
+    def test_legacy_function_call(self):
+        rows = self.rows_for(ShellGptParser(), self.LEGACY)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result", "assistant"])
+        use, result = rows[2], rows[3]
+        self.assertEqual((use.tool_use_id, use.text), ("function_call_2", "df -h /"))
+        self.assertEqual((result.tool_use_id, result.tool_name), ("function_call_2", "execute_shell_command"))
+
+    def test_thinking_opt_in(self):
+        # ShellGPT stores no reasoning; the option changes nothing.
+        self.assertEqual([r.turn_type for r in self.rows_for(ShellGptParser(), self.CHAT, include_thinking=True)],
+                         [r.turn_type for r in self.rows_for(ShellGptParser(), self.CHAT)])
+
+    def test_not_wanted(self):
+        for rel in (".config/shell_gpt/.sgptrc",
+                    "AppData/Local/Temp/shell_gpt/cache/0cc175b9c0f1b6a831c399e269772661"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(ShellGptParser().wants(art), rel)
+
+    def test_loose_temp_directory_is_wanted(self):
+        art = next(a for a in self.col.artifacts if a.rel == self.CHAT)
+        art.rel = "tmp/chat_cache/" + SHELLGPT_CHAT
+        self.assertTrue(ShellGptParser().wants(art))
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        path = self.home / self.CHAT
+        raw = path.read_text(encoding="utf-8")
+        path.write_text(raw[: raw.index('{"role": "tool"') + 20], encoding="utf-8")
+        rows = self.rows_for(ShellGptParser(), self.CHAT)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "system"])
+        self.assertIn("parser: truncated after 3 message(s)", rows[-1].text)
+        msgs, err = load_messages("not json")
+        self.assertEqual(msgs, [])
+        self.assertTrue(err)
