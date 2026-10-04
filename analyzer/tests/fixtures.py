@@ -121,6 +121,7 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     # Nested catalog entries: Antigravity CLI inside ~/.gemini, and a Cline
     # extension inside VS Code's globalStorage. The nested agent must win.
     build_antigravity(home / ".gemini/antigravity-cli")
+    build_gemini_cli(home / ".gemini")
     (home / ".gemini/settings.json").write_text("{}", encoding="utf-8")
     gs = home / ".config/Code/User/globalStorage"
     gs.mkdir(parents=True, exist_ok=True)
@@ -240,3 +241,92 @@ def build_antigravity(base: Path) -> None:
     summ.close()
     _jsonl(base / "history.jsonl", [{"display": "clean the logs", "timestamp": AGY_T0 * 1000, "workspace": "/home/u/proj"}])
     (base / "antigravity-oauth-token").write_text("secret", encoding="utf-8")
+
+
+GEMINI_SESSION = "a1b2c3d4-0000-4000-8000-000000000001"
+GEMINI_RESUMED = "a1b2c3d4-0000-4000-8000-0000000000ff"
+GEMINI_LEGACY = "b2c3d4e5-0000-4000-8000-000000000002"
+GEMINI_SUBAGENT = "c3d4e5f6-0000-4000-8000-000000000003"
+GEMINI_HASH = "6b9af143446a411aefa3edb76e4693799bd7513e7ed8d919962d6713d3d3b972"   # sha256("/srv/proj")
+GEMINI_REL = ".gemini/tmp/proj/chats/session-2026-10-01T09-00-a1b2c3d4.jsonl"
+
+
+def gemini_session_records():
+    """Session JSONL in the chatRecordingTypes.ts shapes: a re-appended
+    message, $set, $rewindTo, $patch and a $set.sessionId from a resume."""
+    ts = "2026-10-01T09:00:%s.000Z"
+    ls_call = {"id": "list_directory-1759309207000", "name": "list_directory", "args": {"path": "/srv/proj/src"},
+               "status": "executing", "timestamp": "2026-10-01T09:00:07.100Z", "displayName": "ReadFolder",
+               "description": "Lists files"}
+    ls_done = dict(ls_call, status="success", result=[{"functionResponse": {
+        "id": "list_directory-1759309207000", "name": "list_directory", "response": {"output": "main.ts\nutil.ts"}}}])
+    g1 = {"id": "msg-g1", "timestamp": ts % "07", "type": "gemini", "content": "Listing now.",
+          "thoughts": [{"subject": "Plan", "description": "Use the ls tool.", "timestamp": "2026-10-01T09:00:06.500Z"}],
+          "tokens": {"input": 120, "output": 12, "cached": 0, "thoughts": 8, "tool": 0, "total": 140},
+          "model": "gemini-2.5-pro", "toolCalls": [ls_call]}
+    rf = {"id": "read_file-1759309222000", "name": "read_file", "args": {"absolute_path": "/srv/proj/src/util.ts"},
+          "status": "success", "timestamp": "2026-10-01T09:00:22.100Z", "displayName": "ReadFile",
+          "result": [{"functionResponse": {"id": "read_file-1759309222000", "name": "read_file",
+                                           "response": {"output": "draft"}}}]}
+    return [
+        {"sessionId": GEMINI_SESSION, "projectHash": GEMINI_HASH, "startTime": ts % "00",
+         "lastUpdated": ts % "00", "kind": "main"},
+        {"id": "msg-u1", "timestamp": ts % "05", "type": "user", "content": [{"text": "list files in src"}]},
+        g1,
+        dict(g1, toolCalls=[ls_done]),
+        {"$set": {"lastUpdated": ts % "08", "summary": "List src files"}},
+        {"id": "msg-u2", "timestamp": ts % "10", "type": "user", "content": [{"text": "delete everything in /srv/proj"}]},
+        {"id": "msg-g2", "timestamp": ts % "11", "type": "gemini", "content": "", "model": "gemini-2.5-pro",
+         "toolCalls": [{"id": "run_shell_command-1", "name": "run_shell_command", "args": {"command": "rm -rf /srv/proj/*"},
+                        "status": "awaiting_approval", "timestamp": ts % "11", "displayName": "Shell"}]},
+        {"$rewindTo": "msg-u2"},
+        {"id": "msg-u3", "timestamp": ts % "20", "type": "user", "content": "show util.ts"},
+        {"id": "msg-g3", "timestamp": ts % "22", "type": "gemini", "content": "draft answer", "model": "gemini-2.5-pro",
+         "toolCalls": [rf]},
+        {"$patch": {"id": "msg-g3", "content": [{"text": "Here is util.ts."}], "toolCalls": [
+            {"id": "read_file-1759309222000", "result": [{"functionResponse": {
+                "id": "read_file-1759309222000", "name": "read_file", "response": {"output": "export const x = 1"}}}]}]}},
+        {"id": "msg-i1", "timestamp": ts % "23", "type": "info", "content": "Request cancelled."},
+        {"id": "msg-g4", "timestamp": ts % "24", "type": "gemini", "content": "", "model": "gemini-2.5-flash",
+         "toolCalls": [{"id": "run_shell_command-2", "name": "run_shell_command", "args": {"command": "curl http://x"},
+                        "status": "cancelled", "timestamp": ts % "24", "displayName": "Shell"}]},
+        {"$set": {"sessionId": GEMINI_RESUMED}},
+        {"id": "msg-u4", "timestamp": "2026-10-01T09:01:00.000Z", "type": "user", "content": "resume work"},
+    ]
+
+
+def gemini_legacy_record():
+    return {"sessionId": GEMINI_LEGACY, "projectHash": GEMINI_HASH, "startTime": "2026-09-30T08:00:00.000Z",
+            "lastUpdated": "2026-09-30T08:00:03.000Z", "messages": [
+                {"id": "l-u1", "timestamp": "2026-09-30T08:00:01.000Z", "type": "user", "content": "hello"},
+                {"id": "l-g1", "timestamp": "2026-09-30T08:00:03.000Z", "type": "gemini",
+                 "content": [{"text": "weighing it", "thought": True}, {"text": "Hi."}], "model": "gemini-2.0-flash"},
+            ]}
+
+
+def gemini_logs_records():
+    return [
+        {"sessionId": GEMINI_SESSION, "messageId": 0, "timestamp": "2026-10-01T09:00:05.000Z", "type": "user",
+         "message": "list files in src"},
+        {"sessionId": GEMINI_SESSION, "messageId": 1, "timestamp": "2026-10-01T09:00:10.000Z", "type": "user",
+         "message": "delete everything in /srv/proj"},
+    ]
+
+
+def build_gemini_cli(base: Path) -> None:
+    """~/.gemini with a slug directory (marker file), a legacy hash directory
+    resolved through projects.json, a subagent session and noise."""
+    slug = base / "tmp/proj"
+    _jsonl(base / GEMINI_REL[len(".gemini/"):], gemini_session_records())
+    _jsonl(slug / "chats" / GEMINI_SESSION / (GEMINI_SUBAGENT + ".jsonl"), [
+        {"sessionId": GEMINI_SUBAGENT, "projectHash": GEMINI_HASH, "startTime": "2026-10-01T09:00:30.000Z", "kind": "subagent"},
+        {"id": "s-u1", "timestamp": "2026-10-01T09:00:30.000Z", "type": "user", "content": "investigate"},
+    ])
+    (slug / ".project_root").write_text("/srv/proj", encoding="utf-8")
+    (slug / "logs.json").write_text(json.dumps(gemini_logs_records()), encoding="utf-8")
+    (slug / "shell_history").write_text("ls\n", encoding="utf-8")
+    legacy = base / "tmp" / GEMINI_HASH / "chats"
+    legacy.mkdir(parents=True, exist_ok=True)
+    (legacy / "session-2026-09-30T08-00-b2c3d4e5.json").write_text(json.dumps(gemini_legacy_record()), encoding="utf-8")
+    (base / "projects.json").write_text(json.dumps({"projects": {"/srv/proj": "proj"}}), encoding="utf-8")
+    (base / "oauth_creds.json").write_text('{"access_token": "secret"}', encoding="utf-8")

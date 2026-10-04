@@ -7,8 +7,10 @@ from .base import Options, Parser
 from .antigravity import AntigravityParser
 from .claude_code import ClaudeCodeParser
 from .codex import CodexParser
+from .gemini_cli import GeminiCliParser
 
 ALL: List[Parser] = [ClaudeCodeParser(), CodexParser(), AntigravityParser()]
+ALL.append(GeminiCliParser())
 
 
 def by_agent() -> Dict[str, List[Parser]]:
