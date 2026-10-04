@@ -7,7 +7,7 @@ others. It has two parts, kept in separate directories because they run in
 different places and have different dependency rules.
 
 | Part | Directory | Runs on |
-| --- | --- | --- | --- |
+| --- | --- | --- |
 | Collectors | [`collectors/`](collectors/README.md) | The host under investigation, or an analyst workstation with a mounted image |
 | Analyzer | [`analyzer/`](analyzer/README.md) | The analyst workstation | v2, in progress |
 | Agent lab | [`lab/`](lab/README.md) | A developer's Docker host, to produce real-install fixtures without installing agents |
