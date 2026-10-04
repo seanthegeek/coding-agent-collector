@@ -40,6 +40,7 @@ class Catalog:
     project_entries: List[Entry] = field(default_factory=list)
     excludes: List[str] = field(default_factory=list)
     secrets: List[str] = field(default_factory=list)
+    docker_volumes: List[Entry] = field(default_factory=list)  # agent|volume name glob
     text: str = ""
 
     @property
@@ -158,6 +159,8 @@ def parse(text: str) -> Catalog:
                 section = "exclude"
             elif head.startswith("credential files"):
                 section = "secret"
+            elif head.startswith("docker volumes"):
+                section = "docker"
             continue
         if section == "home":
             agent, _, glob = line.partition("|")
@@ -167,6 +170,9 @@ def parse(text: str) -> Catalog:
             cat.project_entries.append(_make_entry(agent, glob))
         elif section == "exclude":
             cat.excludes.append(line)
+        elif section == "docker":
+            agent, _, glob = line.partition("|")
+            cat.docker_volumes.append(_make_entry(agent, glob))
         else:
             cat.secrets.append(line)
     return cat

@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- The catalog copy carries collector 1.5.0's `DOCKER_VOLUMES` table; the
+  reader keeps those lines in their own list instead of the secret list.
+
 ## [0.4.0] - 2026-10-04
 
 ### Added
