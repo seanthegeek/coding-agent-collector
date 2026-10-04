@@ -23,101 +23,183 @@ def _jsonl(path: Path, records) -> None:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
-def claude_session_records(cwd="/srv/proj", branch="main"):
-    common = dict(
+CLAUDE_TOOL_RESULT = "b1c2d3e4f.txt"
+CLAUDE_PERSISTED = "line 1 of the full output\nline 2 of the full output"
+
+
+def _claude_common(cwd, branch, **extra):
+    return dict(
         sessionId=CLAUDE_SESSION,
         cwd=cwd,
         gitBranch=branch,
-        version="2.1.0",
+        version="2.1.289",
         userType="external",
         isSidechain=False,
         entrypoint="cli",
+        **extra,
     )
+
+
+def _claude_assistant(common, uuid, t, blocks, model="claude-fable-5-1", **extra):
+    return dict(
+        common,
+        type="assistant",
+        uuid=uuid,
+        timestamp="2026-10-01T10:00:%s.000Z" % t,
+        requestId="req_" + uuid,
+        message={
+            "model": model,
+            "id": "msg_" + uuid,
+            "type": "message",
+            "role": "assistant",
+            "content": blocks,
+        },
+        **extra,
+    )
+
+
+def _claude_user(common, uuid, t, content, **extra):
+    return dict(
+        common,
+        type="user",
+        uuid=uuid,
+        timestamp="2026-10-01T10:00:%s.000Z" % t,
+        message={"role": "user", "content": content},
+        **extra,
+    )
+
+
+def _claude_attachment(common, uuid, t, attachment):
+    return dict(
+        common,
+        type="attachment",
+        uuid=uuid,
+        timestamp="2026-10-01T10:00:%s.000Z" % t,
+        attachment=attachment,
+    )
+
+
+def _claude_result(tool_use_id, content):
+    return [{"tool_use_id": tool_use_id, "type": "tool_result", "content": content}]
+
+
+def _claude_stub(name):
+    return (
+        "<persisted-output>\nOutput too large (32.8KB). Full output saved to: "
+        "/home/alice/.claude/projects/-srv-proj/%s/tool-results/%s\n\n"
+        "Preview (first 2KB):\nline 1 of the full output\n</persisted-output>"
+    ) % (CLAUDE_SESSION, name)
+
+
+def claude_session_records(cwd="/srv/proj", branch="main"):
+    """Line numbers are what ClaudeCodeTests.test_rows asserts."""
+    c = _claude_common(cwd, branch)
+    sid = CLAUDE_SESSION
     return [
-        dict(type="mode", mode="normal", sessionId=CLAUDE_SESSION),
-        dict(
-            common,
-            type="user",
-            uuid="u1",
+        dict(type="mode", mode="normal", sessionId=sid),  # 1
+        _claude_user(
+            c,
+            "u1",
+            "00",
+            "delete the logs in /var/log please",
             parentUuid=None,
-            timestamp="2026-10-01T10:00:00.000Z",
-            message={"role": "user", "content": "delete the logs in /var/log please"},
-        ),
-        dict(
-            common,
-            type="assistant",
-            uuid="a1",
-            parentUuid="u1",
-            timestamp="2026-10-01T10:00:01.000Z",
-            requestId="req_1",
-            message={
-                "model": "claude-fable-5-1",
-                "id": "msg_1",
-                "type": "message",
-                "role": "assistant",
-                "content": [
-                    {"type": "thinking", "thinking": "private reasoning", "signature": "x"}
-                ],
+            origin={"kind": "human"},
+            promptSource="typed",
+        ),  # 2
+        _claude_assistant(
+            c, "a1", "01", [{"type": "thinking", "thinking": "private reasoning", "signature": "x"}]
+        ),  # 3
+        _claude_assistant(
+            c, "a1b", "01", [{"type": "thinking", "thinking": "", "signature": "c2ln"}]
+        ),  # 4: empty thinking, skipped
+        _claude_assistant(
+            c,
+            "a2",
+            "02",
+            [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_01",
+                    "name": "Bash",
+                    "input": {"command": "rm -rf /var/log/*.log", "description": "Remove logs"},
+                    "caller": {"type": "direct"},
+                }
+            ],
+            wireToolInputs={
+                "toolu_01": {
+                    "command": "cd /srv/proj && rm -rf /var/log/*.log",
+                    "description": "Remove logs",
+                }
             },
-        ),
-        dict(
-            common,
-            type="assistant",
-            uuid="a2",
-            parentUuid="a1",
-            timestamp="2026-10-01T10:00:02.000Z",
-            requestId="req_1",
-            message={
-                "model": "claude-fable-5-1",
-                "id": "msg_1",
-                "type": "message",
-                "role": "assistant",
-                "content": [
-                    {
-                        "type": "tool_use",
-                        "id": "toolu_01",
-                        "name": "Bash",
-                        "input": {"command": "rm -rf /var/log/*.log", "description": "Remove logs"},
-                    }
-                ],
-            },
-        ),
-        dict(
-            common,
-            type="user",
-            uuid="u2",
-            parentUuid="a2",
-            timestamp="2026-10-01T10:00:03.000Z",
-            message={
-                "role": "user",
-                "content": [
-                    {
-                        "tool_use_id": "toolu_01",
-                        "type": "tool_result",
-                        "content": "removed 3 files",
-                        "is_error": False,
-                    }
-                ],
-            },
+            wireIngestContext={"toolu_01": {"cwd": "/srv/proj"}},
+        ),  # 5
+        _claude_user(
+            c,
+            "u2",
+            "03",
+            [
+                {
+                    "tool_use_id": "toolu_01",
+                    "type": "tool_result",
+                    "content": "removed 3 files",
+                    "is_error": False,
+                }
+            ],
             toolUseResult={"stdout": "removed 3 files", "stderr": "", "interrupted": False},
-        ),
+            sourceToolAssistantUUID="a2",
+        ),  # 6
         dict(
-            common,
-            type="assistant",
-            uuid="a3",
-            parentUuid="u2",
-            timestamp="2026-10-01T10:00:04.000Z",
-            requestId="req_2",
-            message={
-                "model": "claude-fable-5-1",
-                "id": "msg_2",
-                "type": "message",
-                "role": "assistant",
-                "content": [{"type": "text", "text": "Done. Three log files were removed."}],
+            type="queue-operation",
+            operation="enqueue",
+            timestamp="2026-10-01T10:00:03.500Z",
+            sessionId=sid,
+            content="also check /tmp",
+        ),  # 7: delivered by the attachment on line 8
+        _claude_attachment(
+            c,
+            "t1",
+            "04",
+            {
+                "type": "queued_command",
+                "prompt": "also check /tmp",
+                "commandMode": "prompt",
+                "origin": {"kind": "human"},
+                "humanTurn": True,
+                "source_uuid": "q1",
+                "delivery_id": "d1",
+                "timestamp": "2026-10-01T10:00:03.500Z",
             },
-        ),
+        ),  # 8
+        _claude_attachment(
+            c,
+            "t2",
+            "04",
+            {
+                "type": "edited_text_file",
+                "filename": "/srv/proj/notes.md",
+                "snippet": "1\tfile body",
+            },
+        ),  # 9
+        _claude_attachment(
+            c,
+            "t3",
+            "04",
+            {
+                "type": "hook_system_message",
+                "hookName": "PostToolUse:Bash",
+                "hookEvent": "PostToolUse",
+                "toolUseID": "toolu_01",
+                "content": "lint passed",
+            },
+        ),  # 10
+        _claude_attachment(
+            c, "t4", "04", {"type": "total_tokens_reminder", "text": "tokens used"}
+        ),  # 11: skipped
+        _claude_assistant(
+            c, "a3", "04", [{"type": "text", "text": "Done. Three log files were removed."}]
+        ),  # 12
         dict(
-            common,
+            c,
             type="system",
             uuid="s1",
             parentUuid="a3",
@@ -125,25 +207,137 @@ def claude_session_records(cwd="/srv/proj", branch="main"):
             subtype="turn_duration",
             durationMs=4000,
             messageCount=5,
-            isMeta=True,
-        ),
+            isMeta=False,
+        ),  # 13
+        _claude_user(
+            c,
+            "u3",
+            "06",
+            "<command-name>/model</command-name>\n<command-message>model</command-message>\n"
+            "<command-args></command-args>",
+        ),  # 14
+        _claude_user(
+            c, "u4", "06", "<local-command-stdout>Set model to Fable</local-command-stdout>"
+        ),  # 15
+        _claude_user(
+            c,
+            "u5",
+            "07",
+            "<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n"
+            "</task-notification>",
+            origin={"kind": "task-notification"},
+            promptSource="system",
+        ),  # 16
+        _claude_assistant(
+            c,
+            "a4",
+            "08",
+            [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_02",
+                    "name": "ToolSearch",
+                    "input": {"query": "select:WebFetch"},
+                }
+            ],
+        ),  # 17
+        _claude_user(
+            c,
+            "u6",
+            "09",
+            _claude_result("toolu_02", [{"type": "tool_reference", "tool_name": "WebFetch"}]),
+        ),  # 18
+        _claude_assistant(
+            c,
+            "a5",
+            "10",
+            [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_03",
+                    "name": "Read",
+                    "input": {"file_path": "/srv/proj/big.log"},
+                }
+            ],
+        ),  # 19
+        _claude_user(
+            c, "u7", "11", _claude_result("toolu_03", _claude_stub(CLAUDE_TOOL_RESULT))
+        ),  # 20: the stub's file exists
+        _claude_assistant(
+            c,
+            "a6",
+            "12",
+            [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_04",
+                    "name": "Read",
+                    "input": {"file_path": "/srv/proj/gone.log"},
+                }
+            ],
+        ),  # 21
+        _claude_user(
+            c, "u8", "13", _claude_result("toolu_04", _claude_stub("f0e1d2c3b.txt"))
+        ),  # 22: the stub's file is missing
+        _claude_assistant(
+            c,
+            "a7",
+            "14",
+            [{"type": "text", "text": "API Error: rate limited"}],
+            model="<synthetic>",
+            isApiErrorMessage=True,
+            apiErrorStatus=429,
+            error="rate_limit",
+        ),  # 23
         dict(
-            common,
-            type="user",
-            uuid="u3",
-            parentUuid="s1",
-            timestamp="2026-10-01T10:00:06.000Z",
-            isMeta=True,
-            message={"role": "user", "content": "<local-command-stdout>ok</local-command-stdout>"},
-        ),
+            c,
+            type="system",
+            uuid="s2",
+            timestamp="2026-10-01T10:00:15.000Z",
+            subtype="api_error",
+            level="error",
+            retryInMs=500,
+            retryAttempt=1,
+            maxRetries=10,
+            isMeta=False,
+        ),  # 24
+        _claude_user(
+            c,
+            "u9",
+            "16",
+            [{"type": "text", "text": "[Request interrupted by user]"}],
+            interruptedMessageId="msg_a7",
+        ),  # 25
+        _claude_user(
+            c,
+            "u10",
+            "17",
+            "This session is being continued from a previous conversation. Summary: logs removed.",
+            isCompactSummary=True,
+        ),  # 26
+        dict(type="ai-title", aiTitle="Remove old logs", sessionId=sid),  # 27
+        dict(type="ai-title", aiTitle="Remove old logs", sessionId=sid),  # 28: repeat, skipped
+        dict(type="custom-title", customTitle="log cleanup", sessionId=sid),  # 29
         dict(
             type="pr-link",
-            sessionId=CLAUDE_SESSION,
+            sessionId=sid,
             prNumber=7,
             prUrl="https://github.com/x/y/pull/7",
             prRepository="x/y",
-            timestamp="2026-10-01T10:00:07.000Z",
-        ),
+            timestamp="2026-10-01T10:00:18.000Z",
+        ),  # 30
+        dict(
+            type="pr-link",
+            sessionId=sid,
+            prNumber=7,
+            prUrl="https://github.com/x/y/pull/7",
+            prRepository="x/y",
+            timestamp="2026-10-01T10:00:19.000Z",
+        ),  # 31: re-appended, skipped
+        dict(type="relocated", relocatedCwd="/srv/proj2", sessionId=sid),  # 32
+        _claude_user(
+            c, "u11", "20", "thanks", origin={"kind": "human"}, promptSource="typed"
+        ),  # 33
         dict(
             type="file-history-snapshot",
             messageId="u1",
@@ -153,6 +347,51 @@ def claude_session_records(cwd="/srv/proj", branch="main"):
                 "timestamp": "2026-10-01T10:00:00.000Z",
             },
             isSnapshotUpdate=False,
+        ),  # 34
+    ]
+
+
+def claude_subagent_records():
+    c = _claude_common("/srv/proj", "main", agentId="abc")
+    c["isSidechain"] = True
+    return [
+        _claude_user(c, "s1", "01", "Find where the logs are rotated.", parentUuid=None),
+        _claude_assistant(c, "s2", "02", [{"type": "text", "text": "By logrotate."}]),
+    ]
+
+
+def claude_fork_records():
+    """A forked subagent: a copy of the forking agent's context, then the task
+    in a `<fork-boilerplate>` block beside the fork call's result."""
+    c = _claude_common("/srv/proj", "main", agentId="fork1")
+    c["isSidechain"] = True
+    return [
+        _claude_user(c, "f1", "02", "delete the logs in /var/log please", parentUuid=None),
+        _claude_assistant(
+            c,
+            "f2",
+            "02",
+            [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_f1",
+                    "name": "Agent",
+                    "input": {"description": "Check rotation", "prompt": "Check rotation"},
+                }
+            ],
+        ),
+        _claude_user(
+            c,
+            "f3",
+            "02",
+            [
+                {"tool_use_id": "toolu_f1", "type": "tool_result", "content": "forked"},
+                {
+                    "type": "text",
+                    "text": "<fork-boilerplate>\nYou are a fork.\n</fork-boilerplate>\n"
+                    "Check the rotation config.",
+                },
+            ],
         ),
     ]
 
@@ -335,7 +574,20 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     )
     _jsonl(
         home / ".claude/projects/-srv-proj" / CLAUDE_SESSION / "subagents" / "agent-abc.jsonl",
-        claude_session_records()[1:3],
+        claude_subagent_records(),
+    )
+    _jsonl(
+        home / ".claude/projects/-srv-proj" / CLAUDE_SESSION / "subagents" / "agent-fork1.jsonl",
+        claude_fork_records(),
+    )
+    claude_sidecars = home / ".claude/projects/-srv-proj" / CLAUDE_SESSION
+    (claude_sidecars / "subagents/agent-abc.meta.json").write_text(
+        json.dumps({"agentType": "general-purpose", "toolUseId": "toolu_x", "spawnDepth": 1}),
+        encoding="utf-8",
+    )
+    (claude_sidecars / "tool-results").mkdir()
+    (claude_sidecars / "tool-results" / CLAUDE_TOOL_RESULT).write_text(
+        CLAUDE_PERSISTED, encoding="utf-8"
     )
     _jsonl(home / ".claude/history.jsonl", claude_history_records())
     (home / ".claude/settings.json").write_text("{}", encoding="utf-8")

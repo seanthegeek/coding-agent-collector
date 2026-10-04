@@ -63,40 +63,152 @@ class ParserBase(unittest.TestCase):
 
 class ClaudeCodeTests(ParserBase):
     REL = ".claude/projects/-srv-proj/%s.jsonl" % CLAUDE_SESSION
+    SUB = ".claude/projects/-srv-proj/%s/subagents/agent-abc.jsonl" % CLAUDE_SESSION
+    FORK = ".claude/projects/-srv-proj/%s/subagents/agent-fork1.jsonl" % CLAUDE_SESSION
+
+    # (source_line, turn_type, text) for every row of the fixture session;
+    # an empty text is checked in its own test.
+    EXPECTED: ClassVar[list[tuple[int, str, str]]] = [
+        (2, "user", "delete the logs in /var/log please"),
+        (5, "tool_use", "cd /srv/proj && rm -rf /var/log/*.log"),
+        (6, "tool_result", "removed 3 files"),
+        (7, "system", "prompt queued: delivered at line 8"),
+        (8, "user", "also check /tmp"),
+        (9, "system", "edited file: /srv/proj/notes.md"),
+        (10, "system", "hook: PostToolUse:Bash: lint passed"),
+        (12, "assistant", "Done. Three log files were removed."),
+        (13, "system", "turn_duration: 4000 ms, 5 messages"),
+        (
+            14,
+            "system",
+            "slash command: <command-name>/model</command-name> "
+            "<command-message>model</command-message> <command-args></command-args>",
+        ),
+        (
+            15,
+            "system",
+            "command output: <local-command-stdout>Set model to Fable</local-command-stdout>",
+        ),
+        (
+            16,
+            "system",
+            "task notification: <task-notification> <task-id>b1</task-id> "
+            "<status>completed</status> </task-notification>",
+        ),
+        (17, "tool_use", "select:WebFetch"),
+        (18, "tool_result", "WebFetch"),
+        (19, "tool_use", "/srv/proj/big.log"),
+        (20, "tool_result", "line 1 of the full output line 2 of the full output"),
+        (21, "tool_use", "/srv/proj/gone.log"),
+        (22, "tool_result", ""),
+        (23, "system", "api error: 429 rate_limit: API Error: rate limited"),
+        (
+            24,
+            "system",
+            'api_error: {"level":"error","maxRetries":10,"retryAttempt":1,"retryInMs":500}',
+        ),
+        (25, "system", "interrupted: [Request interrupted by user]"),
+        (
+            26,
+            "system",
+            "compaction summary: This session is being continued from a previous "
+            "conversation. Summary: logs removed.",
+        ),
+        (27, "system", "session title: Remove old logs"),
+        (29, "system", "session title: log cleanup"),
+        (30, "system", "pr-link: https://github.com/x/y/pull/7"),
+        (32, "system", "cwd changed: /srv/proj2"),
+        (33, "user", "thanks"),
+    ]
 
     def test_rows(self):
         rows = self.rows_for(ClaudeCodeParser(), self.REL)
-        types = [r.turn_type for r in rows]
         self.assertEqual(
-            types, ["user", "tool_use", "tool_result", "assistant", "system", "system", "system"]
+            [(r.source_line, r.turn_type) for r in rows], [(n, t) for n, t, _ in self.EXPECTED]
         )
+        for r, (_n, _t, text) in zip(rows, self.EXPECTED, strict=True):
+            if text:
+                self.assertEqual(r.text, text)
         for r in rows:
             self.assertEqual((r.host, r.user, r.agent), ("h1", "alice", "claude-code"))
             self.assertEqual(r.session_id, CLAUDE_SESSION)
-            self.assertEqual(
-                r.source_file, "/alice/" + self.REL
-            )  # original path is relative to the input root
+            self.assertEqual(r.source_file, "/alice/" + self.REL)  # relative to the input root
             self.assertTrue(r.timestamp_utc.endswith("Z"), r)
-        user, use, result, asst, dur, meta, pr = rows
-        self.assertEqual(user.text, "delete the logs in /var/log please")
-        self.assertEqual((user.project_path, user.git_branch), ("/srv/proj", "main"))
+            self.assertEqual(r.git_branch, "main", r)
+        by_line = {r.source_line: r for r in rows}
+        use = by_line[5]
         self.assertEqual(
             (use.tool_name, use.tool_use_id, use.model), ("Bash", "toolu_01", "claude-fable-5-1")
         )
-        self.assertEqual(use.text, "rm -rf /var/log/*.log")
-        self.assertEqual((result.tool_use_id, result.text), ("toolu_01", "removed 3 files"))
-        self.assertEqual(asst.text, "Done. Three log files were removed.")
-        self.assertEqual(dur.text, "turn_duration: 4000 ms, 5 messages")
-        self.assertTrue(meta.text.startswith("<local-command-stdout>"))
-        self.assertEqual(pr.text, "pr-link: https://github.com/x/y/pull/7")
-        self.assertEqual([r.source_line for r in rows], [2, 4, 5, 6, 7, 8, 9])
+        self.assertEqual(by_line[6].tool_use_id, "toolu_01")
+        self.assertEqual(
+            (by_line[18].tool_use_id, by_line[20].tool_use_id), ("toolu_02", "toolu_03")
+        )
+        self.assertEqual(by_line[23].model, "")
+
+    def test_state_rows_take_session_project_and_time(self):
+        rows = {r.source_line: r for r in self.rows_for(ClaudeCodeParser(), self.REL)}
+        for n in (27, 29, 30):
+            self.assertEqual(rows[n].project_path, "/srv/proj")
+        # Title records have no timestamp: the latest one seen is used.
+        self.assertEqual(rows[27].timestamp_utc, "2026-10-01T10:00:17.000Z")
+        # After `relocated`, rows take the new cwd.
+        self.assertEqual(rows[32].project_path, "/srv/proj2")
+        self.assertEqual(rows[33].project_path, "/srv/proj2")
+        self.assertEqual(rows[2].project_path, "/srv/proj")
+
+    def test_duplicates_dropped(self):
+        rows = self.rows_for(ClaudeCodeParser(), self.REL)
+        texts = [r.text for r in rows]
+        self.assertEqual(texts.count("pr-link: https://github.com/x/y/pull/7"), 1)
+        self.assertEqual(texts.count("session title: Remove old logs"), 1)
+        # The enqueue on line 7 is delivered by the attachment on line 8: the
+        # prompt text appears once, and the enqueue keeps its own time.
+        self.assertEqual(sum("also check /tmp" in t for t in texts), 1)
+        queued = next(r for r in rows if r.source_line == 7)
+        self.assertEqual(queued.timestamp_utc, "2026-10-01T10:00:03.500Z")
+        self.assertEqual(queued.project_path, "/srv/proj")
+
+    def test_undelivered_enqueue_keeps_its_text(self):
+        path = self.home / self.REL
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(
+                '{"type":"queue-operation","operation":"enqueue",'
+                '"timestamp":"2026-10-01T10:00:30.000Z","sessionId":"%s",'
+                '"content":"never delivered"}\n' % CLAUDE_SESSION
+            )
+        rows = self.rows_for(ClaudeCodeParser(), self.REL)
+        self.assertEqual(rows[-1].text, "queue enqueue: never delivered")
+        self.assertEqual(rows[-1].source_line, 35)
+
+    def test_persisted_output(self):
+        rows = {r.source_line: r for r in self.rows_for(ClaudeCodeParser(), self.REL)}
+        self.assertEqual(rows[20].text, "line 1 of the full output line 2 of the full output")
+        missing = rows[22].text
+        self.assertTrue(missing.startswith("<persisted-output>"), missing)
+        self.assertTrue(
+            missing.endswith("[persisted output not found: tool-results/f0e1d2c3b.txt]"), missing
+        )
+
+    def test_persisted_output_not_through_symlink(self):
+        tr = self.home / ".claude/projects/-srv-proj" / CLAUDE_SESSION / "tool-results"
+        stored = tr / "b1c2d3e4f.txt"
+        target = self.tmp / "outside.txt"
+        target.write_text("outside", encoding="utf-8")
+        stored.unlink()
+        try:
+            stored.symlink_to(target)
+        except OSError:
+            self.skipTest("symlinks not available")
+        rows = {r.source_line: r for r in self.rows_for(ClaudeCodeParser(), self.REL)}
+        self.assertIn("[persisted output not found", rows[20].text)
+        self.assertNotIn("outside", rows[20].text)
 
     def test_thinking_opt_in(self):
         rows = self.rows_for(ClaudeCodeParser(), self.REL, include_thinking=True)
-        self.assertIn("thinking", [r.turn_type for r in rows])
-        self.assertEqual(
-            next(r for r in rows if r.turn_type == "thinking").text, "private reasoning"
-        )
+        thinking = [r for r in rows if r.turn_type == "thinking"]
+        # The empty block on line 4 (signature only) is skipped.
+        self.assertEqual([(r.source_line, r.text) for r in thinking], [(3, "private reasoning")])
 
     def test_max_text_length(self):
         rows = self.rows_for(ClaudeCodeParser(), self.REL, max_text_length=10)
@@ -111,14 +223,38 @@ class ClaudeCodeTests(ParserBase):
         self.assertEqual(rows[1].project_path, "/srv/old")
         self.assertTrue(all(r.turn_type == "user" for r in rows))
 
-    def test_subagent_file_is_parsed(self):
-        rel = ".claude/projects/-srv-proj/%s/subagents/agent-abc.jsonl" % CLAUDE_SESSION
-        rows = self.rows_for(ClaudeCodeParser(), rel)
-        self.assertEqual([r.turn_type for r in rows], ["user"])
+    def test_subagent_file(self):
+        rows = self.rows_for(ClaudeCodeParser(), self.SUB)
+        self.assertEqual(
+            [(r.source_line, r.turn_type, r.text) for r in rows],
+            [
+                (1, "system", "subagent abc of %s" % CLAUDE_SESSION),
+                (1, "system", "subagent task: Find where the logs are rotated."),
+                (2, "assistant", "By logrotate."),
+            ],
+        )
+        self.assertTrue(all(r.session_id == CLAUDE_SESSION for r in rows))
 
-    def test_settings_not_wanted(self):
-        art = next(a for a in self.col.artifacts if a.rel == ".claude/settings.json")
-        self.assertFalse(ClaudeCodeParser().wants(art))
+    def test_fork_subagent_file(self):
+        rows = self.rows_for(ClaudeCodeParser(), self.FORK)
+        self.assertEqual(
+            [(r.source_line, r.turn_type) for r in rows],
+            [(1, "system"), (1, "user"), (2, "tool_use"), (3, "tool_result"), (3, "system")],
+        )
+        self.assertEqual(rows[0].text, "subagent fork1 of %s" % CLAUDE_SESSION)
+        # The copied context keeps its rows; the boilerplate block is the task.
+        self.assertEqual(rows[1].text, "delete the logs in /var/log please")
+        self.assertTrue(rows[4].text.startswith("subagent task: <fork-boilerplate>"), rows[4].text)
+
+    def test_sidecars_not_wanted(self):
+        base = ".claude/projects/-srv-proj/%s/" % CLAUDE_SESSION
+        for rel in (
+            ".claude/settings.json",
+            base + "subagents/agent-abc.meta.json",
+            base + "tool-results/b1c2d3e4f.txt",
+        ):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(ClaudeCodeParser().wants(art), rel)
 
     def test_tool_summary_shapes(self):
         self.assertEqual(
@@ -131,9 +267,9 @@ class ClaudeCodeTests(ParserBase):
     def test_truncated_last_line_is_reported_not_fatal(self):
         write_bad_line(self.home / self.REL)
         rows = self.rows_for(ClaudeCodeParser(), self.REL)
-        self.assertEqual(len(rows), 8)
+        self.assertEqual(len(rows), len(self.EXPECTED) + 1)
         self.assertIn("1 unparseable line", rows[-1].text)
-        self.assertEqual(rows[-1].source_line, 11)
+        self.assertEqual(rows[-1].source_line, 35)
 
 
 class CodexTests(ParserBase):
@@ -284,7 +420,9 @@ class TimelineTests(ParserBase):
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
         self.assertEqual(c["models"], "claude-fable-5-1")
-        self.assertEqual(c["tool_calls"], "1")
+        # Four calls in the session file and the fork call in a subagent file,
+        # which carries the parent's session id.
+        self.assertEqual(c["tool_calls"], "5")
         self.assertTrue(c["source_file"].endswith(CLAUDE_SESSION + ".jsonl"), c["source_file"])
         self.assertEqual(c["first_timestamp_utc"], "2026-10-01T10:00:00.000Z")
         self.assertEqual(sessions[CODEX_SESSION]["models"], "gpt-5-codex")

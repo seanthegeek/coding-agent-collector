@@ -52,7 +52,7 @@ The config home is `$CLAUDE_CONFIG_DIR`, else `~/.claude`, on every OS
 | `.claude/projects/<key>/<session id>.jsonl` | the session transcript; `<key>` is the cwd with every `[^a-zA-Z0-9]` replaced by `-`, cut at 200 characters plus `-` and a base-36 hash when longer (cc:473717, cc:474429); the session id is a UUID (cc:477784 `${q()}.jsonl`) | yes |
 | `.claude/projects/<key>/<session id>/subagents/agent-<agent id>.jsonl` | one transcript per subagent, same record format; an optional extra directory level sits between `subagents/` and the file when the agent has a transcript subdirectory (cc:477784 `agentTranscriptSubdirs`, cc:484031 parses `subagents/<dirs...>/agent-(.+).jsonl`) | yes |
 | `.claude/projects/<key>/<session id>/subagents/agent-<agent id>.meta.json` | one JSON object per subagent: `agentType`, `description`, `toolUseId`, `model`, `spawnDepth`, `requestShape`, `requestNonInteractive`, and for some `isFork`, `parentAgentId`, `spawnedWithWorktree`, `worktreePath`, `worktreeBranch` (observed, 80 of 80; cc:484010 maps `.meta.json` to `.jsonl`) | no, section 6 |
-| `.claude/projects/<key>/<session id>/tool-results/<name>.txt` | full output of a tool result too large to keep inline (`tool-results` constant, cc:474483); the inline result holds a `<persisted-output>` stub (cc:382991) | no, section 4 |
+| `.claude/projects/<key>/<session id>/tool-results/<name>.txt` | full output of a tool result too large to keep inline (`tool-results` constant, cc:474483); the inline result holds a `<persisted-output>` stub (cc:382991) | through the stub, section 8 |
 | `.claude/projects/<key>/<session id>/remote-agents/remote-agent-<id>.meta.json`, `.../mcp-tasks/mcp-task-<id>.meta.json` | sidecars for remote agents and MCP tasks (cc:484010, cc:488428) | no; not observed |
 | `.claude/projects/<key>/memory/*.md` | per-project memory files (observed) | no |
 | `.claude/history.jsonl` | prompt history across sessions, section 5 | yes, as history |
@@ -62,9 +62,9 @@ The config home is `$CLAUDE_CONFIG_DIR`, else `~/.claude`, on every OS
 
 The parser selects `^\.claude/projects/[^/]+/.*\.jsonl$` and
 `.claude/history.jsonl`, so it reads main and subagent transcripts at any
-depth and ignores the `.meta.json` and `.txt` sidecars. A config home
-moved with `CLAUDE_CONFIG_DIR` (for example `~/.claude-work`) is neither
-in the catalog (`.claude`, `.claude.json*`, `.local/share/claude`) nor
+depth, ignores the `.meta.json` sidecars, and reads a `.txt` sidecar
+only when a stub names it (section 8). A config home moved with
+`CLAUDE_CONFIG_DIR` (for example `~/.claude-work`) is neither in the catalog (`.claude`, `.claude.json*`, `.local/share/claude`) nor
 matched by the parser.
 
 Transcripts older than `cleanupPeriodDays` (default 30) are deleted at
@@ -342,7 +342,7 @@ inside the running turn) or a later `user` record with
 - No compressed or archived transcript form exists; deletion by
   `cleanupPeriodDays` is the only rotation.
 
-## 8. Parser plan (what the existing parser does)
+## 8. Parser plan (what the parser does)
 
 `agent_analyzer/parsers/claude_code.py`, class `ClaudeCodeParser`.
 `wants()`:
@@ -354,40 +354,84 @@ inside the running turn) or a later `user` record with
 
 Lines are read with `iter_jsonl`; bad lines are counted and reported in
 one `system` row at the end with the first bad line's number; earlier
-rows are kept.
+rows are kept. Each session file is read twice: a first pass collects the
+prompts that `queued_command` attachments and `user` records deliver
+and the lines that deliver them,
+whether the file holds a `<fork-boilerplate>` block, and the first `cwd`
+and `gitBranch`.
 
-Coverage:
+Coverage. A label is the start of a `system` row's text, `<label>: ` and
+then the full text:
 
 | Record | `turn_type` |
 | --- | --- |
-| `user`, string content | `user`, or `system` when `isMeta` |
-| `user`, `text` or `image` block | `user`, or `system` when `isMeta` (one row per block) |
-| `user`, `tool_result` block | `tool_result`, text prefixed `[error] ` when `is_error` |
+| subagent file, first transcript record | an extra `system` row first, `subagent <agentId> of <sessionId>` (`agentId` from the record, else from the file name) |
+| `user`, first one in a subagent file that is not a fork | `system`, label `subagent task` |
+| `user`, `isCompactSummary` | `system`, label `compaction summary` |
+| `user`, `interruptedMessageId` | `system`, label `interrupted` |
+| `user` text starting `<task-notification>` | `system`, label `task notification` |
+| `user` text starting `<command-name>` or `<command-message>` | `system`, label `slash command` |
+| `user` text starting `<local-command-stdout>` | `system`, label `command output` |
+| `user` text starting `<local-command-caveat>` or `<system-reminder>` | `system`, label `context` |
+| `user` text starting `<fork-boilerplate>` | `system`, label `subagent task` |
+| `user`, `origin.kind` `task-notification`, `peer`, `coordinator`, `auto-continuation` | `system`, label `task notification`, `peer message`, `coordinator message`, `auto-continuation` |
+| `user`, other `isMeta` | `system`, label `context` |
+| `user`, any other string, `text` or `image` block | `user` (one row per block); the rules above are tried in this order, the record-level ones for every block |
+| `user`, `tool_result` block | `tool_result`; `tool_reference` blocks as their `tool_name`; a `<persisted-output>` stub replaced by its `tool-results/` file (below); text prefixed `[error]` when `is_error` |
+| `assistant`, `isApiErrorMessage` or model `<synthetic>` | `system`, `api error: <apiErrorStatus> <error>: <text>`, no model |
 | `assistant`, `text` block | `assistant` (empty text skipped) |
 | `assistant`, `tool_use` block | `tool_use` |
-| `assistant`, `thinking` / `redacted_thinking` | `thinking` with `include_thinking`, text `thinking` or `[redacted]` when empty |
+| `assistant`, `thinking` | `thinking` with `include_thinking`; an empty `thinking` (signature only) is skipped |
+| `assistant`, `redacted_thinking` | `thinking` with `include_thinking`, text `[redacted]` |
 | `assistant`, other block types | skip |
-| `system` | `system`, text `<subtype>: <content>`; `turn_duration` as `<durationMs> ms, <messageCount> messages` |
-| `pr-link` | `system`, text `pr-link: <prUrl or prNumber>` |
-| `queue-operation` | `system`, text `queue <operation>: <content>` |
-| `attachment` | skip |
+| `system` | `system`, text `<subtype>: <content>`; `turn_duration` as `<durationMs> ms, <messageCount> messages`; without `content`, `<subtype>: ` and the compact JSON of the fields other than the envelope (`api_error`: `level`, `retryInMs`, `retryAttempt`, `maxRetries`, `error`) |
+| `attachment` `queued_command`, `origin.kind` `human` | `user`, text `prompt` (a text marker above still makes it `system`) |
+| `attachment` `queued_command`, other origin | `system`, the marker or origin label, else `queued command` |
+| `attachment` `hook_system_message` | `system`, `hook: <hookName>: <content>` |
+| `attachment` `edited_text_file` | `system`, `edited file: <filename>` (the `snippet` is not shown) |
+| `attachment`, other types | skip: model context (system prompt, tool lists, reminders, environment and model snapshots, skill and agent listings); `remote_session_change` (the session's PR and commit) is skipped too |
+| `ai-title`, `custom-title`, `agent-name` | `system`, `session title: <value>`, once per distinct value per session |
+| `relocated` | `system`, `cwd changed: <relocatedCwd>`; every later row of the file takes it as `project_path` |
+| `pr-link` | `system`, `pr-link: <prUrl or prNumber>`, once per session and URL (the first record wins) |
+| `queue-operation` | `system`, `queue <operation>: <content>`; an `enqueue` whose `content` a `queued_command` attachment or a `user` record of the file delivers is `prompt queued: delivered at line N` at the enqueue's own timestamp, N being the first delivering line after it (else the first), so the typing time is kept and the prompt text appears once, on the delivering row |
 | every other type (section 3 table) | skip |
 | `history.jsonl` line | `user` |
+
+A forked subagent's file begins with a copy of the forking agent's context
+(observed in the 4 fork files: the records before the
+`<fork-boilerplate>` one have new `uuid`s, and their tool ids are in no
+session file), so no boundary ties those records to their source; their
+rows are kept, the first `user` record stays `user`, and the
+`<fork-boilerplate>` block is the `subagent task` row.
+
+**Persisted output.** When a `tool_result` text starts with
+`<persisted-output>`, the parser takes the path after `Full output saved
+to: `, keeps its last component and requires the component before
+`tool-results` to equal the transcript's session directory
+(`<session id>/` beside a session file, the directory above `subagents/`
+for a subagent file). It reads `<session dir>/tool-results/<name>`
+when neither the file, `tool-results/` nor the session directory is a
+symlink, and otherwise keeps the stub followed by
+`[persisted output not found: tool-results/<name>]`. On the observed
+install every stub resolved.
 
 Columns:
 
 | Column | Source |
 | --- | --- |
-| timestamp_utc | record `timestamp`; history: `timestamp` (ms) |
+| timestamp_utc | record `timestamp`; records without one (titles, `relocated`) take the latest timestamp seen in the file; history: `timestamp` (ms) |
 | session_id | latest `sessionId` (or `session_id`) seen in the file; history: `sessionId` |
-| project_path | record `cwd`; history: `project` |
-| git_branch | record `gitBranch` |
+| project_path | the `relocatedCwd` of an earlier `relocated` record, else the latest `cwd` seen in the file, else the file's first `cwd`; history: `project` |
+| git_branch | the latest `gitBranch` seen in the file, else the file's first |
 | turn_type | coverage table |
-| model | `message.model` on `assistant` rows |
+| model | `message.model` on `assistant` and `thinking` rows |
 | tool_name | `tool_use.name`; empty on `tool_result` rows |
 | tool_use_id | `tool_use.id` / `tool_result.tool_use_id` |
-| text | user/assistant/thinking text; `tool_use`: per-tool key from `input` (`command`, `file_path`, `notebook_path`, `pattern`+`path`, `url`, `query`, `description`+`prompt`, `skill`+`args`, `path`), else the first of `command`, `file_path`, `path`, `pattern`, `url`, `query`, `description`, else compact JSON; `tool_result`: `text_of(content)` |
-| source_line | 1-based line number |
+| text | user/assistant/thinking text; `tool_use`: for Bash the `command` of `wireToolInputs[<id>]` when present (it keeps the `cd <dir> &&` prefix), else per-tool key from `input` (`command`, `file_path`, `notebook_path`, `pattern`+`path`, `url`, `query`, `description`+`prompt`, `skill`+`args`, `path`), else the first of `command`, `file_path`, `path`, `pattern`, `url`, `query`, `description`, else compact JSON; `tool_result`: the block text as above |
+| source_line | 1-based line number; the subagent header row takes its first record's line |
+
+Not read: `.meta.json` sidecars, `sessions/*.json`, `paste-cache/`, and a
+config home moved with `CLAUDE_CONFIG_DIR`.
 
 Sample records, `.claude/projects/-srv-proj/11111111-2222-4333-8444-555555555555.jsonl`
 (state record, typed prompt, empty-thinking block, Bash call with a wire
@@ -426,20 +470,23 @@ History `.claude/history.jsonl`:
 {"display":"why does the test fail? [Pasted text #1 +3 lines]","pastedContents":{"1":{"id":1,"type":"text","contentHash":"0123456789abcdef"}},"timestamp":1790848800000,"project":"/srv/proj","sessionId":"11111111-2222-4333-8444-555555555555"}
 ```
 
-Expected rows from the session sample with the current parser: `user`
-(line 2), `thinking` text `[redacted]` (line 3, with `include_thinking`),
-`tool_use` `Bash` `toolu_01` text `npm test` (line 4), `tool_result`
-`toolu_01` text `1 failing` (line 5), `system` `queue enqueue: also check
-the linter` (line 6), `assistant` (line 8), `system` `turn_duration: 8000
-ms, 7 messages` (line 9), `system` `pr-link: https://...` (line 12), and
-the bad-line `system` row (line 14); all with `session_id`
-`11111111-...`, and `project_path` `/srv/proj`, `git_branch` `main`
-except the queue, PR-link and bad-line rows, which are empty because
-those records carry no `cwd` or `gitBranch` (checked by running the
-parser on this sample). The
-subagent sample yields one `user` row with the parent's `session_id`.
-Noise the parser must not want: `.claude/settings.json`, the `.meta.json`
-sidecar, `tool-results/*.txt`.
+Expected rows from the session sample with the parser: `user` (line 2);
+nothing for the empty thinking block (line 3, even with
+`include_thinking`); `tool_use` `Bash` `toolu_01` text `cd /srv/proj &&
+npm test` (line 4, from `wireToolInputs`); `tool_result` `toolu_01` text
+`1 failing` (line 5); `system` `prompt queued: delivered at line 7`
+(line 6, at 10:00:05.500); `user` `also check the linter` (line 7);
+`assistant` (line 8); `system` `turn_duration: 8000 ms, 7 messages`
+(line 9); `system` `session title: Fix stale fixture date` (line 10,
+timestamp of line 9); `system` `pr-link: https://...` (line 12); and the
+bad-line `system` row (line 14). All have `session_id` `11111111-...`;
+all but the bad-line row have `project_path` `/srv/proj` and
+`git_branch` `main` (checked by running the parser on this sample). The
+subagent sample yields two `system` rows on line 1, `subagent
+a0b1c2d3e4f5a6b7c of 11111111-...` and `subagent task: Find where the
+fixture date is set.`, with the parent's `session_id`. Noise the parser
+must not want: `.claude/settings.json`, the `.meta.json` sidecar,
+`tool-results/*.txt` (read only through a stub).
 
 ## Confidence
 
