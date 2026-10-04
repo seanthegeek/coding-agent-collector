@@ -6,11 +6,11 @@ Copilot CLI, Cursor, Windsurf, Aider, Ollama, VS Code chat extensions and
 others. It has two parts, kept in separate directories because they run in
 different places and have different dependency rules.
 
-| Part | Directory | Runs on | Status |
+| Part | Directory | Runs on |
 | --- | --- | --- | --- |
-| Collectors | [`collectors/`](collectors/README.md) | The host under investigation, or an analyst workstation with a mounted image | v1, done |
+| Collectors | [`collectors/`](collectors/README.md) | The host under investigation, or an analyst workstation with a mounted image |
 | Analyzer | [`analyzer/`](analyzer/README.md) | The analyst workstation | v2, in progress |
-| Agent lab | [`lab/`](lab/README.md) | A developer's Docker host, to produce real-install fixtures without installing agents | tooling |
+| Agent lab | [`lab/`](lab/README.md) | A developer's Docker host, to produce real-install fixtures without installing agents |
 
 ## Collectors
 
@@ -41,18 +41,6 @@ library.
 
 Usage, accepted inputs, the CSV schema and the parser table are in
 [analyzer/README.md](analyzer/README.md).
-
-## Repository layout
-
-```
-collectors/   the sh and PowerShell collectors, their README, research and smoke tests
-analyzer/     the Python analyzer package, its README, research and test suite
-.github/      CI: catalog drift test, shell and PowerShell smoke matrix, analyzer tests
-.githooks/    optional pre-commit hook that refuses a stale catalog copy
-AGENTS.md     standards and process for anyone, human or agent, changing the code
-CLAUDE.md     Claude Code entry point; imports AGENTS.md
-LICENSE       Apache 2.0
-```
 
 ## License
 
