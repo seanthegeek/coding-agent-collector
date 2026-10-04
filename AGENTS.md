@@ -8,12 +8,22 @@ Guidance for AI coding agents and humans working in this repository.
 It gathers the on-disk artifacts of AI agents that run on the host, coding
 agents first (Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot CLI,
 Cursor, VS Code chat extensions, Windsurf, Aider, Ollama, and others), for
-every user on a host, plus shell histories and a live system snapshot, into
-one archive with a hashed manifest. The criterion for the catalog is an agent
+every user on a host, plus shell histories, into one archive with a hashed
+manifest. It supplements an EDR rather than duplicating it, so host state
+(processes, logins, network, services) is not collected. The criterion for the catalog is an agent
 that executes tools or shell commands on the host and leaves transcripts,
 configuration or credentials on disk; it need not be an editor or coding
 tool. When a non-coding agent is added, widen the wording in the top-level
 README in the same commit.
+
+The project supplements the EDR a responder already has during an incident
+response investigation; it never duplicates EDR features. Process lists,
+logged-on users, network connections, services and scheduled tasks are the
+EDR's job and are not collected. What the collector adds is what EDR does
+not see: the agents' own transcripts, configuration, credentials and project
+references on disk, and the catalog that says where to find them. A proposed
+feature that an EDR console already provides is out of scope, however cheap
+it looks to add.
 
 It must work in three situations:
 
@@ -321,9 +331,7 @@ find. The validation for every current entry is recorded in the table in
    point) at the end of `EXCLUDES` and `SECRET_GLOBS`.
 5. If the tool records project paths, add extraction to `discover_projects`
    in the sh collector and `Find-Projects` in the PowerShell collector, and
-   any per-project files to `PROJECT_CATALOG`. Add the tool's process name
-   to `AGENT_PROC_RE` in both scripts so the live snapshot lists it; short
-   names get the whole-word form used for `zed` and `pi`.
+   any per-project files to `PROJECT_CATALOG`.
 6. Add a fixture and assertions to `collectors/tests/smoke.sh` and
    `collectors/tests/smoke.ps1`. Both files build the fake image in labelled
    blocks (one per catalog revision) followed by `check "name" "expr"`
