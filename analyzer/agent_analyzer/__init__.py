@@ -6,4 +6,4 @@ coding agents left state in it, and parses the agents' transcripts into a
 normalised CSV timeline. Nothing here runs on the host under investigation.
 """
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"

@@ -33,6 +33,9 @@ python3 -m agent_analyzer timeline /mnt/evidence -o /cases/host02/analysis --hos
 
 # A single agent directory copied on its own, under its original name
 python3 -m agent_analyzer detect /cases/host03/alice/.claude --user alice
+
+# Fleet inventory: one saved collector --inventory stdout per host in a directory
+python3 -m agent_analyzer inventory /cases/fleet/inventory -o /cases/fleet/fleet-inventory.csv
 ```
 
 `pip install .` in this directory installs the package
@@ -227,11 +230,65 @@ The two CSV layouts are a compatibility contract with the analysts and
 tooling that consume them. A future version may append new columns after the
 existing ones, but existing columns keep their names, order and meaning.
 
+## Inventory
+
+`inventory` merges the output of collector runs made with `--inventory`
+(sh) or `-Inventory` (PowerShell), described in the
+[collectors README](../collectors/README.md#inventory-mode), into one CSV
+for the fleet. Each `INPUT` is a file holding one host's captured stdout,
+or a directory whose regular files are all read (not recursively, sorted
+by name, symlinks skipped). A symlink given as `INPUT` is an error.
+
+Each file is read line by line as UTF-8 (a byte order mark is dropped,
+undecodable bytes are replaced). A line that is not a JSON object with
+`type` `host` or `agent`, such as a console banner, a prompt or a record
+cut off mid-line, is skipped, and the number skipped is printed on stderr
+as `skipped N non-inventory lines in <file>`. Blank lines are skipped
+without being counted. A `host` line opens a run, and each later `agent`
+line in the same file is a row of that run until the next `host` line, so
+one file may hold several runs. An `agent` line before any `host` line
+gives a row with its own `host` and empty `collector`, `mode` and `at`.
+Rows are written in input order; nothing is deduplicated, so two captures
+of the same host give two sets of rows.
+
+The CSV, `fleet-inventory.csv` in the current directory unless `-o` names
+another path (missing parent directories are created), is UTF-8 without a
+byte order mark, quoted where needed, with CRLF line ends and a header row.
+Columns, in order:
+
+| Column | Meaning |
+| --- | --- |
+| `host` | The run's `host` line `host`: the collector machine's host name. |
+| `collector` | The collector version from the `host` line. |
+| `mode` | `live` or `image`, from the `host` line. |
+| `at` | The run's start time, normalised to ISO 8601 UTC with milliseconds, `2026-10-04T16:31:54.000Z`. |
+| `user` | The home's user, or `docker` for a Docker or Podman volume. |
+| `agent` | The catalog agent name. |
+| `files`, `bytes` | Regular files under the agent's matched paths after exclusions, and their total size. |
+| `first`, `last` | Earliest and latest file modification time, normalised like `at`. Empty when the collector reported none. |
+| `projects` | The user's discovered project count, the same on each of the user's rows (the collector does not attribute projects to agents). |
+| `evidence` | The catalog globs that matched, comma-separated, as the collector printed them. |
+
+A `host` line with no `agent` lines after it gives one row with the four
+host columns filled and the eight agent columns empty, so hosts where
+nothing was found are still in the sheet. The `host` line's
+`users_scanned`, `users_unreadable` and `docker_volumes` are not carried
+into the CSV. The columns are an interface like the timeline's: new ones
+are appended, existing ones keep their names, order and meaning.
+
+On stdout `inventory` then prints `rows: N from H hosts in <path>` (H
+counts distinct `host` values) and, when any row has an agent, a rollup
+with one line per agent: `agent`, `hosts` (distinct hosts with a row for
+it), `users` (distinct host and user pairs, `docker` included) and
+`latest` (the greatest `last`). The rollup is sorted by `hosts`, then
+`users`, both descending, then by agent name.
+
 ## Options
 
 ```
 analyze-agent-artifacts detect INPUT [--json] [--files] [common options]
 analyze-agent-artifacts timeline INPUT -o DIR [--max-text-length N] [--include-thinking] [--agent NAME]... [common options]
+analyze-agent-artifacts inventory [-o FILE] INPUT...
 analyze-agent-artifacts catalog [--agents]
 analyze-agent-artifacts --version
 ```
@@ -241,6 +298,7 @@ analyze-agent-artifacts --version
 | `--json` | `detect` | Print the machine-readable object described under [Output](#output). |
 | `--files` | `detect` | Also list every attributed file. |
 | `-o, --output DIR` | `timeline` | Output directory, required. |
+| `-o, --output FILE` | `inventory` | CSV to write. Default `fleet-inventory.csv` in the current directory. |
 | `--max-text-length N` | `timeline` | Cut the `text` column to N characters, the last of which is an ellipsis. Default `0`, the full text. |
 | `--include-thinking` | `timeline` | Emit thinking and reasoning blocks as `thinking` rows. |
 | `--agent NAME` | `timeline` | Run only the parsers of this agent. Repeatable. An unknown name produces no rows. |
@@ -254,9 +312,9 @@ analyze-agent-artifacts --version
 
 | Exit code | Meaning |
 | --- | --- |
-| `0` | `timeline` wrote at least one row; `detect` found agent artifacts, or `--json` was given; `catalog`, `--version`. |
-| `1` | `timeline` produced no rows (the three files are still written), or `detect` without `--json` found no agent artifacts. |
-| `2` | The input does not exist, a file input is neither tar nor zip, or the command line is invalid. |
+| `0` | `timeline` wrote at least one row; `detect` found agent artifacts, or `--json` was given; `inventory` wrote at least one row; `catalog`, `--version`. |
+| `1` | `timeline` produced no rows (the three files are still written), `detect` without `--json` found no agent artifacts, or `inventory` found no `host` or `agent` line (the CSV is written with its header only). |
+| `2` | The input does not exist, a file input is neither tar nor zip, an `inventory` input is a symlink or a file or directory that cannot be read, or the command line is invalid. |
 
 ## Testing
 
@@ -275,6 +333,11 @@ the parsers were validated against, and checks detection in every input mode,
 each parser's rows, the CSV output, and the bundled catalog against the
 collector's `--list`. When `sh` and `tar` are available it also runs the sh
 collector on the fake image and analyses the resulting archive end to end.
+`test_inventory.py` feeds `inventory` captured outputs of three hosts, one
+with console junk lines and one with a `host` line only, and checks the
+columns, the default file name, `-o`, the rollup and the empty-host row;
+with `sh` available it also runs the collector's `--inventory` on the fake
+image and reads that.
 Tests that need `zstandard`, the collector script, `sh` and `tar`, or
 permission to create symlinks are skipped, with the reason, when it is
 missing. CI runs the suite on Python 3.9 and 3.12 with `requirements.txt`

@@ -8,10 +8,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-04
+
 ### Added
 
+- `inventory` command: merges the saved stdout of collector 1.6.0
+  `--inventory` / `-Inventory` runs (files, or directories of files) into
+  one CSV, `fleet-inventory.csv` unless `-o FILE` is given.
+- New CSV interface, `fleet-inventory.csv`, columns `host`, `collector`,
+  `mode`, `at`, `user`, `agent`, `files`, `bytes`, `first`, `last`,
+  `projects`, `evidence`; times normalised to UTC with milliseconds. A host
+  with no agents gives one row with the agent columns empty.
+- Console junk lines in a capture are skipped and counted on stderr.
+- A per-agent rollup on stdout after the CSV: hosts, users and latest
+  `last`.
 - The catalog copy carries collector 1.5.0's `DOCKER_VOLUMES` table; the
   reader keeps those lines in their own list instead of the secret list.
+
+### Changed
+
+- The README says the `live` pseudo-agent appears only in collections made
+  by collectors before 1.6.0, which removed the live snapshot.
 
 ## [0.4.0] - 2026-10-04
 
@@ -111,7 +128,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--summary-length` (default 400), `--include-thinking` and `--agent`;
   `detect --json` and `--files`; `catalog --agents`.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.4.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.5.0...HEAD
+[0.5.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.4.0...analyzer-v0.5.0
 [0.4.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.3.1...analyzer-v0.4.0
 [0.3.1]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.3.0...analyzer-v0.3.1
 [0.3.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.2.0...analyzer-v0.3.0

@@ -10,7 +10,7 @@ from collections import Counter, OrderedDict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from . import VERSION, catalog as catalog_mod
+from . import VERSION, catalog as catalog_mod, inventory as inventory_mod
 from .inputs import Collection, open_input
 from .model import SESSION_COLUMNS, TIMELINE_COLUMNS, Row, summarise
 from .parsers import ALL, Options, by_agent
@@ -50,6 +50,12 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--agent", action="append", default=[],
                    help="only parse this agent (repeatable); default is every agent with a parser")
 
+    i = sub.add_parser("inventory", help="merge collector --inventory outputs into one fleet CSV")
+    i.add_argument("input", type=Path, nargs="+",
+                   help="a saved stdout of collect-agent-artifacts --inventory, or a directory of them")
+    i.add_argument("-o", "--output", type=Path, default=Path(inventory_mod.DEFAULT_NAME),
+                   help="CSV to write (default: %s in the current directory)" % inventory_mod.DEFAULT_NAME)
+
     c = sub.add_parser("catalog", help="print the bundled artifact catalog")
     c.add_argument("--agents", action="store_true", help="print agent names and whether a parser exists")
     return ap
@@ -59,6 +65,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "catalog":
         return cmd_catalog(args)
+    if args.command == "inventory":
+        return cmd_inventory(args)
     cat = catalog_mod.load()
     try:
         col = open_input(args.input, cat, work_dir=args.work_dir, host=args.host)
@@ -91,6 +99,41 @@ def cmd_catalog(args: argparse.Namespace) -> int:
     for agent in cat.agents:
         print("%-20s %s" % (agent, "parser" if agent in parsers else "detect only"))
     return 0
+
+
+# ---- inventory ------------------------------------------------------------------
+
+def cmd_inventory(args: argparse.Namespace) -> int:
+    try:
+        files = inventory_mod.input_files(args.input)
+    except OSError as e:
+        print("error: %s" % e, file=sys.stderr)
+        return 2
+    rows: List[List[str]] = []
+    for f in files:
+        try:
+            got, junk = inventory_mod.read_file(f)
+        except OSError as e:
+            print("error: %s: %s" % (f, e), file=sys.stderr)
+            return 2
+        if junk:
+            print("skipped %d non-inventory line%s in %s" % (junk, "" if junk == 1 else "s", f), file=sys.stderr)
+        rows.extend(got)
+    if args.output.parent != Path(""):
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+    with open(args.output, "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(inventory_mod.INVENTORY_COLUMNS)
+        w.writerows(rows)
+    hosts = {r[0] for r in rows}
+    print("rows:   %d from %d host%s in %s" % (len(rows), len(hosts), "" if len(hosts) == 1 else "s", args.output))
+    roll = inventory_mod.rollup(rows)
+    if roll:
+        print()
+        print("%-22s %6s %6s  %s" % ("agent", "hosts", "users", "latest"))
+        for agent, nh, nu, last in roll:
+            print("%-22s %6d %6d  %s" % (agent, nh, nu, last))
+    return 0 if rows else 1
 
 
 # ---- detect ---------------------------------------------------------------------
