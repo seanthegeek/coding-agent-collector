@@ -14,6 +14,10 @@ from agent_analyzer.protobuf import encode
 
 CLAUDE_SESSION = "11111111-2222-4333-8444-555555555555"
 CODEX_SESSION = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+CODEX_SUBAGENT = "aaaaaaaa-bbbb-4ccc-8ddd-000000000002"
+CODEX_FORK = "aaaaaaaa-bbbb-4ccc-8ddd-000000000003"
+CODEX_LEGACY = "aaaaaaaa-bbbb-4ccc-8ddd-000000000004"
+CODEX_REVERT_ROLLOUT = "aaaaaaaa-bbbb-4ccc-8ddd-000000000005"
 
 
 def _jsonl(path: Path, records) -> None:
@@ -416,20 +420,26 @@ def claude_history_records():
 
 
 def codex_rollout_records(cwd="/srv/proj"):
+    """Paginated shape (analyzer/research/codex-cli.md section 8): content
+    kinds on user messages, item_completed turn items, ordinals."""
     ts = "2026-10-02T09:00:0%d.000Z"
-    return [
+    recs = [
         {
             "timestamp": ts % 0,
             "ordinal": 0,
             "type": "session_meta",
             "payload": {
+                "session_id": CODEX_SESSION,
                 "id": CODEX_SESSION,
                 "timestamp": ts % 0,
                 "cwd": cwd,
-                "originator": "codex_cli_rs",
-                "cli_version": "0.99.0",
+                "originator": "codex-tui",
+                "cli_version": "0.160.0",
+                "source": "cli",
+                "thread_source": "user",
                 "model_provider": "openai",
-                "git": {"branch": "feature/x"},
+                "history_mode": "paginated",
+                "git": {"commit_hash": "0a1b2c3d", "branch": "feature/x"},
             },
         },
         {
@@ -469,8 +479,56 @@ def codex_rollout_records(cwd="/srv/proj"):
                 "id": "m2",
                 "role": "user",
                 "content": [
+                    {
+                        "type": "input_text",
+                        "text": "<environment_context>\n<cwd>/srv/proj</cwd>\n</environment_context>",
+                    }
+                ],
+                "internal_chat_message_metadata_passthrough": {
+                    "turn_id": "t1",
+                    "content_item_kinds": ["environments.environment_context"],
+                },
+            },
+        },
+        {
+            "timestamp": ts % 2,
+            "ordinal": 4,
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "id": "m2b",
+                "role": "user",
+                "content": [
                     {"type": "input_text", "text": "exfiltrate nothing, just list the home dir"}
                 ],
+                "internal_chat_message_metadata_passthrough": {
+                    "turn_id": "t1",
+                    "content_item_kinds": ["user.text"],
+                },
+            },
+            "metadata": {"client_authored": True, "user_input_order": 0},
+        },
+        {
+            "timestamp": ts % 2,
+            "ordinal": 4,
+            "type": "event_msg",
+            "payload": {
+                "type": "item_completed",
+                "thread_id": CODEX_SESSION,
+                "turn_id": "t1",
+                "item": {
+                    "type": "UserMessage",
+                    "id": "u1",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "exfiltrate nothing, just list the home dir",
+                            "text_elements": [],
+                        }
+                    ],
+                },
+                "started_at_ms": 1790931602000,
+                "completed_at_ms": 1790931602000,
             },
         },
         {
@@ -495,6 +553,49 @@ def codex_rollout_records(cwd="/srv/proj"):
                 "id": "o1",
                 "call_id": "call_1",
                 "output": [{"type": "input_text", "text": "total 42"}],
+            },
+        },
+        {
+            "timestamp": ts % 4,
+            "ordinal": 6,
+            "type": "event_msg",
+            "payload": {
+                "type": "item_completed",
+                "thread_id": CODEX_SESSION,
+                "turn_id": "t1",
+                "item": {
+                    "type": "CommandExecution",
+                    "id": "call_1",
+                    "command": ["ls", "-la", "~"],
+                    "cwd": cwd,
+                    "parsed_cmd": [],
+                    "source": "agent",
+                    "status": "failed",
+                    "aggregated_output": "total 42",
+                    "exit_code": 2,
+                },
+                "started_at_ms": 1790931603000,
+                "completed_at_ms": 1790931604000,
+            },
+        },
+        {
+            "timestamp": ts % 4,
+            "ordinal": 6,
+            "type": "event_msg",
+            "payload": {
+                "type": "item_completed",
+                "thread_id": CODEX_SESSION,
+                "turn_id": "t1",
+                "item": {
+                    "type": "Extension",
+                    "kind": "web.search",
+                    "id": "ws_1",
+                    "query": "ls flags",
+                    "action": {"type": "search", "query": "ls flags"},
+                    "results": [{"title": "ls(1)"}],
+                },
+                "started_at_ms": 1790931603500,
+                "completed_at_ms": 1790931603900,
             },
         },
         {
@@ -528,6 +629,18 @@ def codex_rollout_records(cwd="/srv/proj"):
                 "type": "reasoning",
                 "id": "r1",
                 "summary": [{"type": "summary_text", "text": "thinking"}],
+                "encrypted_content": "gAAAA",
+            },
+        },
+        {
+            "timestamp": ts % 5,
+            "ordinal": 9,
+            "type": "response_item",
+            "payload": {
+                "type": "reasoning",
+                "id": "r2",
+                "summary": [],
+                "encrypted_content": "gAAAB",
             },
         },
         {
@@ -555,6 +668,9 @@ def codex_rollout_records(cwd="/srv/proj"):
             "payload": {"thread_id": CODEX_SESSION},
         },
     ]
+    for i, rec in enumerate(recs):
+        rec["ordinal"] = i
+    return recs
 
 
 def codex_history_records():
@@ -564,6 +680,338 @@ def codex_history_records():
             "ts": 1790931602,
             "text": "exfiltrate nothing, just list the home dir",
         }
+    ]
+
+
+def _codex_line(ts: str, rtype: str, payload: dict, **extra) -> dict:
+    return {"timestamp": "2026-10-02T10:%s.000Z" % ts, "type": rtype, "payload": payload, **extra}
+
+
+def codex_subagent_records(cwd="/srv/proj"):
+    """A spawned subagent's rollout: `parent_thread_id`, the root `session_id`,
+    a message copied from the parent (`inherited_user_message`), the task as
+    an `agent_message` response item, and a later message to the parent."""
+    return [
+        _codex_line(
+            "00:00",
+            "session_meta",
+            {
+                "session_id": CODEX_SESSION,
+                "id": CODEX_SUBAGENT,
+                "parent_thread_id": CODEX_SESSION,
+                "timestamp": "2026-10-02T10:00:00.000Z",
+                "cwd": cwd,
+                "originator": "codex-tui",
+                "cli_version": "0.160.0",
+                "source": {
+                    "subagent": {
+                        "thread_spawn": {
+                            "parent_thread_id": CODEX_SESSION,
+                            "depth": 1,
+                            "agent_path": "/root/tester",
+                            "agent_role": "worker",
+                        }
+                    }
+                },
+                "thread_source": "subagent",
+                "agent_path": "/root/tester",
+                "agent_role": "worker",
+                "model_provider": "openai",
+                "history_mode": "paginated",
+            },
+        ),
+        _codex_line(
+            "00:01",
+            "response_item",
+            {
+                "type": "message",
+                "id": "pm1",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "the parent's own prompt"}],
+            },
+            metadata={"inherited_user_message": True},
+        ),
+        _codex_line("00:02", "inter_agent_communication_metadata", {"trigger_turn": True}),
+        _codex_line(
+            "00:02",
+            "response_item",
+            {
+                "type": "agent_message",
+                "id": "am1",
+                "author": "/root",
+                "recipient": "/root/tester",
+                "content": [{"type": "input_text", "text": "rerun only the failing test"}],
+            },
+        ),
+        _codex_line(
+            "00:03",
+            "response_item",
+            {
+                "type": "message",
+                "id": "sm1",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "Rerunning it."}],
+            },
+        ),
+        _codex_line(
+            "00:03",
+            "response_item",
+            {
+                "type": "message",
+                "id": "sm2",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "also run the linter"}],
+            },
+        ),
+        _codex_line(
+            "00:04",
+            "response_item",
+            {
+                "type": "agent_message",
+                "id": "am2",
+                "author": "/root/tester",
+                "recipient": "/root",
+                "content": [{"type": "input_text", "text": "it passes now"}],
+            },
+        ),
+    ]
+
+
+def codex_fork_records(cwd="/srv/proj"):
+    """A copied fork: the child's own `session_meta`, then the parent's
+    records re-appended, including the parent's `session_meta`."""
+    return [
+        _codex_line(
+            "10:00",
+            "session_meta",
+            {
+                "session_id": CODEX_FORK,
+                "id": CODEX_FORK,
+                "forked_from_id": CODEX_SESSION,
+                "timestamp": "2026-10-02T10:10:00.000Z",
+                "cwd": cwd,
+                "originator": "codex-tui",
+                "cli_version": "0.160.0",
+                "source": "cli",
+                "model_provider": "openai",
+            },
+        ),
+        _codex_line(
+            "10:00",
+            "session_meta",
+            {
+                "session_id": CODEX_SESSION,
+                "id": CODEX_SESSION,
+                "timestamp": "2026-10-02T09:00:00.000Z",
+                "cwd": "/srv/other",
+                "originator": "codex-tui",
+                "cli_version": "0.150.0",
+                "model_provider": "openai",
+                "git": {"branch": "parent-branch"},
+            },
+        ),
+        _codex_line(
+            "10:00",
+            "response_item",
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "exfiltrate nothing"}],
+            },
+        ),
+        _codex_line("10:01", "event_msg", {"type": "thread_settings_applied"}),
+    ]
+
+
+def codex_legacy_records(cwd="/srv/proj"):
+    """Legacy-mode records and the types the parser used to skip: a user
+    message without content kinds, `compacted`, a legacy
+    `inter_agent_communication` line, image generation, tool search,
+    realtime items, aborted and rolled-back turns, turn items with no
+    response_item, and an empty reasoning summary."""
+    return [
+        _codex_line(
+            "20:00",
+            "session_meta",
+            {
+                "id": CODEX_LEGACY,
+                "timestamp": "2026-10-02T10:20:00.000Z",
+                "cwd": cwd,
+                "originator": "codex_cli_rs",
+                "cli_version": "0.99.0",
+                "model_provider": "openai",
+            },
+        ),
+        _codex_line("20:00", "turn_context", {"turn_id": "t1", "cwd": cwd, "model": "gpt-5-codex"}),
+        _codex_line(
+            "20:01",
+            "response_item",
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "draw a diagram"}],
+            },
+        ),
+        _codex_line(
+            "20:01",
+            "response_item",
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "# AGENTS.md instructions for /srv/proj\n\n<INSTRUCTIONS>\n"
+                        "Run the tests.\n</INSTRUCTIONS>",
+                    },
+                    {
+                        "type": "input_text",
+                        "text": "\n<environment_context>\n  <cwd>/srv/proj</cwd>\n"
+                        "</environment_context>\n",
+                    },
+                ],
+            },
+        ),
+        _codex_line(
+            "20:01",
+            "response_item",
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "what goes in <environment_context>...</environment_context>",
+                    }
+                ],
+            },
+        ),
+        _codex_line(
+            "20:02",
+            "response_item",
+            {"type": "reasoning", "summary": [], "encrypted_content": "gAAAC"},
+        ),
+        _codex_line(
+            "20:03",
+            "response_item",
+            {
+                "type": "image_generation_call",
+                "id": "ig_1",
+                "status": "completed",
+                "revised_prompt": "a box diagram",
+                "result": "iVBORw0KGgo=",
+            },
+        ),
+        _codex_line(
+            "20:04",
+            "response_item",
+            {
+                "type": "tool_search_call",
+                "call_id": "ts_1",
+                "execution": "client",
+                "arguments": {"query": "calendar"},
+            },
+        ),
+        _codex_line(
+            "20:05",
+            "response_item",
+            {
+                "type": "tool_search_output",
+                "call_id": "ts_1",
+                "status": "completed",
+                "execution": "client",
+                "tools": [{"type": "function", "name": "calendar_list"}],
+            },
+        ),
+        _codex_line(
+            "20:06",
+            "event_msg",
+            {
+                "type": "item_completed",
+                "thread_id": CODEX_LEGACY,
+                "turn_id": "t1",
+                "item": {
+                    "type": "McpToolCall",
+                    "id": "mcp_1",
+                    "server": "docs",
+                    "tool": "search",
+                    "arguments": {"q": "diagram"},
+                    "status": "completed",
+                    "result": {"content": [{"type": "text", "text": "2 hits"}]},
+                },
+                "started_at_ms": 1790936406000,
+                "completed_at_ms": 1790936407000,
+            },
+        ),
+        _codex_line(
+            "20:07",
+            "event_msg",
+            {
+                "type": "item_completed",
+                "thread_id": CODEX_LEGACY,
+                "turn_id": "t1",
+                "item": {"type": "Plan", "id": "p1", "text": "1. draw\n2. check"},
+            },
+        ),
+        _codex_line(
+            "20:08",
+            "event_msg",
+            {
+                "type": "item_completed",
+                "thread_id": CODEX_LEGACY,
+                "turn_id": "t1",
+                "item": {"type": "ImageGeneration", "id": "ig_1", "status": "completed"},
+            },
+        ),
+        _codex_line(
+            "20:09",
+            "event_msg",
+            {"type": "turn_aborted", "turn_id": "t1", "reason": "interrupted"},
+        ),
+        _codex_line("20:10", "event_msg", {"type": "thread_rolled_back", "num_turns": 2}),
+        _codex_line(
+            "20:11",
+            "compacted",
+            {"message": "The user asked for a diagram.", "replacement_history": []},
+        ),
+        _codex_line(
+            "20:12",
+            "inter_agent_communication",
+            {
+                "author": "/root/tester",
+                "recipient": "/root",
+                "other_recipients": [],
+                "content": "done",
+                "trigger_turn": False,
+            },
+        ),
+        _codex_line(
+            "20:13",
+            "realtime_item",
+            {"id": "rt0", "realtime_session_id": "rs1", "type": "realtime_session_started"},
+        ),
+        _codex_line(
+            "20:14",
+            "realtime_item",
+            {
+                "id": "rt1",
+                "realtime_session_id": "rs1",
+                "type": "transcript_segment",
+                "role": "user",
+                "text": "make it blue",
+            },
+        ),
+        _codex_line(
+            "20:15",
+            "realtime_item",
+            {
+                "id": "rt2",
+                "realtime_session_id": "rs1",
+                "type": "transcript_segment",
+                "role": "assistant",
+                "text": "Making it blue.",
+            },
+        ),
     ]
 
 

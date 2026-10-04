@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-04
+
 ### Added
 
 - Claude Code: a tool result stored as a `<persisted-output>` stub now
@@ -21,6 +23,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rows take the new `project_path`), `hook:` rows for hook system messages
   and `edited file:` rows for `edited_text_file` attachments (the path
   only, not the snippet).
+
+### Changed
+
+- Claude Code: the Bash `tool_use` text is the command the model sent,
+  with its `cd <dir> &&` prefix, instead of the normalised one.
+- Claude Code: other injected context (`isMeta` records) starts with
+  `context:`, and `system` records without `content` (`api_error`,
+  `memory_saved`, ...) show their fields as JSON after the subtype.
+- Open Interpreter rollouts are read by the same code as Codex CLI's, so
+  every Codex CLI change below applies to them too.
+- Codex CLI: a rollout that holds an ancestor's `session_meta` (a copied
+  fork) keeps the file's own session id, project and branch; the ancestor's
+  record is a `system` row `copied from ancestor: ...`, and a fork gets a
+  `forked from <id>` row.
+- Codex CLI: a non-zero exit code from a command's `item_completed` record
+  prefixes that call's `tool_result` text as `[exit N]`.
+- Codex CLI: a subagent rollout starts with a `system` row
+  `subagent <id> of <parent id>` (with its agent path and role), and its
+  first prompt, the task from the parent, is a `system` row
+  `subagent task: ...` instead of `user`. Messages copied from the parent
+  (`inherited_user_message`) are no longer repeated in the subagent's rows.
 
 ### Fixed
 
@@ -45,14 +68,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   like the queue rows.
 - Claude Code: tool results that list tools (`tool_reference` blocks) show
   the tool names instead of empty text.
-
-### Changed
-
-- Claude Code: the Bash `tool_use` text is the command the model sent,
-  with its `cd <dir> &&` prefix, instead of the normalised one.
-- Claude Code: other injected context (`isMeta` records) starts with
-  `context:`, and `system` records without `content` (`api_error`,
-  `memory_saved`, ...) show their fields as JSON after the subtype.
+- Codex CLI: user-role messages the harness injects (environment context,
+  AGENTS.md and skill instructions, subagent notifications, user shell
+  commands) were `user` rows; they are now `system` rows
+  `context: <kind>: ...`, by content kind where the rollout records one
+  (current releases) and otherwise by the harness's own wrapper around the
+  block (`<environment_context>`, `# AGENTS.md instructions`, `<skill>`
+  and others), so `user` rows and `user_turns` count only what the person
+  typed. A tag typed inside a prompt does not change its type.
+- Codex CLI: compaction summaries, messages between agents
+  (`inter_agent_communication`, `agent_message`), image generation
+  prompts, tool searches, realtime voice transcripts, aborted and
+  rolled-back turns, and `item_completed` turn items that no other record
+  carries (web searches inside code-mode calls, MCP and dynamic tool calls,
+  plans) were dropped; they now produce rows.
+- Codex CLI: a reverted thread's rollout
+  (`rollout-<time>-<thread id>_<rollout id>.jsonl`) cut before its
+  `session_meta` took the rollout id as session id; it now takes the
+  thread id.
+- Codex CLI: a reasoning item with no summary text was a `thinking` row
+  with empty text under `--include-thinking`; it is now skipped.
 
 ## [0.6.0] - 2026-10-04
 
@@ -197,7 +232,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--summary-length` (default 400), `--include-thinking` and `--agent`;
   `detect --json` and `--files`; `catalog --agents`.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.6.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.7.0...HEAD
+[0.7.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.6.0...analyzer-v0.7.0
 [0.6.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.5.0...analyzer-v0.6.0
 [0.5.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.4.0...analyzer-v0.5.0
 [0.4.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.3.1...analyzer-v0.4.0
