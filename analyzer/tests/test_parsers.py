@@ -198,7 +198,7 @@ class TimelineTests(ParserBase):
             OPENHANDS_CONV, OPENHANDS_CLI_CONV, SHELLGPT_CHAT,
             "0199a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a1b", "local-conv-1", "conv-9f",
             "20261001_120000_a1b2c3d4", "20261001_130000_0badf00d", "AbCd1234",
-            OI_SESSION, OI_IMPORTED,
+            OI_SESSION, OI_IMPORTED, "cmpl-7f3a", "7",  # tabby completion and thread
             "7d0c2a8e-1111-4000-8000-000000000001", "telegram:123456789",
             "Sat, 03 Oct 2026 10:00:00 GMT", "7d1c2b3a-1111-4000-8000-000000000001",
             "9b1c2d3e-0000-4000-8000-000000000001", "1791036000000",
