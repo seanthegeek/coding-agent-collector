@@ -10,6 +10,8 @@ from .codex import CodexParser
 from .kiro import KiroParser
 from .qwen_code import QwenCodeParser
 from .gemini_cli import GeminiCliParser
+from .crush import CrushParser
+from .goose import GooseParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -18,6 +20,8 @@ ALL: List[Parser] = [
     QwenCodeParser(),
     KiroParser(),
     GeminiCliParser(),
+    CrushParser(),
+    GooseParser(),
 ]
 
 
