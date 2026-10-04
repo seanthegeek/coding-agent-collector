@@ -1,0 +1,93 @@
+# local-deep-research: on-disk paths
+
+## 1. Source and evidence level
+
+LearningCircuit/local-deep-research (LDR), MIT, open source, Python, commit [`3b965431351bb17c523fa38fdcfced4a3f891d49`](https://github.com/LearningCircuit/local-deep-research/commit/3b965431351bb17c523fa38fdcfced4a3f891d49). A research agent with a web UI. All claims are from source, apart from the pre-1.0 layout, which comes from the repository's own docs. Platform directory resolution was checked in tox-dev/platformdirs at [`960ff632eb575deb6f0d5bf49519d5a2ee2098b6`](https://github.com/tox-dev/platformdirs/commit/960ff632eb575deb6f0d5bf49519d5a2ee2098b6). LDR pins `platformdirs~=4.5` ([pyproject.toml:62](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/pyproject.toml#L62)), and that checkout is newer.
+
+No analyzer document. Research history and chat live in a per-user SQLCipher database encrypted with the user's login password (section 3), so the analyzer cannot parse them without that password.
+
+## 2. Per-user storage
+
+The data directory is `$LDR_DATA_DIR` if set (absolute path required), otherwise `platformdirs.user_data_dir("local-deep-research")` ([config/paths.py:28-61](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/config/paths.py#L28-L61)):
+
+- Linux: `$XDG_DATA_HOME/local-deep-research`, else `~/.local/share/local-deep-research` ([platformdirs unix.py:40-42](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/unix.py#L40-L42)).
+- macOS: `~/Library/Application Support/local-deep-research` ([macos.py:22-23](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/macos.py#L22-L23), [31-33](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/macos.py#L31-L33)). Newer platformdirs lets `XDG_*` override this on macOS ([macos.py:171-179](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/macos.py#L171-L179)).
+- Windows: `%LOCALAPPDATA%\local-deep-research\local-deep-research`. With no `appauthor`, platformdirs repeats the app name as the author ([windows.py:32-51](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/windows.py#L32-L51)). The comment in LDR's `paths.py:52` omits the doubled segment.
+
+Contents, all created on demand ([paths.py:64-213](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/config/paths.py#L64-L213)):
+
+- `ldr_auth.db`: plain SQLite, table `users` (`username`, `created_at`, `last_login`, `database_version`) ([database/auth_db.py:1-4](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/auth_db.py#L1-L4), [33-35](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/auth_db.py#L33-L35), [models/auth.py:32-40](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/models/auth.py#L32-L40)). This is the list of LDR accounts on the host.
+- `encrypted_databases/ldr_user_<sha256(username)[:16]>.db`, with a `.salt` sidecar and WAL files: the per-user SQLCipher database ([paths.py:135-158](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/config/paths.py#L135-L158), [encrypted_db.py:384-390](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/encrypted_db.py#L384-L390), [564-575](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/encrypted_db.py#L564-L575), [sqlcipher_utils.py:27-28](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/sqlcipher_utils.py#L27-L28), [656-666](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/sqlcipher_utils.py#L656-L666)). Tables include `research_history` (`query`, `mode`, `status`, `created_at`, `report_content`, `progress_log`, …; [models/research.py:310-343](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/models/research.py#L310-L343)), `chat_sessions`, `chat_messages` ([models/chat.py:59-65](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/models/chat.py#L59-L65), [140-147](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/models/chat.py#L140-L147)), `settings` and `api_keys`.
+- `encrypted_databases/backups/<user hash>/ldr_backup_*.db`: encrypted backups ([paths.py:211-242](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/config/paths.py#L211-L242), [backup_service.py:249](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/backup/backup_service.py#L249)).
+- `research_outputs/<research_id>.md` and `<research_id>_metadata.json`: plaintext report copies, written only when `report.enable_file_backup` is on (default `false`) ([storage/file.py:32-84](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/storage/file.py#L32-L84), [storage/factory.py:36-45](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/storage/factory.py#L36-L45), [default_settings.json:925-937](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/defaults/default_settings.json#L925-L937)).
+- `logs/<name>.log`: plaintext, only when `LDR_ENABLE_FILE_LOGGING=true`; 10 MB rotation, 7-day retention, zip-compressed ([log_utils.py:1095-1110](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/utilities/log_utils.py#L1095-L1110)). Messages pass a credential redactor first ([log_utils.py:805-812](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/utilities/log_utils.py#L805-L812)).
+- `config/config.toml`: written from the web UI ([web/routers/research.py:2550-2560](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/web/routers/research.py#L2550-L2560)). `server_config.json` is legacy ([web/server_config.py:84-86](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/web/server_config.py#L84-L86)).
+- `.secret_key`: web session signing key, mode 0600 ([web/fastapi_app.py:176-188](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/web/fastapi_app.py#L176-L188)).
+- `cache/` including `cache/rag_indices/<user hash>/` vector indexes ([library_rag_service.py:679-686](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/research_library/services/library_rag_service.py#L679-L686)), `models/` (embedding models), `journal_data/` (OpenAlex and DOAJ downloads, [paths.py:93-103](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/config/paths.py#L93-L103)), `library/`, `benchmark_results/` ([benchmark_commands.py:57](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/benchmarks/cli/benchmark_commands.py#L57)).
+
+The downloaded-document library defaults to `~/Documents/LocalDeepResearch/Library`, outside the data directory, on every OS ([library_settings.json:2-13](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/defaults/research_library/library_settings.json#L2-L13), [library_service.py:1212-1224](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/research_library/services/library_service.py#L1212-L1224)).
+
+Pre-1.0 (v0.x) kept a single unencrypted `ldr.db` in the data directory ([MIGRATION_GUIDE_v1.md:70-80](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docs/MIGRATION_GUIDE_v1.md#L70-L80), [env_configuration.md:244-248](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docs/env_configuration.md#L244-L248)).
+
+The Docker deployment sets `LDR_DATA_DIR=/data` on a named volume ([docker-compose.yml:57](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docker-compose.yml#L57), [127-128](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docker-compose.yml#L127-L128)), which is outside any home directory.
+
+## 3. Credentials
+
+- Provider API keys are kept in the `api_keys` and `settings` tables inside the encrypted user database ([models/settings.py:43-58](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/models/settings.py#L43-L58)). No keychain is used. LDR reads server environment variables, not a `.env` file ([error_handling/report_generator.py:396](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/error_handling/report_generator.py#L396)).
+- Encryption: SQLCipher, key derived with PBKDF2-HMAC-SHA512 (256,000 iterations) from the login password and the 32-byte `.salt` file; a missing salt file means the legacy fixed salt `b"no salt"` ([sqlcipher_utils.py:44-76](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/sqlcipher_utils.py#L44-L76), [355-358](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/sqlcipher_utils.py#L355-L358), [399](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/sqlcipher_utils.py#L399)). With `bootstrap.allow_unencrypted` the database is plain SQLite ([encrypted_db.py:522-528](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/encrypted_db.py#L522-L528)), and the keys are then readable. Passwords are held only in memory ([session_passwords.py:1-12](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/src/local_deep_research/database/session_passwords.py#L1-L12)).
+- `.secret_key`: secret, since it can forge web sessions.
+- `config/config.toml` may embed keys if the operator put them there (not verified).
+- The pre-1.0 `ldr.db` is unencrypted, so it holds settings and keys in plaintext. Collect it unflagged as evidence.
+
+## 4. Exclusions
+
+`cache`, `models`, `journal_data` and `library` under the data directory, and `Documents/LocalDeepResearch/Library`. Embedding models, vector indexes, journal datasets and downloaded PDFs are large and are not agent state. They are still listed in the manifest, and that list of file names records what was researched. Keep `encrypted_databases/backups`: the files are encrypted copies, but they show when the database existed.
+
+## 5. Project-local files
+
+None. LDR is not a coding agent and does not write into repositories.
+
+## 6. Where the project path is recorded
+
+Nowhere. LDR has no project concept. The research query (`research_history.query`) is inside the encrypted database.
+
+## 7. Catalog proposal
+
+```
+local-deep-research|.local/share/local-deep-research
+local-deep-research|Library/Application Support/local-deep-research
+local-deep-research|AppData/Local/local-deep-research
+local-deep-research|Documents/LocalDeepResearch
+```
+
+```
+(none)
+```
+
+```
+.local/share/local-deep-research/cache
+.local/share/local-deep-research/models
+.local/share/local-deep-research/journal_data
+.local/share/local-deep-research/library
+Library/Application Support/local-deep-research/cache
+Library/Application Support/local-deep-research/models
+Library/Application Support/local-deep-research/journal_data
+Library/Application Support/local-deep-research/library
+AppData/Local/local-deep-research/local-deep-research/cache
+AppData/Local/local-deep-research/local-deep-research/models
+AppData/Local/local-deep-research/local-deep-research/journal_data
+AppData/Local/local-deep-research/local-deep-research/library
+Documents/LocalDeepResearch/Library
+```
+
+```
+.local/share/local-deep-research/.secret_key
+Library/Application Support/local-deep-research/.secret_key
+AppData/Local/local-deep-research/local-deep-research/.secret_key
+```
+
+Discovery: none.
+
+## 8. Confidence
+
+High: data directory resolution on all three OSes, every file name, encryption scheme and key storage (source). High: the Windows doubled `local-deep-research` segment, from platformdirs `_append_parts` (the pinned 4.5 line was not checked separately). Medium: the pre-1.0 `ldr.db` location (docs only, no older tag read). Not determined: contents of `config/config.toml`; whether `Documents` is redirected (OneDrive) on Windows, which would move the library; Docker volume paths, which no home-relative entry covers.
