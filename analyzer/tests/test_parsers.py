@@ -175,6 +175,7 @@ class TimelineTests(ParserBase):
             "gemini-cli",
             "crush", "goose",
             "zed", "vscode",
+            "cline", "roo-code",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -396,6 +397,8 @@ class QwenCodeTests(ParserBase):
         self.assertEqual(args_summary({"command": "ls"}), "ls")
         self.assertEqual(args_summary({"other": 1}), '{"other":1}')
         self.assertEqual(args_summary(None), "")
+
+
 from agent_analyzer.parsers.kiro import KiroParser, salvage  # noqa: E402
 from fixtures import KIRO_EXPORT_SESSION, KIRO_SESSION, KIRO_SHELL_SESSION  # noqa: E402
 
@@ -479,6 +482,8 @@ class KiroTests(ParserBase):
         self.assertEqual(state, {"conversation_id": 'c"1', "history": [{"x": 1}]})
         self.assertTrue(err)
         self.assertEqual(salvage("garbage")[0], None)
+
+
 class GeminiCliTests(ParserBase):
     REL = GEMINI_REL
     LEGACY = ".gemini/tmp/%s/chats/session-2026-09-30T08-00-b2c3d4e5.json" % GEMINI_HASH
@@ -567,6 +572,8 @@ class GeminiCliTests(ParserBase):
         rows = self.rows_for(GeminiCliParser(), self.LEGACY)
         self.assertEqual(len(rows), 1)
         self.assertIn("unparseable", rows[0].text)
+
+
 class CrushTests(ParserBase):
     REL = ".crush/crush.db"
 
@@ -704,6 +711,8 @@ class GooseTests(ParserBase):
         rows = self.rows_for(GooseParser(), self.REL)
         self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result", "assistant", "system"])
         self.assertIn("content_json did not parse", rows[-1].text)
+
+
 from agent_analyzer.parsers.continue_dev import ContinueParser, load_session
 from agent_analyzer.parsers.aider import AiderParser, AiderProjectParser
 from fixtures import CONTINUE_SESSION, build_aider
@@ -854,6 +863,8 @@ class AiderTests(ParserBase):
                          {"/srv/proj/.aider.chat.history.md#2026-10-02 12:00:00",
                           "/srv/proj/.aider.chat.history.md#2026-10-02 13:00:00"})
         self.assertFalse(AiderProjectParser().wants(next(a for a in col.artifacts if a.rel == ".aider.conf.yml")))
+
+
 import importlib.util  # noqa: E402
 import json  # noqa: E402
 import sqlite3  # noqa: E402
@@ -1021,8 +1032,10 @@ class VsCodeTests(ParserBase):
         self.assertEqual(s, {"a": [1, 9], "new": [1]})
         with self.assertRaises(ValueError):
             apply_mutation(s, {"kind": 1, "k": ["missing", "x"], "v": 1})
+
+
 from agent_analyzer.parsers.opencode import OpenCodeParser, tool_summary as opencode_tool_summary
-from agent_analyzer.parsers.kilo_code import KiloCodeParser, iter_json_array
+from agent_analyzer.parsers.kilo_code import KiloCodeParser, iter_json_array as kilo_iter_json_array
 from fixtures import (KILO_SESSION, KILO_TASK, OPENCODE_LEGACY_SESSION, OPENCODE_SESSION,
                       OPENCODE_V2_SESSION)
 
@@ -1223,8 +1236,216 @@ class KiloCodeTests(ParserBase):
         self.assertIn("unexpected data after the array", rows[-1].text)
 
     def test_iter_json_array(self):
-        self.assertEqual(iter_json_array('[1, {"a": 2} ,3]'), ([1, {"a": 2}, 3], None))
-        self.assertEqual(iter_json_array("[]"), ([], None))
-        self.assertEqual(iter_json_array('[1, {"a"')[0], [1])
-        self.assertEqual(iter_json_array("[1, 2")[1], "record 3: unexpected end of file")
-        self.assertEqual(iter_json_array('{"a":1}'), ([], "not a JSON array"))
+        self.assertEqual(kilo_iter_json_array('[1, {"a": 2} ,3]'), ([1, {"a": 2}, 3], None))
+        self.assertEqual(kilo_iter_json_array("[]"), ([], None))
+        self.assertEqual(kilo_iter_json_array('[1, {"a"')[0], [1])
+        self.assertEqual(kilo_iter_json_array("[1, 2")[1], "record 3: unexpected end of file")
+        self.assertEqual(kilo_iter_json_array('{"a":1}'), ([], "not a JSON array"))
+
+
+from agent_analyzer.parsers.cline import ClineParser
+from agent_analyzer.parsers.cline_legacy import iter_json_array
+from agent_analyzer.parsers.roo_code import RooCodeParser
+from fixtures import (CLINE_CLI_TASK, CLINE_OLD_SESSION, CLINE_SESSION, CLINE_TASK, ROO_CLI_TASK, ROO_GONE_TASK,
+                      ROO_TASK)
+
+CLINE_GS = ".config/Code/User/globalStorage/saoudrizwan.claude-dev/"
+ROO_GS = ".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/"
+
+
+class ClineTests(ParserBase):
+    UI = CLINE_GS + "tasks/%s/ui_messages.json" % CLINE_TASK
+    SDK = ".cline/data/sessions/%s/%s" % (CLINE_SESSION, CLINE_SESSION)
+
+    def test_rows(self):
+        rows = self.rows_for(ClineParser(), self.UI)
+        self.assertEqual([r.turn_type for r in rows], ["user", "system", "tool_use", "assistant", "tool_use",
+                                                       "tool_result", "system", "assistant"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "cline", CLINE_TASK))
+            self.assertEqual((r.project_path, r.git_branch, r.model), ("/srv/proj", "", "claude-sonnet-4-5"))
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        user, api, read, text, cmd, out, ckpt, done = rows
+        self.assertEqual((user.text, user.timestamp_utc), ("fix tests | [1 image(s)]", "2026-10-03T10:00:00.000Z"))
+        self.assertEqual(api.text, "api_req_started: tokensIn=1200 tokensOut=80 cacheWrites=0 cacheReads=900 cost=0.0041")
+        self.assertEqual((read.tool_name, read.tool_use_id, read.text),
+                         ("readFile", "1791021602000", "src/app.py | /srv/proj/src/app.py"))
+        self.assertEqual((cmd.tool_name, cmd.tool_use_id, cmd.text), ("execute_command", "1791021604000", "pytest -q"))
+        self.assertEqual((out.tool_use_id, out.text), ("1791021604000", "3 passed"))
+        self.assertEqual(ckpt.text, "checkpoint_created: abc123")
+        self.assertEqual(done.text, "All tests pass.")
+        self.assertEqual([r.source_line for r in rows], [1, 2, 4, 5, 6, 7, 8, 9])   # empty ask at 10 skipped
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(ClineParser(), self.UI, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["read the test first"])
+        rows = self.rows_for(ClineParser(), self.SDK + ".messages.json", include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["run the suite"])
+
+    def test_api_history_only_without_ui_messages(self):
+        self.assertEqual(self.rows_for(ClineParser(), CLINE_GS + "tasks/%s/api_conversation_history.json" % CLINE_TASK), [])
+        rows = self.rows_for(ClineParser(), ".cline/data/tasks/%s/api_conversation_history.json" % CLINE_CLI_TASK)
+        self.assertEqual([r.turn_type for r in rows], ["user", "tool_use", "tool_result"])
+        # No per-message timestamps: every row inherits the task id's time.
+        self.assertEqual({r.timestamp_utc for r in rows}, {"2026-10-03T09:55:00.000Z"})
+        self.assertEqual({r.project_path for r in rows}, {"/srv/proj"})
+        use, res = rows[1], rows[2]
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("execute_command", "toolu_01A", "pytest -q"))
+        self.assertEqual((res.tool_use_id, res.text), ("toolu_01A", "3 passed"))
+
+    def test_history_and_metadata(self):
+        rows = self.rows_for(ClineParser(), CLINE_GS + "state/taskHistory.json")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0].turn_type, rows[0].session_id, rows[0].project_path),
+                         ("system", CLINE_TASK, "/srv/proj"))
+        self.assertTrue(rows[0].text.startswith("task: fix tests | tokensIn=1200"))
+        rows = self.rows_for(ClineParser(), CLINE_GS + "tasks/%s/task_metadata.json" % CLINE_TASK)
+        self.assertEqual([r.text.split(":")[0] for r in rows], ["environment", "model_usage", "file cline_read"])
+        self.assertEqual(rows[2].timestamp_utc, "2026-10-03T10:00:02.000Z")
+        self.assertIn("src/app.py", rows[2].text)
+
+    def test_sdk_session(self):
+        rows = self.rows_for(ClineParser(), self.SDK + ".json")
+        self.assertEqual([r.text.split(":")[0] for r in rows], ["session start", "session end"])
+        self.assertEqual((rows[0].session_id, rows[0].project_path, rows[0].timestamp_utc),
+                         (CLINE_SESSION, "/srv/proj", "2026-10-03T10:01:40.000Z"))
+        self.assertIn("title=fix tests", rows[0].text)
+        rows = self.rows_for(ClineParser(), self.SDK + ".messages.json")
+        self.assertEqual([r.turn_type for r in rows], ["user", "tool_use", "tool_result", "assistant"])
+        user, use, res, asst = rows
+        self.assertEqual({r.session_id for r in rows}, {CLINE_SESSION})
+        self.assertEqual({r.project_path for r in rows}, {"/srv/proj"})
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("bash", "call_1", "pytest -q"))
+        self.assertEqual((res.tool_name, res.tool_use_id, res.text), ("bash", "call_1", "3 passed"))
+        self.assertEqual(asst.timestamp_utc, res.timestamp_utc)   # no ts: previous message's time
+        self.assertEqual([r.source_line for r in rows], [1, 2, 3, 4])
+
+    def test_sessions_db_only_lists_sessions_without_manifest(self):
+        rows = self.rows_for(ClineParser(), ".cline/data/db/sessions.db")
+        self.assertEqual([r.session_id for r in rows], [CLINE_OLD_SESSION])
+        self.assertEqual(rows[0].timestamp_utc, "2026-10-02T23:00:00.000Z")
+        self.assertIn("an older deleted session", rows[0].text)
+
+    def test_config_and_secrets_not_wanted(self):
+        p = ClineParser()
+        for rel in (CLINE_GS + "settings/cline_mcp_settings.json", ".cline/data/secrets.json",
+                    self.SDK + ".compaction.json"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(p.wants(art), rel)
+
+    def test_wants_any_editor_prefix(self):
+        p = ClineParser()
+        art = next(a for a in self.col.artifacts if a.rel == self.UI)
+        for prefix in ("Library/Application Support/Cursor/User/globalStorage/",
+                       "AppData/Roaming/Code - Insiders/User/globalStorage/",
+                       ".vscode-server/data/User/globalStorage/"):
+            art.rel = prefix + "saoudrizwan.claude-dev/tasks/1/ui_messages.json"
+            self.assertTrue(p.wants(art), art.rel)
+        art.rel = ".config/Code/User/globalStorage/other.ext/tasks/1/ui_messages.json"
+        self.assertFalse(p.wants(art))
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.UI)
+        rows = self.rows_for(ClineParser(), self.UI)
+        self.assertEqual(len(rows), 9)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("after the JSON array", rows[-1].text)
+
+    def test_array_cut_mid_write_keeps_earlier_records(self):
+        path = self.home / self.UI
+        data = path.read_text(encoding="utf-8")
+        path.write_text(data[:data.index('"say": "command_output"') - 30], encoding="utf-8")
+        rows = self.rows_for(ClineParser(), self.UI)
+        self.assertEqual([r.turn_type for r in rows], ["user", "system", "tool_use", "assistant", "tool_use", "system"])
+        self.assertEqual(rows[-1].source_line, 7)
+        self.assertIn("record 7", rows[-1].text)
+        sdk = self.home / (self.SDK + ".messages.json")
+        data = sdk.read_text(encoding="utf-8")
+        sdk.write_text(data[:data.index('"id": "m3"') - 2], encoding="utf-8")
+        rows = self.rows_for(ClineParser(), self.SDK + ".messages.json")
+        self.assertEqual([r.turn_type for r in rows], ["user", "tool_use", "system"])
+        self.assertEqual(rows[0].timestamp_utc, "2026-10-03T10:01:40.000Z")
+
+    def test_sessions_summary(self):
+        rows = []
+        for parser in (ClineParser(), RooCodeParser()):
+            for a in self.col.artifacts_for(parser.agent):
+                if parser.wants(a):
+                    rows.extend(parser.parse(a, Options()))
+        sessions = {s.session_id: s for s in summarise(rows)}
+        self.assertEqual(set(sessions), {CLINE_TASK, CLINE_CLI_TASK, CLINE_SESSION, CLINE_OLD_SESSION,
+                                         ROO_TASK, ROO_CLI_TASK, ROO_GONE_TASK})
+        s = sessions[CLINE_TASK]
+        self.assertEqual((s.models, s.user_turns, s.assistant_turns, s.tool_calls),
+                         ({"claude-sonnet-4-5": None}, 1, 2, 2))
+        self.assertTrue(s.source_file.endswith("ui_messages.json"), s.source_file)
+        self.assertEqual(sessions[CLINE_SESSION].first_timestamp_utc, "2026-10-03T10:01:40.000Z")
+        self.assertEqual(sessions[ROO_TASK].project_path, "/srv/proj")
+
+    def test_json_array_reader(self):
+        p = self.tmp / "a.json"
+        for text, items, nerr in (("[]", [], 0), ('[{"a":1}, {"b":2}]', [{"a": 1}, {"b": 2}], 0),
+                                  ('[{"a":1}, {"b":', [{"a": 1}], 1), ('{"a":1}', [], 1)):
+            p.write_text(text, encoding="utf-8")
+            errors = []
+            self.assertEqual([v for _, v in iter_json_array(p, errors)], items, text)
+            self.assertEqual(len(errors), nerr, text)
+
+
+class RooCodeTests(ParserBase):
+    UI = ROO_GS + "tasks/%s/ui_messages.json" % ROO_TASK
+    CLI_API = ".vscode-mock/global-storage/tasks/%s/api_conversation_history.json" % ROO_CLI_TASK
+
+    def test_rows(self):
+        rows = self.rows_for(RooCodeParser(), self.UI)
+        self.assertEqual([r.turn_type for r in rows], ["user", "system", "tool_use", "tool_use", "tool_result",
+                                                       "system", "assistant", "user", "assistant"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "roo-code", ROO_TASK))
+            self.assertEqual((r.project_path, r.git_branch, r.model), ("/srv/proj", "", ""))
+        user, api, diff, cmd, out, condense, ask, feedback, done = rows
+        self.assertEqual((user.text, user.timestamp_utc), ("rename the helper", "2026-10-03T10:03:20.000Z"))
+        self.assertIn("apiProtocol=anthropic", api.text)
+        self.assertEqual((diff.tool_name, diff.text), ("appliedDiff", "src/util.py | -old +new"))
+        self.assertEqual((out.tool_use_id, out.text), (cmd.tool_use_id, "1 passed"))
+        self.assertTrue(condense.text.startswith("condense_context: prevContextTokens=9000"))
+        self.assertIn("Renamed helper; tests pass.", condense.text)
+        self.assertEqual(ask.text, "Commit now? | yes; no")
+        self.assertEqual(feedback.text, "yes")
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(RooCodeParser(), self.CLI_API)
+        self.assertNotIn("thinking", [r.turn_type for r in rows])
+        rows = self.rows_for(RooCodeParser(), self.CLI_API, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["check the runner"])
+
+    def test_api_history_only_without_ui_messages(self):
+        self.assertEqual(self.rows_for(RooCodeParser(), ROO_GS + "tasks/%s/api_conversation_history.json" % ROO_TASK), [])
+        rows = self.rows_for(RooCodeParser(), self.CLI_API)
+        self.assertEqual([r.turn_type for r in rows], ["user", "tool_use", "tool_result"])
+        self.assertEqual([r.timestamp_utc for r in rows],                  # Roo records carry their own ts
+                         ["2026-10-03T10:05:00.000Z", "2026-10-03T10:05:02.000Z", "2026-10-03T10:05:03.000Z"])
+        self.assertEqual({(r.session_id, r.project_path) for r in rows}, {(ROO_CLI_TASK, "/srv/proj")})
+        self.assertEqual((rows[1].tool_use_id, rows[2].tool_use_id), ("toolu_01A", "toolu_01A"))
+
+    def test_history_item_and_index(self):
+        rows = self.rows_for(RooCodeParser(), ROO_GS + "tasks/%s/history_item.json" % ROO_TASK)
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0].text.startswith("task: rename the helper"))
+        self.assertIn("mode=code", rows[0].text)
+        rows = self.rows_for(RooCodeParser(), ROO_GS + "tasks/_index.json")
+        self.assertEqual([r.session_id for r in rows], [ROO_GONE_TASK])     # tasks on disk are not repeated
+        rows = self.rows_for(RooCodeParser(), ROO_GS + "tasks/%s/task_metadata.json" % ROO_TASK)
+        self.assertEqual([r.text.split(":")[0] for r in rows], ["file roo_read", "file roo_edit"])
+
+    def test_secrets_not_wanted(self):
+        art = next(a for a in self.col.artifacts if a.rel == ".vscode-mock/global-storage/secrets.json")
+        self.assertFalse(RooCodeParser().wants(art))
+        self.assertFalse(ClineParser().wants(art))
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.UI)
+        rows = self.rows_for(RooCodeParser(), self.UI)
+        self.assertEqual(len(rows), 10)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("parser:", rows[-1].text)

@@ -90,6 +90,8 @@ agents and which have parsers.
 | `vscode` | `User/workspaceStorage/<hash>/chatSessions/*.jsonl` and `.json` (with the sibling `workspace.json` for the project), `User/globalStorage/emptyWindowChatSessions/*`, `User/globalStorage/transferredChatSessions/*.json`, for Code, Code - Insiders, VSCodium, Positron, Trae and the `.vscode-server*/data` remote layout. Covers Copilot Chat; its model and participant ids are opaque strings | Source at d7622a5, synthetic fixture |
 | `opencode` | `.local/share/opencode/opencode*.db` (SQLite with JSON columns, WAL sidecars; V1 `message`/`part`, V2 `session_message` for sessions without V1 rows), legacy JSON `storage/session/*/*.json` and `storage/message/*/*.json` with their `part/` files, and the older `project/<slug>/storage/session/` tree | Source at 907b3bc, synthetic fixture |
 | `kilo-code` | `.local/share/kilo/kilo*.db` and `opencode-*.db` plus the same JSON trees under `.local/share/kilo` (OpenCode parser, Kilo paths), and pre-migration VS Code tasks `<globalStorage>/kilocode.kilo-code/tasks/<id>/api_conversation_history.json` | Source at 76bcfd4, synthetic fixture |
+| `cline` | `<editor>/User/globalStorage/saoudrizwan.claude-dev/` and `.cline/data/`: `tasks/<id>/ui_messages.json` (preferred), `api_conversation_history.json` (only when `ui_messages.json` is absent; inherits the task start time), `task_metadata.json`, `state/taskHistory.json`; SDK `.cline/data/sessions/<id>/<id>.json` and `*.messages.json`, `.cline/data/db/sessions.db` | Source at 39ff2359, synthetic fixture; see `research/cline.md` |
+| `roo-code` | `<editor>/User/globalStorage/rooveterinaryinc.roo-cline/` and `.vscode-mock/global-storage/`: the Cline task files plus `tasks/<id>/history_item.json` and `tasks/_index.json` | Source at b867ec91, synthetic fixture; see `research/roo-code.md` |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
@@ -99,8 +101,7 @@ event per row; `--max-text-length` shortens it for a spreadsheet view. History f
 matching session transcript exists, because they survive session deletion;
 filter on `source_file` to drop them.
 
-Agents detected but not yet parsed: everything else in the catalog. The
-record schemas for Cline and Roo Code are documented under `research/` and are next in line.
+Agents detected but not yet parsed: everything else in the catalog.
 Windsurf and Cursor need format work first.
 
 Protobuf stores are decoded by `agent_analyzer/protobuf.py`, a small

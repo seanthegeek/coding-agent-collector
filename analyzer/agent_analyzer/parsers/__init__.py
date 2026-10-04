@@ -18,6 +18,8 @@ from .zed import ZedParser
 from .vscode import VsCodeParser
 from .opencode import OpenCodeParser
 from .kilo_code import KiloCodeParser
+from .cline import ClineParser
+from .roo_code import RooCodeParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -35,6 +37,8 @@ ALL: List[Parser] = [
     VsCodeParser(),
     OpenCodeParser(),
     KiloCodeParser(),
+    ClineParser(),
+    RooCodeParser(),
 ]
 
 

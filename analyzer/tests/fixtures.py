@@ -138,6 +138,8 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     build_aider(home)
     build_opencode(home)
     build_kilo(home)
+    build_cline(home)
+    build_roo_code(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -324,6 +326,8 @@ def build_qwen(home: Path) -> None:
     (tmp / "logs.json").write_text(json.dumps(qwen_logs_entries(), indent=2), encoding="utf-8")
     (home / ".qwen/settings.json").write_text("{}", encoding="utf-8")
     (home / ".qwen/oauth_creds.json").write_text('{"access_token": "secret"}', encoding="utf-8")
+
+
 KIRO_SESSION = "3f2b8c1e-9d7a-4e6b-b1c2-0a9f8e7d6c5b"
 KIRO_EXPORT_SESSION = "7c1d2e3f-4a5b-4c6d-8e7f-901234567890"
 KIRO_SHELL_SESSION = "fig-shell-1"
@@ -441,6 +445,8 @@ def build_kiro(home: Path) -> None:
     (home / ".kiro/sessions/s1.json").write_text(json.dumps(
         {"conversation_id": "x", "history": [], "messages": [{"role": "user", "content": [{"text": "hi"}]}]}),
         encoding="utf-8")
+
+
 GEMINI_SESSION = "a1b2c3d4-0000-4000-8000-000000000001"
 GEMINI_RESUMED = "a1b2c3d4-0000-4000-8000-0000000000ff"
 GEMINI_LEGACY = "b2c3d4e5-0000-4000-8000-000000000002"
@@ -528,6 +534,8 @@ def build_gemini_cli(base: Path) -> None:
     (legacy / "session-2026-09-30T08-00-b2c3d4e5.json").write_text(json.dumps(gemini_legacy_record()), encoding="utf-8")
     (base / "projects.json").write_text(json.dumps({"projects": {"/srv/proj": "proj"}}), encoding="utf-8")
     (base / "oauth_creds.json").write_text('{"access_token": "secret"}', encoding="utf-8")
+
+
 def _wal_db(path: Path, script: str, inserts) -> None:
     """Build a WAL-mode SQLite file whose schema is checkpointed into the main
     file and whose rows live only in the -wal sidecar, as on a host where the
@@ -677,6 +685,8 @@ def build_goose(home: Path) -> None:
     (home / ".config/goose").mkdir(parents=True, exist_ok=True)
     (home / ".config/goose/config.yaml").write_text("GOOSE_PROVIDER: anthropic\n", encoding="utf-8")
     (home / ".config/goose/secrets.yaml").write_text("ANTHROPIC_API_KEY: sk-test\n", encoding="utf-8")
+
+
 CONTINUE_SESSION = "0f1e"
 CONTINUE_CREATED = "1790935200000"  # 2026-10-02T10:00:00Z, a millisecond epoch string as sessions.json stores it
 
@@ -767,6 +777,8 @@ def build_aider(base: Path) -> None:
     (base / ".aider.input.history").write_text(AIDER_INPUT, encoding="utf-8")
     (base / ".aider.llm.history").write_text(AIDER_LLM, encoding="utf-8")
     (base / ".aider.conf.yml").write_text("model: gpt-4o\n", encoding="utf-8")
+
+
 ZED_THREAD = "6f1c0b2e-1111-4bbb-8ccc-000000000001"
 ZED_EXTERNAL = "ext-claude-code-sess-1"
 
@@ -1106,3 +1118,187 @@ def build_kilo(home: Path) -> None:
     _json_file(tasks / "_index.json", {"version": 1, "updatedAt": KILO_T0 - 86395000, "entries": [
         {"id": KILO_TASK, "number": 1, "ts": KILO_T0 - 86400000, "task": "fix tests", "tokensIn": 1200,
          "tokensOut": 80, "totalCost": 0.0041, "workspace": "/srv/proj", "mode": "code", "status": "completed"}]})
+
+
+# ---- Cline and Roo Code (research/cline.md, research/roo-code.md) ----------------
+
+CLINE_TASK = "1791021600000"            # 2026-10-03T10:00:00Z, a Date.now() id
+CLINE_CLI_TASK = "1791021300000"        # API history only, no ui_messages.json
+CLINE_SESSION = "1791021700000_k3x9q"
+CLINE_OLD_SESSION = "1791000000000_old01"
+ROO_TASK = "8f1c2b7e-0000-4000-8000-000000000001"
+ROO_CLI_TASK = "8f1c2b7e-0000-4000-8000-000000000002"
+ROO_GONE_TASK = "8f1c2b7e-0000-4000-8000-000000000003"
+CLINE_T0 = 1791021600000
+
+
+def _json(path: Path, value) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+
+
+def cline_ui_records(t0=CLINE_T0):
+    model = {"modelId": "claude-sonnet-4-5", "providerId": "anthropic", "mode": "act"}
+    return [
+        {"ts": t0, "type": "say", "say": "task", "text": "fix tests", "images": ["data:image/png;base64,AAAA"]},
+        {"ts": t0 + 1000, "type": "say", "say": "api_req_started",
+         "text": json.dumps({"request": "<task>fix tests</task>", "tokensIn": 1200, "tokensOut": 80,
+                             "cacheWrites": 0, "cacheReads": 900, "cost": 0.0041})},
+        {"ts": t0 + 1500, "type": "say", "say": "reasoning", "text": "read the test first", "partial": False},
+        {"ts": t0 + 2000, "type": "say", "say": "tool", "modelInfo": model,
+         "text": json.dumps({"tool": "readFile", "path": "src/app.py", "content": "/srv/proj/src/app.py"})},
+        {"ts": t0 + 3000, "type": "say", "say": "text", "text": "Running the suite.", "modelInfo": model},
+        {"ts": t0 + 4000, "type": "ask", "ask": "command", "text": "pytest -q", "modelInfo": model},
+        {"ts": t0 + 5000, "type": "say", "say": "command_output", "text": "3 passed"},
+        {"ts": t0 + 6000, "type": "say", "say": "checkpoint_created", "lastCheckpointHash": "abc123"},
+        {"ts": t0 + 7000, "type": "say", "say": "completion_result", "text": "All tests pass.", "modelInfo": model},
+        {"ts": t0 + 7001, "type": "ask", "ask": "completion_result", "text": ""},
+    ]
+
+
+def cline_api_records():
+    return [
+        {"role": "user", "content": [{"type": "text", "text": "<task>fix tests</task>"}]},
+        {"role": "assistant", "content": [{"type": "thinking", "thinking": "run the suite"},
+                                          {"type": "tool_use", "id": "toolu_01A", "name": "execute_command",
+                                           "input": {"command": "pytest -q"}}]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_01A", "content": "3 passed",
+                                      "is_error": False}]},
+    ]
+
+
+def cline_task_metadata(t0=CLINE_T0):
+    return {
+        "files_in_context": [
+            {"path": "src/app.py", "record_state": "active", "record_source": "read_tool",
+             "cline_read_date": t0 + 2000, "cline_edit_date": None},
+        ],
+        "model_usage": [{"ts": t0 + 500, "model_id": "claude-sonnet-4-5", "model_provider_id": "anthropic",
+                         "mode": "act"}],
+        "environment_history": [{"ts": t0 + 100, "os_name": "linux", "os_version": "6.6", "os_arch": "x64",
+                                 "host_name": "Visual Studio Code", "host_version": "1.105.0",
+                                 "cline_version": "3.40.0"}],
+    }
+
+
+def cline_history_items():
+    return [
+        {"id": CLINE_TASK, "ulid": "01JAX3Q8M4", "ts": CLINE_T0 + 7001, "task": "fix tests", "tokensIn": 1200,
+         "tokensOut": 80, "totalCost": 0.0041, "cwdOnTaskInitialization": "/srv/proj",
+         "modelId": "claude-sonnet-4-5", "apiProvider": "anthropic"},
+    ]
+
+
+def cline_sdk_manifest():
+    return {"version": 1, "session_id": CLINE_SESSION, "source": "cli", "pid": 4242,
+            "started_at": "2026-10-03T10:01:40.000Z", "ended_at": "2026-10-03T10:01:50.000Z", "exit_code": 0,
+            "status": "completed", "interactive": True, "provider": "anthropic", "model": "claude-sonnet-4-5",
+            "cwd": "/srv/proj", "workspace_root": "/srv/proj", "enable_tools": True, "enable_spawn": False,
+            "enable_teams": False, "prompt": "fix tests", "metadata": {"title": "fix tests"},
+            "messages_path": "/home/u/.cline/data/sessions/%s/%s.messages.json" % (CLINE_SESSION, CLINE_SESSION)}
+
+
+def cline_sdk_messages(t0=CLINE_T0 + 100000):
+    return {"version": 1, "updated_at": "2026-10-03T10:01:50.000Z", "agent": "lead", "sessionId": CLINE_SESSION,
+            "origin": {"source": "cli", "mode": "user", "sessionId": CLINE_SESSION},
+            "system_prompt": "You are Cline.",
+            "messages": [
+                {"id": "m1", "role": "user", "content": "fix tests", "ts": t0},
+                {"id": "m2", "role": "assistant",
+                 "content": [{"type": "thinking", "thinking": "run the suite"},
+                             {"type": "tool_use", "id": "call_1", "name": "bash", "input": {"command": "pytest -q"}}],
+                 "modelInfo": {"id": "claude-sonnet-4-5", "provider": "anthropic"},
+                 "metrics": {"inputTokens": 1200, "outputTokens": 80, "cost": 0.0041}, "ts": t0 + 2000},
+                {"id": "m3", "role": "user",
+                 "content": [{"type": "tool_result", "tool_use_id": "call_1", "name": "bash", "content": "3 passed",
+                              "is_error": False}], "ts": t0 + 3000},
+                {"id": "m4", "role": "assistant", "content": [{"type": "text", "text": "Fixed."}]},
+            ]}
+
+
+def build_cline(home: Path) -> None:
+    gs = home / ".config/Code/User/globalStorage/saoudrizwan.claude-dev"
+    task = gs / "tasks" / CLINE_TASK
+    _json(task / "ui_messages.json", cline_ui_records())
+    _json(task / "api_conversation_history.json", cline_api_records())
+    _json(task / "task_metadata.json", cline_task_metadata())
+    _json(gs / "state/taskHistory.json", cline_history_items())
+    _json(gs / "settings/cline_mcp_settings.json", {"mcpServers": {}})
+    data = home / ".cline/data"
+    _json(data / "tasks" / CLINE_CLI_TASK / "api_conversation_history.json", cline_api_records())
+    _json(data / "state/taskHistory.json", [dict(cline_history_items()[0], id=CLINE_CLI_TASK, ts=1791021305000)])
+    _json(data / "secrets.json", {"apiKey": "sk-not-real"})
+    sess = data / "sessions" / CLINE_SESSION
+    _json(sess / (CLINE_SESSION + ".json"), cline_sdk_manifest())
+    _json(sess / (CLINE_SESSION + ".messages.json"), cline_sdk_messages())
+    _json(sess / (CLINE_SESSION + ".compaction.json"), {"version": 1})
+    (data / "db").mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(data / "db/sessions.db"))
+    con.execute("CREATE TABLE sessions (session_id TEXT PRIMARY KEY, source TEXT, pid INTEGER, started_at TEXT, "
+                "ended_at TEXT, exit_code INTEGER, status TEXT, interactive INTEGER, provider TEXT, model TEXT, "
+                "cwd TEXT, workspace_root TEXT, prompt TEXT, metadata_json TEXT, is_subagent INTEGER, "
+                "parent_session_id TEXT, updated_at TEXT)")
+    for sid, started, prompt in ((CLINE_SESSION, "2026-10-03T10:01:40.000Z", "fix tests"),
+                                 (CLINE_OLD_SESSION, "2026-10-02T23:00:00.000Z", "an older deleted session")):
+        con.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (sid, "cli", 4242, started, None, None, "completed", 1, "anthropic", "claude-sonnet-4-5",
+                     "/srv/proj", "/srv/proj", prompt, json.dumps({"title": prompt}), 0, None, started))
+    con.commit()
+    con.close()
+
+
+def roo_ui_records(t0=CLINE_T0 + 200000):
+    return [
+        {"ts": t0, "type": "say", "say": "text", "text": "rename the helper"},
+        {"ts": t0 + 1000, "type": "say", "say": "api_req_started",
+         "text": json.dumps({"request": "rename the helper", "tokensIn": 900, "tokensOut": 40, "cost": 0.002,
+                             "apiProtocol": "anthropic"})},
+        {"ts": t0 + 2000, "type": "ask", "ask": "tool",
+         "text": json.dumps({"tool": "appliedDiff", "path": "src/util.py", "diff": "-old\n+new"})},
+        {"ts": t0 + 3000, "type": "ask", "ask": "command", "text": "pytest -q"},
+        {"ts": t0 + 4000, "type": "ask", "ask": "command_output", "text": "1 passed"},
+        {"ts": t0 + 5000, "type": "say", "say": "condense_context", "partial": False,
+         "contextCondense": {"cost": 0.001, "prevContextTokens": 9000, "newContextTokens": 1200,
+                             "summary": "Renamed helper; tests pass.", "condenseId": "c1"}},
+        {"ts": t0 + 6000, "type": "ask", "ask": "followup",
+         "text": json.dumps({"question": "Commit now?", "suggest": [{"answer": "yes"}, {"answer": "no"}]})},
+        {"ts": t0 + 7000, "type": "say", "say": "user_feedback", "text": "yes"},
+        {"ts": t0 + 8000, "type": "say", "say": "completion_result", "text": "Renamed and committed."},
+    ]
+
+
+def roo_api_records(t0=CLINE_T0 + 300000):
+    return [
+        {"role": "user", "content": [{"type": "text", "text": "<task>fix tests</task>"}], "ts": t0},
+        {"type": "reasoning", "summary": [{"type": "summary_text", "text": "check the runner"}],
+         "encrypted_content": "gAAAA", "ts": t0 + 1000},
+        {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_01A", "name": "execute_command",
+                                           "input": {"command": "pytest -q"}}], "ts": t0 + 2000},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_01A", "content": "3 passed",
+                                      "is_error": False}], "ts": t0 + 3000},
+    ]
+
+
+def roo_history_item(task_id, ts, task, workspace="/srv/proj"):
+    return {"id": task_id, "number": 1, "ts": ts, "task": task, "tokensIn": 1200, "tokensOut": 80,
+            "totalCost": 0.0041, "workspace": workspace, "mode": "code", "status": "completed"}
+
+
+def build_roo_code(home: Path) -> None:
+    gs = home / ".config/Code/User/globalStorage/rooveterinaryinc.roo-cline"
+    task = gs / "tasks" / ROO_TASK
+    _json(task / "ui_messages.json", roo_ui_records())
+    _json(task / "api_conversation_history.json", roo_api_records())
+    _json(task / "history_item.json", roo_history_item(ROO_TASK, CLINE_T0 + 208000, "rename the helper"))
+    _json(task / "task_metadata.json", {"files_in_context": [
+        {"path": "src/util.py", "record_state": "active", "record_source": "roo_edited",
+         "roo_read_date": CLINE_T0 + 202000, "roo_edit_date": CLINE_T0 + 202500, "user_edit_date": None}]})
+    _json(gs / "tasks/_index.json", {"version": 1, "updatedAt": CLINE_T0 + 208000, "entries": [
+        roo_history_item(ROO_TASK, CLINE_T0 + 208000, "rename the helper"),
+        roo_history_item(ROO_GONE_TASK, CLINE_T0 - 3600000, "a task deleted from disk"),
+    ]})
+    mock = home / ".vscode-mock/global-storage"
+    _json(mock / "tasks" / ROO_CLI_TASK / "api_conversation_history.json", roo_api_records())
+    _json(mock / "tasks" / ROO_CLI_TASK / "history_item.json",
+          roo_history_item(ROO_CLI_TASK, CLINE_T0 + 303000, "fix tests"))
+    _json(mock / "secrets.json", {"roo_cline_config_api_config": "{\"apiKey\":\"sk-not-real\"}"})
