@@ -53,7 +53,7 @@ analyzer/
   CHANGELOG.md                 analyzer release history, one entry per VERSION
   tests/                       unittest suite with synthetic fixtures; tests/run.sh
   pyproject.toml               installable as analyze-agent-artifacts
-  requirements.txt             third-party dependencies, none yet
+  requirements.txt             third-party dependencies (zstandard, for Zed threads)
 lab/                           Docker sandbox for running CLI agents against a scratch
                                home and exporting it for the collector; see lab/README.md
 README.md                      project overview; points at the per-part READMEs

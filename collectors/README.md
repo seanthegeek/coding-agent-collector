@@ -6,9 +6,9 @@ into a staging area, hash them, and produce one `tar.gz` with a JSONL manifest.
 Nothing is parsed on the host; that is the job of the analyst-side tool
 described in the [project README](../README.md).
 
-Covered tools, with how each one's catalog entries were validated. The
-evidence for every agent, with citations, is one document per agent under
-[research/](research/README.md):
+The evidence for every catalog entry, with citations and the level each
+claim rests on, is one document per agent under
+[research/](research/README.md).
 
 VS Code, VSCodium and their forks are collected through their `User`
 directories, which hold Copilot Chat sessions and extension state. The
