@@ -7,9 +7,14 @@ inside the container, the home is exported as a fake disk image, and the
 collector reads it in image mode exactly as it would a mounted volume.
 
 Nothing from the host is mounted into the container. The agent's home is a
-named volume, the container runs as an unprivileged user with every
-capability dropped, and the only things that cross the boundary are the API
-keys you choose to pass in and the export you ask for.
+named volume (`agent-home`, mounted at `/home/agent`). The container runs as
+the unprivileged user `agent` (uid 1000) with every capability dropped,
+`no-new-privileges`, a tmpfs `/tmp`, and limits of 512 processes and 4 GB of
+memory. The only things that cross the boundary are the API keys you choose
+to pass in and the export you ask for. The image is `node:22-bookworm` with
+git, ripgrep, sqlite3 and Python. It starts in `/home/agent/work/sample`, a
+small git repository with a `README.md`, `AGENTS.md` and `calc.py`, so
+project discovery has a working directory to find.
 
 ## Requirements
 
@@ -31,13 +36,36 @@ cp .env.example .env && $EDITOR .env  # keys; .env is gitignored
 ./lab.sh down                       # keeps the home volume for next time
 ```
 
-`collect` writes to `lab/out/<UTC stamp>/`:
+| Command | What it does |
+| --- | --- |
+| `build [--ollama]` | Build the `agent-lab:latest` image; with `--ollama`, also pull the Ollama image. |
+| `up [--ollama]` | Start the sandbox detached; with `--ollama`, also the Ollama service. |
+| `shell` | Open `bash` in the running sandbox as `agent`. |
+| `run CMD [ARGS...]` | Run one command in the running sandbox, for example `run claude`. |
+| `pull MODEL` | Pull a model into the running Ollama service. |
+| `collect [DIR]` | Export the home and run the collector and analyzer on it; see below. |
+| `down` | Stop and remove the containers, keeping the volumes. |
+| `clean` | Remove the containers and both volumes; see [Cleaning up](#cleaning-up). |
+| `help` | Print the command summary. |
+
+Every command but `help` needs `docker` and Compose v2 and stops with a
+message when they are missing. Once the Ollama container exists, `build`,
+`up`, `down` and `clean` include the Ollama service without `--ollama`.
+
+`collect` needs the sandbox container to exist, not to be running. It writes
+to `DIR`, by default `lab/out/<UTC stamp>/`:
 
 ```
-image/        home/agent/..., etc/passwd, root/.ollama (when Ollama ran)
-collection/   the collector's archive, manifest, summary and log
-analysis/     timeline.csv and sessions.csv from the analyzer
+image/        home/agent/..., etc/passwd, root/.ollama (when the Ollama container exists)
+collection/   the collector's archive, manifest, summary, log and .sha256
+analysis/     timeline.csv, sessions.csv and detect.json from the analyzer
 ```
+
+The export goes through `docker cp`, so times, modes and symlinks survive
+and symlinks are copied as links. The collector runs in image mode with `-q`
+against `image/`. The analyzer runs only when `python3` is on the host. When
+no transcript can be parsed yet, `collect` says so and still keeps the
+collection.
 
 Read the manifest for `secret: true` and `skipped_excluded` rows, compare
 what the agent wrote against `collectors/research/<agent>.md`, and lift
@@ -95,7 +123,13 @@ reference for Claude Code shows an allowlisting firewall if you need one.
 ## Cleaning up
 
 ```sh
-./lab.sh down     # stop, keep volumes
-./lab.sh clean    # remove containers, volumes and the image; lab/out stays
-rm -rf out        # the exports, once you have what you need
+./lab.sh down                     # stop, keep volumes
+./lab.sh clean                    # remove containers and volumes; lab/out stays
+docker image rm agent-lab:latest  # the image, which clean leaves behind
+rm -rf out                        # the exports, once you have what you need
 ```
+
+`clean` runs `docker compose down -v --rmi local`. `--rmi local` removes only
+images without a custom tag, and `compose.yaml` tags the sandbox image
+`agent-lab:latest`, so the image stays even though `clean` says it was
+removed. The pulled `ollama/ollama` image also stays.

@@ -31,20 +31,22 @@ python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host0
 # A home directory copied off a host by other means, or a mounted image
 python3 -m agent_analyzer timeline /mnt/evidence -o /cases/host02/analysis --host host02
 
-# A single agent directory copied on its own
-python3 -m agent_analyzer detect /cases/host03/alice-dot-claude --user alice
+# A single agent directory copied on its own, under its original name
+python3 -m agent_analyzer detect /cases/host03/alice/.claude --user alice
 ```
 
-`pip install .` in this directory installs the same thing as the
-`analyze-agent-artifacts` command.
+`pip install .` in this directory installs the package
+`coding-agent-analyzer`, which provides the same tool as the
+`analyze-agent-artifacts` command. `--version` prints
+`analyze-agent-artifacts <version>`.
 
 ## Inputs
 
 | Input | How it is read |
 | --- | --- |
-| `*_agent-artifacts.tar.gz` or `.zip` from either collector | Extracted to a temporary directory (or `--work-dir`), then read as an extracted collection. A `.sha256` sidecar next to the archive is verified and the result reported. Symlinks inside the archive are not materialised; their targets are in the manifest. |
-| Extracted collection: a directory holding `manifest.jsonl`, `collection.json` and `fs/` | Host name from `collection.json`; user, home and agent for every file from the manifest. Only rows with status `collected` are parsed. |
-| Anything else | Treated as a loose tree: a copied home directory, a mounted disk image, another collector's output, or one agent directory such as `.claude`. Homes and agents are discovered from the catalog, and the user is inferred from the path. |
+| Any file, normally `*_agent-artifacts.tar.gz` or `.zip` from either collector | Recognised as zip or tar by its content (any compression `tarfile` reads), extracted to a temporary directory (or `--work-dir`), then read as an extracted collection. If it does not unpack to `manifest.jsonl` and `fs/`, it is read as a loose tree. A `.sha256` sidecar next to the archive is verified and the result reported as a note. Symlinks, hard links and device files inside the archive are not materialised (their targets are in the manifest), and members with absolute paths, `..` or a drive letter are skipped. A file that is neither tar nor zip is an error. |
+| Extracted collection: a directory holding `manifest.jsonl` and `fs/` | Host name from `collection.json` `hostname` unless `--host` is given. User, home and agent for every file come from the manifest. Only rows with status `collected` and type `file` are read. |
+| Anything else | Treated as a loose tree: a copied home directory, a mounted disk image, another collector's output, or one agent directory such as `.claude`. Homes and agents are discovered from the catalog, and the user is inferred from the path. A directory with `fs/` but no `manifest.jsonl` is read from `fs/`. |
 
 In loose mode the analyzer walks the tree and treats a directory as a home
 when at least one catalog entry for a real agent matches under it. A
@@ -53,10 +55,15 @@ project, not a home. A home is never nested inside another, so project-level
 `.claude` directories inside a home are not mistaken for a second user. The
 user is taken from `home/<user>`, `Users/<user>`, `usr/home/<user>`,
 `export/home/<user>`, `root` or `var/root` in the path, falling back to the
-directory name, and left empty when the input root itself is the home. Pass
-`--user` and `--host` to fill in what the path cannot say. Loose-mode output
-is marked `inferred` in `detect --json` because none of this comes from a
-manifest.
+directory name, and left empty when the input root itself is the home. When
+the input is itself an agent directory, its name must match a one-segment
+catalog entry such as `.claude` or `.codex`. Its parent is then the only
+home, the user comes from the parent's path by the same conventions (with no
+directory-name fallback), and `source_file` is relative to that parent.
+Pass `--user` and `--host` to fill in what the path cannot say. Loose-mode
+output is marked `inferred` in `detect --json` because none of this comes
+from a manifest. Exclusions do not apply in loose mode: every file under a
+matched catalog path is attributed and offered to the parsers.
 
 ## Detection
 
@@ -143,29 +150,51 @@ Windsurf and Cursor need format work first.
 Protobuf stores are decoded by `agent_analyzer/protobuf.py`, a small
 schema-driven wire decoder, from field tables written into each parser. For
 a closed-source agent the field names come from the descriptors embedded in
-its binary; `tools/proto_descriptors.py` extracts and queries them. SQLite
+its binary. `tools/proto_descriptors.py extract BINARY OUT.json` extracts
+them, and `show OUT.json MESSAGE...` and `find OUT.json TEXT` query them. SQLite
 stores are copied together with their `-wal` and `-shm` sidecars into a
 scratch directory before being opened, so the evidence copy is never touched
 and rows still in the write-ahead log are not lost.
 
 ## Output
 
-`timeline` writes three files into `-o`:
+`detect` prints the input, its kind (`archive`, `collected` for an extracted
+collection, or `loose`), the host, any notes, and one line per user, home
+and agent with the number of files, their bytes (from the manifest `size`,
+or from disk in loose mode), and whether a parser exists. The notes cover the
+archive hash check, unreadable `collection.json`, manifest rows that do not
+parse, and how a loose root was interpreted. `--files` adds one
+`user<TAB>agent<TAB>path` line per attributed file. With `--json` the same
+data is printed as one object with the keys `input`, `kind`, `host`,
+`notes`, `homes` (`user`, `home`, `inferred`), `agents` (`user`, `home`,
+`agent`, `files`, `bytes`, `parser`, `inferred`), and with `--files` also
+`files` (`user`, `agent`, `path`). The collector's live snapshot files appear
+as agent `live` with no user, and `detect only`.
+
+`timeline` writes three files into `-o`, creating the directory if needed,
+and writes them even when no rows were produced:
 
 ```
 timeline.csv    one row per turn, tool call, tool result or system event
 sessions.csv    one row per session with first and last timestamp and counts
-detect.json     what detect would have printed, for the record
+detect.json     the detect --json object without its homes and files keys
 ```
+
+On stdout it prints the input, host and notes, one `problem:` line per file a
+parser could not read, the agents parsed and the agents only detected, the
+row count with a breakdown by agent and `turn_type`, and the session count.
+
+Both CSV files are UTF-8 without a byte order mark, quoted where needed as
+in RFC 4180, with CRLF line ends, and start with a header row.
 
 `timeline.csv` columns, in order:
 
 | Column | Meaning |
 | --- | --- |
-| `timestamp_utc` | ISO 8601 UTC with milliseconds, `2026-10-03T16:55:31.123Z`. Empty when the record has none. |
-| `host` | From `collection.json`, or `--host`. |
+| `timestamp_utc` | ISO 8601 UTC with milliseconds, `2026-10-03T16:55:31.123Z`. Times recorded without a zone are taken as UTC. Epoch numbers above 10^11 are read as milliseconds, smaller ones as seconds. Empty when the record has none. |
+| `host` | From `collection.json`, or `--host`. Empty for loose input without `--host`. |
 | `user` | From the manifest, inferred from the path, or `--user`. |
-| `agent` | Catalog agent name. |
+| `agent` | Catalog agent name of the parser that produced the row. |
 | `session_id` | The agent's own session or thread identifier. |
 | `project_path` | Working directory recorded for the turn. |
 | `git_branch` | Branch recorded for the turn, where the agent logs one. |
@@ -174,18 +203,24 @@ detect.json     what detect would have printed, for the record
 | `tool_name` | For `tool_use` rows: the tool. Codex shell calls are `shell`. |
 | `tool_use_id` | Links a `tool_use` row to its `tool_result`. |
 | `text` | The event's text with whitespace runs collapsed: the prompt, the response, the tool output, or for a tool call its most identifying argument (the Bash command, the edited file, the search pattern, the fetched URL), else the arguments as JSON. Full length by default; `--max-text-length` cuts it. |
-| `source_file` | Path of the record on the source host, as in the manifest. In loose mode it is relative to the input root. |
-| `source_line` | Line number in that file, so the full record can be read. |
+| `source_file` | Path of the record on the source host, as in the manifest. In loose mode it is the path relative to the input root with a leading `/`, or relative to the home when the input root is the home or an agent directory. |
+| `source_line` | Where the record is in that file, so the full record can be read. For line-oriented files (JSONL, Markdown, text) the 1-based line number. For SQLite stores it is the record's `rowid` (Tabby events: the event id), and for JSON documents an array index or `1`. Each parser's module docstring says which. `0` when no position applies. |
 
 Rows are sorted by timestamp, then by source file and line. Rows without a
 timestamp sort last. Injected context (`isMeta` user records in Claude Code,
 `developer` messages in Codex) is typed `system`, not `user`, so the `user`
-rows are what the person typed.
+rows are what the person typed. A line a parser cannot decode, such as a
+transcript's last line cut off mid-write, is reported as a `system` row,
+and the rest of the file is still read.
 
-`sessions.csv` columns: `host`, `user`, `agent`, `session_id`,
-`project_path`, `first_timestamp_utc`, `last_timestamp_utc`, `models`
-(space separated), `user_turns`, `assistant_turns`, `tool_calls`,
-`source_file` (the file that contributed most rows).
+`sessions.csv` has one row per `host`, `user`, `agent` and `session_id`,
+built from the timeline rows that have a session id. Its columns: `host`,
+`user`, `agent`, `session_id`, `project_path` (the first non-empty one),
+`first_timestamp_utc`, `last_timestamp_utc`, `models` (space separated, in
+order of first use), `user_turns` and `assistant_turns` (rows of those
+types), `tool_calls` (`tool_use` rows), and `source_file` (the file that
+contributed the most rows). It is sorted by first timestamp, so sessions
+with no timestamp come first.
 
 The two CSV layouts are a compatibility contract with the analysts and
 tooling that consume them. A future version may append new columns after the
@@ -193,28 +228,45 @@ existing ones, but existing columns keep their names, order and meaning.
 
 ## Options
 
-| Option | Meaning |
-| --- | --- |
-| `detect INPUT` | Print homes, users, agents, file counts and whether a parser exists. `--json` for machine-readable output, `--files` to list every attributed file. |
-| `timeline INPUT -o DIR` | Write `timeline.csv`, `sessions.csv` and `detect.json`. |
-| `catalog` | Print the bundled catalog; `--agents` prints agent names and parser availability. |
-| `--host NAME` | Host to record when the input has no `collection.json`. |
-| `--user NAME` | User to record for a home whose owner cannot be inferred. |
-| `--work-dir DIR` | Where to extract an archive. Default is a temporary directory. |
-| `--keep-extracted` | Keep the extracted archive and print its path. |
-| `--max-text-length N` | Cut the `text` column to N characters, marking the cut with an ellipsis. Default `0`, the full text. |
-| `--include-thinking` | Emit thinking and reasoning blocks as `thinking` rows. |
-| `--agent NAME` | Parse only this agent. Repeatable. |
+```
+analyze-agent-artifacts detect INPUT [--json] [--files] [common options]
+analyze-agent-artifacts timeline INPUT -o DIR [--max-text-length N] [--include-thinking] [--agent NAME]... [common options]
+analyze-agent-artifacts catalog [--agents]
+analyze-agent-artifacts --version
+```
 
-Exit code is `0` when rows were written, `1` when nothing was found or
-parsed, `2` for a bad input path.
+| Option | Subcommand | Meaning |
+| --- | --- | --- |
+| `--json` | `detect` | Print the machine-readable object described under [Output](#output). |
+| `--files` | `detect` | Also list every attributed file. |
+| `-o, --output DIR` | `timeline` | Output directory, required. |
+| `--max-text-length N` | `timeline` | Cut the `text` column to N characters, the last of which is an ellipsis. Default `0`, the full text. |
+| `--include-thinking` | `timeline` | Emit thinking and reasoning blocks as `thinking` rows. |
+| `--agent NAME` | `timeline` | Run only the parsers of this agent. Repeatable. An unknown name produces no rows. |
+| `--agents` | `catalog` | Print each agent in the catalog with `parser` or `detect only`, instead of the catalog text. |
+| `--host NAME` | `detect`, `timeline` | Host name to record. Overrides `collection.json`. |
+| `--user NAME` | `detect`, `timeline` | User to record for every home whose user is empty. |
+| `--work-dir DIR` | `detect`, `timeline` | Where to extract an archive. A `cac-*` directory is created inside it. Default: a `cac-analyzer-*` directory in the system temp directory. Either is removed afterwards unless `--keep-extracted` is given. |
+| `--keep-extracted` | `detect`, `timeline` | Keep the extracted archive and print `extracted to: <path>` on stderr. |
+
+`catalog` prints the bundled `catalog.txt` verbatim.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | `timeline` wrote at least one row; `detect` found agent artifacts, or `--json` was given; `catalog`, `--version`. |
+| `1` | `timeline` produced no rows (the three files are still written), or `detect` without `--json` found no agent artifacts. |
+| `2` | The input does not exist, a file input is neither tar nor zip, or the command line is invalid. |
 
 ## Testing
 
 ```sh
 cd analyzer
-tests/run.sh                 # python3 -m unittest discover -s tests
+tests/run.sh                 # python3 -m unittest discover -s tests -t tests
+tests/run.sh -p 'test_catalog*'   # extra arguments go to unittest discover
 ```
+
+`tests/run.sh` changes to the `analyzer/` directory itself, so it can be run
+from anywhere.
 
 The suite builds a fake image with two Linux users and a Windows profile
 tree, each holding synthetic state for every parsed agent in the exact shapes
@@ -222,6 +274,10 @@ the parsers were validated against, and checks detection in every input mode,
 each parser's rows, the CSV output, and the bundled catalog against the
 collector's `--list`. When `sh` and `tar` are available it also runs the sh
 collector on the fake image and analyses the resulting archive end to end.
+Tests that need `zstandard`, the collector script, `sh` and `tar`, or
+permission to create symlinks are skipped, with the reason, when it is
+missing. CI runs the suite on Python 3.9 and 3.12 with `requirements.txt`
+installed.
 
 ## Adding a parser
 

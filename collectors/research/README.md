@@ -5,8 +5,8 @@ One document per catalog agent, named after the agent as it appears in
 on each OS, which files are credentials, which subtrees are large or
 worthless, which files it writes inside projects, and where it records the
 project path, ending with the confidence in each finding. These documents
-are the evidence behind the `CATALOG`, `PROJECT_CATALOG`, `EXCLUDES` and
-`SECRET_GLOBS` tables; the collectors README table summarises the evidence
+are the evidence behind the `CATALOG`, `PROJECT_CATALOG`, `EXCLUDES`,
+`SECRET_GLOBS` and `DOCKER_VOLUMES` tables; the collectors README table summarises the evidence
 level. How transcripts are encoded is the analyzer's concern and lives in
 `analyzer/research/`.
 
@@ -19,9 +19,17 @@ document mentions `scratchpad/...`, that is the research session's working
 directory, kept only for the duration of the research; the cited sources are
 the repositories, package versions and URLs named beside it.
 
+`tools/check_research_links.py` (at the repository root) checks every
+GitHub citation in these documents and in `analyzer/research/`. For each
+link it checks that the file exists at the cited commit and that the cited
+line range lies inside it. It fetches each file from
+`raw.githubusercontent.com`, or uses local checkouts with `--repos DIR`
+(each named after its repository, with `HEAD` at the cited commit). Pass
+file names to check only those. It exits `1` when any link fails.
+
 | Agent | Document | Evidence | Notes |
 | --- | --- | --- | --- |
-| `agent-zero` | [agent-zero.md](agent-zero.md) | source (agent-zero, a0-install, a0-launcher, a0-connector) | state under the install dir `~/agent-zero/<instance>/usr`, not a dot dir; Docker volumes not covered |
+| `agent-zero` | [agent-zero.md](agent-zero.md) | source (agent-zero, a0-install, a0-launcher, a0-connector) | state under the install dir `~/agent-zero/<instance>/usr`, not a dot dir; named Docker volumes `*a0_usr` and `a0-launcher-*-usr` collected since 1.5.0 |
 | `aider` | [aider.md](aider.md) | source | history files live in the repository, home copies only as a fallback |
 | `amp` | [amp.md](amp.md) | shipped binary strings, docs | threads are server-side; XDG dirs on every OS |
 | `antigravity` | [antigravity.md](antigravity.md) | binary strings, real install, docs | CLI under `.gemini/antigravity-cli`; IDE now `.gemini/antigravity-ide` and `Antigravity IDE` app dirs |
@@ -59,7 +67,7 @@ the repositories, package versions and URLs named beside it.
 | `shared` | [shared.md](shared.md) | derived from the per-agent documents | cross-agent instruction and skill dirs, `.env` |
 | `shell-history` | [shell-history.md](shell-history.md) | shell documentation | formats and which carry timestamps |
 | `shellgpt` | [shellgpt.md](shellgpt.md) | source | chat history in the system temp dir, collected only on Windows |
-| `tabby` | [tabby.md](tabby.md) | source, JetBrains docs | self-hosted server; Docker `TABBY_ROOT=/data` not covered |
+| `tabby` | [tabby.md](tabby.md) | source, JetBrains docs | self-hosted server; Docker `TABBY_ROOT=/data` reached only through a named volume matching `*tabby*` |
 | `twinny` | [twinny.md](twinny.md) | source | chats in `state.vscdb`; project root inferred from the embeddings manifest |
 | `vscode` | [vscode.md](vscode.md) | source (vscode, vscode-copilot-chat) | remote server data dirs hold Copilot Chat state on WSL and SSH hosts |
 | `windsurf` | [windsurf.md](windsurf.md) | official docs, community write-ups | rebrand to Devin in progress; new `.windsurf/transcripts` |
