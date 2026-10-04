@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Every job only checks out the repository and downloads public release
+# binaries, so the token needs no more than read access to the contents.
+permissions:
+  contents: read
+
 # Linter versions for the lint job. AGENTS.md ("Quality gates") and
 # .githooks/pre-commit list the same versions; change all three together.
 env:
