@@ -7,8 +7,10 @@ from .base import Options, Parser
 from .antigravity import AntigravityParser
 from .claude_code import ClaudeCodeParser
 from .codex import CodexParser
+from .vscode import VsCodeParser
+from .zed import ZedParser
 
-ALL: List[Parser] = [ClaudeCodeParser(), CodexParser(), AntigravityParser()]
+ALL: List[Parser] = [ClaudeCodeParser(), CodexParser(), AntigravityParser(), ZedParser(), VsCodeParser()]
 
 
 def by_agent() -> Dict[str, List[Parser]]:

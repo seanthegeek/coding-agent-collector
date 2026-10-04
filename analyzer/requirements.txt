@@ -1,3 +1,7 @@
-# The analyzer currently uses only the Python standard library (3.9+).
-# Third-party parsers (protobuf for Antigravity and Windsurf, zstandard for
-# Zed) will be added here when those parsers land.
+# The analyzer is standard library first (Python 3.9+). Third-party packages
+# are listed here only when a format needs them; keep pyproject.toml in step.
+# Parsers import them lazily and report undecodable records as system rows
+# when a package is missing.
+
+# Zed: threads/threads.db stores each thread as zstd-compressed JSON.
+zstandard

@@ -121,6 +121,8 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     # Nested catalog entries: Antigravity CLI inside ~/.gemini, and a Cline
     # extension inside VS Code's globalStorage. The nested agent must win.
     build_antigravity(home / ".gemini/antigravity-cli")
+    build_zed(home)
+    build_vscode(home)
     (home / ".gemini/settings.json").write_text("{}", encoding="utf-8")
     gs = home / ".config/Code/User/globalStorage"
     gs.mkdir(parents=True, exist_ok=True)
@@ -240,3 +242,145 @@ def build_antigravity(base: Path) -> None:
     summ.close()
     _jsonl(base / "history.jsonl", [{"display": "clean the logs", "timestamp": AGY_T0 * 1000, "workspace": "/home/u/proj"}])
     (base / "antigravity-oauth-token").write_text("secret", encoding="utf-8")
+
+
+ZED_THREAD = "6f1c0b2e-1111-4bbb-8ccc-000000000001"
+ZED_EXTERNAL = "ext-claude-code-sess-1"
+
+
+def zed_thread_record(cwd="/srv/proj"):
+    """A `threads.data` blob, version 0.3.0, as in analyzer/research/zed.md."""
+    return {
+        "version": "0.3.0", "title": "Fix flaky test", "updated_at": "2026-10-03T09:01:05Z",
+        "initial_project_snapshot": {"worktree_snapshots": [{"worktree_path": cwd, "git_state": {
+            "remote_url": "git@github.com:alice/proj.git", "head_sha": "abc123", "current_branch": "main", "diff": None}}],
+            "timestamp": "2026-10-03T09:00:00Z"},
+        "model": {"provider": "anthropic", "model": "claude-sonnet-4-5"},
+        "messages": [
+            {"User": {"id": "9a7d6c5b-2222-4ddd-9eee-000000000002", "content": [
+                {"Text": "run the tests"}, {"Mention": {"uri": "file://%s/README.md" % cwd, "content": ""}}]}},
+            {"Agent": {"content": [
+                {"Thinking": {"text": "use pytest", "signature": None}},
+                {"ToolUse": {"id": "toolu_01", "name": "terminal", "raw_input": "{\"command\":\"pytest -q\"}",
+                             "input": {"type": "json", "value": {"command": "pytest -q"}},
+                             "is_input_complete": True, "thought_signature": None}},
+                {"Text": "All 3 tests pass."}],
+                "tool_results": {"toolu_01": {"tool_use_id": "toolu_01", "tool_name": "terminal", "is_error": False,
+                                              "content": [{"Text": "3 passed"}], "output": None}},
+                "reasoning_details": None}},
+            "Resume",
+            {"Compaction": {"Summary": "ran the tests"}},
+        ],
+    }
+
+
+def zed_blob(record):
+    """(data_type, data): zstd when the zstandard package is installed, as Zed
+    writes it, otherwise the `json` form Zed also accepts."""
+    raw = json.dumps(record).encode("utf-8")
+    try:
+        import zstandard
+    except ImportError:
+        return "json", raw
+    return "zstd", zstandard.ZstdCompressor(level=3).compress(raw)
+
+
+def build_zed(home: Path) -> None:
+    data = home / ".local/share/zed"
+    (data / "threads").mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(data / "threads/threads.db"))
+    con.executescript("""
+    CREATE TABLE threads (id TEXT PRIMARY KEY, summary TEXT NOT NULL, updated_at TEXT NOT NULL,
+      data_type TEXT NOT NULL, data BLOB NOT NULL);
+    ALTER TABLE threads ADD COLUMN parent_id TEXT;
+    ALTER TABLE threads ADD COLUMN folder_paths TEXT;
+    ALTER TABLE threads ADD COLUMN folder_paths_order TEXT;
+    ALTER TABLE threads ADD COLUMN created_at TEXT;
+    """)
+    dtype, blob = zed_blob(zed_thread_record())
+    con.execute("INSERT INTO threads(id,parent_id,folder_paths,folder_paths_order,summary,updated_at,data_type,data,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (ZED_THREAD, None, "/srv/proj", "0", "Fix flaky test", "2026-10-03T09:01:05.000000000+00:00", dtype, blob,
+                 "2026-10-03T09:00:00.000000000+00:00"))
+    con.commit()
+    con.close()
+    (data / "db/0-stable").mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(data / "db/0-stable/db.sqlite"))
+    con.executescript("""
+    CREATE TABLE sidebar_threads(thread_id BLOB PRIMARY KEY, session_id TEXT, agent_id TEXT, title TEXT NOT NULL,
+      updated_at TEXT NOT NULL, created_at TEXT, folder_paths TEXT, folder_paths_order TEXT, archived INTEGER DEFAULT 0,
+      main_worktree_paths TEXT, main_worktree_paths_order TEXT, remote_connection TEXT);
+    ALTER TABLE sidebar_threads ADD COLUMN interacted_at TEXT;
+    ALTER TABLE sidebar_threads ADD COLUMN title_override TEXT;
+    """)
+    con.execute("INSERT INTO sidebar_threads(thread_id,session_id,agent_id,title,updated_at,created_at,folder_paths,"
+                "folder_paths_order,archived) VALUES (?,?,?,?,?,?,?,?,?)",
+                (os.urandom(16), ZED_THREAD, None, "Fix flaky test", "2026-10-03T09:01:05+00:00",
+                 "2026-10-03T09:00:00+00:00", "/srv/proj", "0", 0))
+    con.execute("INSERT INTO sidebar_threads(thread_id,session_id,agent_id,title,updated_at,folder_paths,folder_paths_order) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (os.urandom(16), ZED_EXTERNAL, "claude-code", "External thread", "2026-10-03T10:00:00+00:00", "/srv/proj", "0"))
+    con.commit()
+    con.close()
+    (home / ".config/zed").mkdir(parents=True, exist_ok=True)
+    (home / ".config/zed/settings.json").write_text('{"agent": {"default_model": {}}}', encoding="utf-8")
+
+
+VSCODE_SESSION = "9ab0c1d2-0000-4000-8000-00000000c0de"
+VSCODE_LEGACY_SESSION = "9ab0c1d2-0000-4000-8000-0000000001d0"
+VSCODE_T0 = 1791025200000  # 2026-10-03T11:00:00Z, ms
+VSCODE_WS = ".config/Code/User/workspaceStorage/abc123"
+
+
+def vscode_log_records(cwd="/srv/proj"):
+    """A `chatSessions/<id>.jsonl` mutation log, as in analyzer/research/vscode.md.
+    The modelId, agent id and responder strings come from the closed Copilot
+    extension and are invented."""
+    t = VSCODE_T0
+    return [
+        {"kind": 0, "v": {"version": 3, "creationDate": t, "customTitle": None, "initialLocation": "panel",
+                          "responderUsername": "GitHub Copilot", "sessionId": VSCODE_SESSION, "requests": [
+            {"requestId": "request_1", "timestamp": t + 1000, "message": {"text": "run tests", "parts": []},
+             "agent": {"id": "github.copilot.default", "name": "GitHub Copilot", "extensionId": {"value": "GitHub.copilot-chat"}},
+             "modelId": "copilot/gpt-4.1", "modeInfo": {"kind": "agent", "telemetryModeId": "agent", "isBuiltin": True},
+             "variableData": {"variables": [{"id": "file://%s/test_a.py" % cwd, "name": "test_a.py", "value": "..."}]},
+             "response": [
+                 {"kind": "thinking", "value": "Need pytest", "id": "t1"},
+                 {"kind": "toolInvocationSerialized", "toolCallId": "call_a", "toolId": "run_in_terminal",
+                  "invocationMessage": "Running command", "isComplete": True, "isConfirmed": True,
+                  "toolSpecificData": {"kind": "terminal", "commandLine": {"original": "pytest"}},
+                  "resultDetails": {"input": "pytest", "output": [{"type": "embed", "value": "3 passed"}]}},
+                 {"value": "All tests pass in "},
+                 {"kind": "inlineReference", "inlineReference": {"scheme": "file", "path": cwd + "/test_a.py"},
+                  "name": "test_a.py"},
+                 {"value": "."}],
+             "responseId": "response_1", "responseTimestamp": t + 2000, "modelState": {"value": "complete"}}],
+            "workingDirectory": "file://%s" % cwd}},
+        {"kind": 2, "k": ["requests"], "v": [
+            {"requestId": "request_2", "timestamp": t + 10000, "message": {"text": "thanks", "parts": []},
+             "variableData": {"variables": []}, "modelId": "copilot/gpt-4.1", "response": []}]},
+        {"kind": 2, "k": ["requests", 1, "response"], "v": [{"value": "You're welcome."}]},
+        {"kind": 1, "k": ["requests", 1, "responseTimestamp"], "v": t + 11000},
+        {"kind": 1, "k": ["customTitle"], "v": "Run tests"},
+    ]
+
+
+def vscode_legacy_session(cwd="/srv/proj"):
+    """A pre-1.109 flat `.json` session from an empty window on a remote host."""
+    t = VSCODE_T0 - 3600000
+    return {"version": 3, "sessionId": VSCODE_LEGACY_SESSION, "creationDate": t, "initialLocation": "panel",
+            "responderUsername": "GitHub Copilot", "workingDirectory": "file://%s" % cwd, "requests": [
+                {"requestId": "request_1", "timestamp": t + 1000, "message": "where is the config?",
+                 "modelId": "copilot/gpt-4o", "response": ["It is in ", "config.toml."],
+                 "responseTimestamp": t + 2000, "result": {"errorDetails": {"message": "Rate limited"}}}]}
+
+
+def build_vscode(home: Path) -> None:
+    ws = home / VSCODE_WS
+    _jsonl(ws / "chatSessions" / (VSCODE_SESSION + ".jsonl"), vscode_log_records())
+    (ws / "workspace.json").write_text(json.dumps({"folder": "file:///srv/proj"}), encoding="utf-8")
+    (home / ".config/Code/User/settings.json").write_text('{"chat.useLogSessionStorage": true}', encoding="utf-8")
+    legacy = home / ".vscode-server/data/User/globalStorage/emptyWindowChatSessions"
+    legacy.mkdir(parents=True, exist_ok=True)
+    (legacy / (VSCODE_LEGACY_SESSION + ".json")).write_text(json.dumps(vscode_legacy_session(), indent=2),
+                                                            encoding="utf-8")

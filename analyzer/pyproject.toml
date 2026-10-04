@@ -9,7 +9,7 @@ description = "Analyst-side parser for coding-agent-collector output: detects AI
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.9"
-dependencies = []
+dependencies = ["zstandard"]
 
 [project.scripts]
 analyze-agent-artifacts = "agent_analyzer.cli:main"

@@ -4,8 +4,11 @@ The analyst-side half of coding-agent-collector. It takes a collector archive,
 an extracted collection, or any loose directory tree, detects which AI coding
 agents left state in it, and parses the transcripts it knows how to read into
 one normalised CSV timeline. It never runs on the host under investigation, so
-unlike the collectors it may carry dependencies. Today it needs only Python
-3.9 or later and the standard library.
+unlike the collectors it may carry dependencies. It needs Python 3.9 or
+later and the packages in `requirements.txt` (`pip install -r
+requirements.txt`): today only `zstandard`, for Zed threads. Without it the
+Zed parser reports each thread as one undecodable `system` row and
+everything else still runs.
 
 ## Quick start
 
@@ -76,6 +79,8 @@ agents and which have parsers.
 | `claude-code` | `.claude/projects/<slug>/<session>.jsonl`, subagent transcripts under the session directory, `.claude/history.jsonl` | Real install, Claude Code 2.x, October 2026 |
 | `codex-cli` | `.codex/sessions/**/rollout-*.jsonl`, `.codex/history.jsonl` | Real install, Codex CLI, October 2026 |
 | `antigravity` | `.gemini/antigravity-cli/conversations/*.db` (SQLite of protobuf steps, with WAL sidecars), `conversation_summaries.db`, `history.jsonl` | Protobuf descriptors extracted from the shipped `agy` binary plus a real install, October 2026; see `research/antigravity.md` |
+| `zed` | `threads/threads.db` (zstd-compressed JSON threads; needs `zstandard`) and `db/0-<channel>/db.sqlite` `sidebar_threads` (external-agent threads as `system` rows) under `.local/share/zed`, `Library/Application Support/Zed`, `AppData/Local/Zed` or the Flatpak data dir. No per-message timestamps: messages carry the thread's `updated_at` | Source at a846890, synthetic fixture |
+| `vscode` | `User/workspaceStorage/<hash>/chatSessions/*.jsonl` and `.json` (with the sibling `workspace.json` for the project), `User/globalStorage/emptyWindowChatSessions/*`, `User/globalStorage/transferredChatSessions/*.json`, for Code, Code - Insiders, VSCodium, Positron, Trae and the `.vscode-server*/data` remote layout. Covers Copilot Chat; its model and participant ids are opaque strings | Source at d7622a5, synthetic fixture |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
@@ -87,7 +92,7 @@ filter on `source_file` to drop them.
 
 Agents detected but not yet parsed: everything else in the catalog. The
 record schemas for Gemini CLI, Qwen Code, Cline, Roo Code, Kilo Code,
-Continue, Copilot Chat, Aider, Goose, OpenCode, Crush, Zed and Amazon Q CLI
+Continue, Aider, Goose, OpenCode, Crush and Amazon Q CLI
 are documented under `research/` and are next in line. Windsurf and Cursor
 need format work first.
 
