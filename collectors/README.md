@@ -88,7 +88,7 @@ powershell.exe -ExecutionPolicy Bypass -File Collect-AgentArtifacts.ps1 -Root E:
 `-ExecutionPolicy Bypass` is needed because fresh Windows installs default to
 `Restricted`; it affects only that process and does not change machine policy.
 The parameters mirror the sh options: `-OutputDir`, `-Root`, `-Users`,
-`-Project`, `-Full`, `-NoSecrets`, `-NoLive`, `-NoProjects`, `-NoDocker`,
+`-Project`, `-Full`, `-NoSecrets`, `-NoProjects`, `-NoDocker`,
 `-MaxFileSizeMB`, `-KeepStaging`, `-List`, `-Quiet`, `-Version`. `-o`, `-r`,
 `-u`, `-p`, `-k` and `-q` are accepted as aliases. `-Users` takes one
 comma-separated string. `-Project` takes a PowerShell array
@@ -109,12 +109,11 @@ archive's extension.
 | Option | Meaning |
 | --- | --- |
 | `-o, --output DIR` | Where to write the archive, manifest, summary and log. Created if missing. Default: current directory. |
-| `-r, --root DIR` | Alternate root such as a mounted disk image. Switches to image mode and disables the live snapshot. `-r /` is live mode. |
+| `-r, --root DIR` | Alternate root such as a mounted disk image. Switches to image mode. `-r /` is live mode. |
 | `-u, --users LIST` | Comma-separated usernames to collect. Default: every home directory found. Names are compared with the user name from the password database, or with the directory name for a home found by globbing. The sh collector compares case-sensitively and the PowerShell collector does not. Also limits the rootless Docker directories. |
 | `-p, --project DIR` | Extra project directory whose project-level artifacts (`PROJECT_CATALOG`) are collected, as for a discovered project. Repeatable. Give the full path, including the mount point in image mode, because it is not prefixed with the root. The sh collector ignores a relative path. Has no effect with `--no-projects`. |
 | `--full` | Disable the default size exclusions (model blobs, caches, extension and daemon binaries, marketplace clones). |
-| `--no-secrets` | Skip credential files. By default they are collected and flagged `secret: true` in the manifest. Also stops the capture of `live/environ/`. |
-| `--no-live` | Skip the live system snapshot. |
+| `--no-secrets` | Skip credential files. By default they are collected and flagged `secret: true` in the manifest. |
 | `--no-projects` | Skip project-level artifact discovery and `-p`. |
 | `--no-docker` | Skip Docker and Podman named volume enumeration (see [Docker volumes](#docker-volumes)). |
 | `--max-file-size MB` | Skip individual files larger than this whole number of MiB. Default 256, `0` disables. |
@@ -229,50 +228,14 @@ Remote development state is collected too: `~/.vscode-server`,
 `~/.kiro-server` keep the same `User` layout as the desktop editor, on the
 WSL or SSH host rather than the workstation.
 
-### Live system snapshot
+### Host state is not collected
 
-The files on disk say what the agents did; the snapshot says what was
-running when the collector ran. In live mode (not with `-r`, and skipped by
-`--no-live` / `-NoLive`) the collector writes a `live/` directory of plain
-text files, the output of the commands and queries below. Each file gets a
-manifest row with agent `live`, an empty `user`, `home` and `path`,
-`archive_path` `live/<file>`, and the times, owner and mode of the written
-file. The snapshot answers the questions a responder has before opening a
-transcript: is an agent or gateway still running, as which user, started
-when, from which directory, with which API keys and endpoints in its
-environment, listening on which port, and who was logged in.
-
-| File | macOS, Linux, BSD | Windows |
-| --- | --- | --- |
-| `live/system.txt` | `hostname`, `uname -a`, `date -u`, `uptime`, `id`, `mount`, `df -k`, `/etc/os-release` when present, `sw_vers` on macOS | host name, UTC time, `Win32_OperatingSystem` (caption, version, build, architecture, install date, last boot, local time, registered user), `Win32_ComputerSystem` (name, domain, manufacturer, model, logged-on user, memory), `whoami /all`, and the `Win32_LogicalDisk` volumes |
-| `live/users.txt` | `getent passwd` or `/etc/passwd`; `dscl . -list /Users NFSHomeDirectory` on macOS | each `ProfileList` SID and profile path, and the local accounts from `Win32_UserAccount` (name, SID, disabled, locked out, password required) |
-| `live/logins.txt` | `who`, `last -n 50` | `query user`, and `Win32_LoggedOnUser` as account and logon id |
-| `live/processes.txt` | `ps -axo pid,ppid,user,lstart,etime,args`: pid, parent, user, start time, elapsed time and full command line. Where that is unsupported, `ps -eo pid,ppid,user,etime,args` (no start time), then `ps aux`, then `ps` | `Win32_Process`: pid, parent pid, session, creation time (UTC), executable path and command line. No owner; that is in `agent-processes.txt` |
-| `live/agent-processes.txt` | the lines of `processes.txt` that match an agent name (the `AGENT_PROC_RE` list in the script, case-insensitive), without lines containing `collect-agent-artifacts` | the `Win32_Process` entries whose command line or executable path matches the Windows form of `AGENT_PROC_RE`, without the collector, each with pid, parent, owner (`DOMAIN\user`), creation time, executable path and command line |
-| `live/environ/<pid>.txt` | on Linux, or any host with `/proc`: for each pid in `agent-processes.txt` whose `/proc/<pid>/environ` is readable, the environment one variable per line, then the working directory from `/proc/<pid>/cwd`. Without root only the responder's own processes are readable. Flagged `secret: true` because environments hold API keys, and not captured with `--no-secrets`. When `ps` fell back to `ps aux`, the first column is a user name and nothing is captured | not captured |
-| `live/network.txt` | `ss -tunap`; without `ss`, `netstat -anp`, or `netstat -an` where that fails. The owning process of another user's socket needs root | `Get-NetTCPConnection` (TCP only) with owning pid and process name, else `netstat -ano` |
-| `live/services.txt` | `launchctl list` where present, and `systemctl list-units --type=service --all --no-pager` where present | `Win32_Service`: name, state, start mode, account and path |
-| `live/scheduled-tasks.txt` | not written (user units and launch agents are collected as files through the catalog) | `Get-ScheduledTask`: task path and name, state, author, and each action's command and arguments; `schtasks /query /fo LIST /v` where the cmdlet is missing |
-
-Where a file holds several commands, each starts with a `# <command>` line.
-That covers `system.txt`, `users.txt` and `logins.txt` on every platform,
-and `network.txt` and `services.txt` from the sh collector (except the
-`netstat -anp` output). The process lists, the environment files and the
-other Windows files have no header line.
-
-Each command runs once, and a failure never stops the run, so a hardened
-host still yields the files it can. In the sh collector a command's error
-output goes into its file. The exceptions are the `ps` attempts before the
-last one and `netstat -anp`, whose errors are discarded so the fallback
-runs cleanly. In the PowerShell collector a query that throws replaces that
-file's whole content with `error: <message>`. Non-terminating errors, such
-as access denied on one CIM class, go to the console and not to the file.
-Under PowerShell 7 on Linux or macOS the CIM cmdlets do not exist, so use
-the sh collector for a live snapshot there. A file left empty is deleted
-and gets no manifest row. Nothing in the snapshot is parsed on the host.
-The analyzer lists the `live` rows as a detected-only agent with no user
-and does not parse them. They are for the responder to read alongside the
-timeline.
+The collectors take files from disk only. Running processes, process
+environments, logged-in users, network connections, services and scheduled
+tasks are not captured: the collectors supplement an EDR, which already
+records that host state. Collectors before 1.6.0 wrote a `live/` snapshot of
+it; see [CHANGELOG.md](CHANGELOG.md). The host name is in the `hostname`
+field of `collection.json`.
 
 ### Docker volumes
 
@@ -351,9 +314,7 @@ holds the chat history, so that file is collected unflagged; the keys to
 redact are `cursorAuth/*` and `windsurfAuthStatus`. Kilo Code's `kilo.db` and
 OpenCode's `opencode.db` embed tokens in their `account` and `credential`
 tables and are flagged whole. Use `--no-secrets` to leave credential
-files out. They are then recorded with status `skipped_secret`. Process
-environments captured under `live/environ/` are flagged the same way. With
-`--no-secrets` they are not captured at all, so they get no row.
+files out. They are then recorded with status `skipped_secret`.
 
 Exclusion and credential patterns are matched relative to the directory being
 collected, a home, a discovered project or a Docker volume's `_data`, and
@@ -389,8 +350,6 @@ and:
   `error_copy` row.
 - The root-owned Docker and Podman data roots are reported as unreadable
   (see [Docker volumes](#docker-volumes)).
-- `live/environ/` holds only the responder's own processes, and `ss` or
-  `netstat` omit the owning process of other users' sockets.
 
 ## Output
 
@@ -418,8 +377,6 @@ Inside the archive (the sh collector's tar members start with `./`):
 
 ```
 fs/<original path>          collected files, mirroring the source filesystem
-live/                       live snapshot (live mode only)
-live/environ/<pid>.txt      agent process environments (sh collector, live mode only)
 manifest.jsonl
 collection.json
 collector.log
@@ -438,18 +395,18 @@ Each manifest row is one JSON object:
 
 | Field | Meaning |
 | --- | --- |
-| `user` | Owner of the home the path was found under. For a project file, the user whose agent state referenced the project (empty for a `-p` directory outside every home). `docker` for volume rows. Empty for `live/` rows. |
-| `home` | The base the path was collected relative to: the home directory, the project directory, or a volume's `_data`, including the `-r` root. Empty for `live/` rows. |
-| `agent` | Catalog agent name. `project` for files found through the project catalog, `live` for snapshot files, the `DOCKER_VOLUMES` agent for a matched volume, and empty for `skipped_unmatched_volume`. |
-| `path` | The original full path, including the `-r` root in image mode. Empty for `live/` rows. |
-| `archive_path` | Where the file is in the archive: `fs/<original path>` or `live/<file>`. Set for `collected` rows, and for `symlink` rows from the sh collector. Empty otherwise. |
+| `user` | Owner of the home the path was found under. For a project file, the user whose agent state referenced the project (empty for a `-p` directory outside every home). `docker` for volume rows. |
+| `home` | The base the path was collected relative to: the home directory, the project directory, or a volume's `_data`, including the `-r` root. |
+| `agent` | Catalog agent name. `project` for files found through the project catalog, the `DOCKER_VOLUMES` agent for a matched volume, and empty for `skipped_unmatched_volume`. |
+| `path` | The original full path, including the `-r` root in image mode. |
+| `archive_path` | Where the file is in the archive: `fs/<original path>`. Set for `collected` rows, and for `symlink` rows from the sh collector. Empty otherwise. |
 | `type` | `file`, `symlink`, or `dir` (an excluded directory or an unmatched volume). |
 | `size` | Bytes. For a `dir` row, the size of everything under it: `du -sk` × 1024 from the sh collector, the sum of file lengths from the PowerShell collector. |
 | `mtime`, `atime`, `ctime`, `btime` | Epoch seconds, read before the copy. `btime` (creation) is `0` where the platform cannot report it, and `ctime` is `0` from the PowerShell collector. All four are `0` for an excluded directory from the sh collector, for an unmatched volume, and on a host with neither GNU nor BSD `stat` (where `uid`, `gid` and `mode` are `0` too). |
 | `uid`, `gid`, `mode` | Numeric owner and group, and the permission bits as an octal string (`"644"`), from `lstat`. `0`, `0` and `""` from the PowerShell collector. |
 | `owner`, `attributes` | PowerShell collector only: the owning account name (or SID when the name cannot be resolved) and the attribute list, such as `Archive, ReparsePoint`. |
 | `sha256` | SHA-256 of the staged copy, set only for `collected` rows. The sh collector leaves it empty when it found no hash tool (`capabilities.hash_tool` is `none`). |
-| `secret` | `true` when the path, relative to `home`, matched a credential pattern, and for `live/environ/` files. |
+| `secret` | `true` when the path, relative to `home`, matched a credential pattern. |
 | `status` | See below. |
 | `target` | For a symlink, its target as stored. The PowerShell collector joins several reparse point targets with `;`. |
 | `error` | For `error_copy`, why the copy failed: `cp`'s message or the .NET exception. |
@@ -469,8 +426,7 @@ for `--no-secrets`, then for size. A symlink is therefore never skipped for
 size, and a credential file is `skipped_secret` under `--no-secrets`
 whatever its size.
 Timestamps come from `lstat` on the original file (sh), or from the item's
-times before the copy (PowerShell). Snapshot rows carry the times, owner
-and mode of the written snapshot file. On a live Windows host the archive
+times before the copy (PowerShell). On a live Windows host the archive
 path is `fs/<drive letter>/<path>`, for example
 `fs/C/Users/alice/.claude/history.jsonl`. In image mode it is relative to
 the root, as on other platforms.
@@ -480,14 +436,14 @@ the root, as on other platforms.
 | Field | Meaning |
 | --- | --- |
 | `tool`, `version` | `collect-agent-artifacts` and the collector version. |
-| `hostname` | sh: `hostname`, else `uname -n`. PowerShell: `COMPUTERNAME`, else the DNS host name. |
+| `hostname` | The host name, the only record of it in the output. sh: `hostname`, else `uname -n`. PowerShell: `COMPUTERNAME`, else the DNS host name. Always read from the machine running the collector, so in image mode (`-r`) it is the analyst workstation's name, not the imaged host's. |
 | `mode` | `live` or `image`. |
 | `root` | The `-r` root. In live mode, `/` (sh) or `\` (PowerShell). |
 | `platform` | sh: `uname -s`, `-r` and `-m`. PowerShell: `Windows <OS version> <PROCESSOR_ARCHITECTURE> PowerShell <version>`. |
 | `run_as_uid` | sh only: the numeric uid the collector ran as, as a string. |
 | `run_as`, `run_as_admin` | PowerShell only: the account the collector ran as, and whether it was elevated. |
 | `started`, `finished` | UTC to the second, `2026-10-03T16:55:31Z`. `finished` is taken before archiving. |
-| `options` | `full`, `no_secrets`, `no_live` (`true` in image mode), `max_file_size_bytes` (`0` means no limit), `users_filter` (the `-u` string), `no_docker`. `--no-projects` and `-p` are not recorded. |
+| `options` | `full`, `no_secrets`, `max_file_size_bytes` (`0` means no limit), `users_filter` (the `-u` string), `no_docker`. `--no-projects` and `-p` are not recorded. |
 | `capabilities` | sh: `hash_tool` (`sha256sum`, `shasum`, `sha256`, `openssl` or `none`), `stat_mode` (`gnu`, `gnu0` for GNU `stat` without birth time, `bsd` or `none`) and `worker_shell`. PowerShell: `hash_tool` (`Get-FileHash`) and `archiver` (`tar.exe` or `ZipFile`, as chosen at startup). |
 | `users`, `homes` | Parallel lists of the users and homes collected. |
 | `projects` | The project directories collected from, discovered or given with `-p`. |

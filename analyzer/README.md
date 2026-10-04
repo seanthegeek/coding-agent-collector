@@ -168,8 +168,9 @@ parse, and how a loose root was interpreted. `--files` adds one
 data is printed as one object with the keys `input`, `kind`, `host`,
 `notes`, `homes` (`user`, `home`, `inferred`), `agents` (`user`, `home`,
 `agent`, `files`, `bytes`, `parser`, `inferred`), and with `--files` also
-`files` (`user`, `agent`, `path`). The collector's live snapshot files appear
-as agent `live` with no user, and `detect only`.
+`files` (`user`, `agent`, `path`). Collections made by collectors before
+1.6.0 also hold a `live/` system snapshot, which appears as agent `live`
+with no user, and `detect only`.
 
 `timeline` writes three files into `-o`, creating the directory if needed,
 and writes them even when no rows were produced:

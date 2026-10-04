@@ -246,7 +246,7 @@ class ProjectRoutingTests(unittest.TestCase):
         _wal_db(proj / ".crush/crush.db", CRUSH_SCHEMA, crush_records())
         out = self.tmp / "out"
         out.mkdir()
-        r = subprocess.run(["sh", str(collector), "-r", str(root), "-o", str(out), "-q", "--no-live"],
+        r = subprocess.run(["sh", str(collector), "-r", str(root), "-o", str(out), "-q"],
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         archives = list(out.glob("*.tar.gz"))

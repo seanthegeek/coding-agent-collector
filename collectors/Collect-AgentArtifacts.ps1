@@ -7,9 +7,10 @@
   of AI coding agents (Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot
   CLI, Cursor, Windsurf, Continue, Aider, Ollama, ...) for every user profile on
   a host, from Docker and Podman named volumes it can reach on disk, plus
-  PowerShell history and a live system snapshot, into a single
+  PowerShell history, into a single
   tar.gz (via the built-in tar.exe on Windows 10 1803+) or zip, with a JSONL
   manifest. Same catalog, manifest schema and archive layout as the sh script.
+  Host state (processes, users, network) is left to the EDR it supplements.
 
   Windows PowerShell 5.1 compatible. No modules, no prompts, nothing from stdin.
   Run as:  powershell.exe -ExecutionPolicy Bypass -File Collect-AgentArtifacts.ps1 -OutputDir C:\ir
@@ -17,7 +18,7 @@
 .PARAMETER OutputDir
   Directory for the archive (default: current directory).
 .PARAMETER Root
-  Alternate root such as a mounted disk image (image mode; disables the live snapshot).
+  Alternate root such as a mounted disk image (image mode).
 .PARAMETER Users
   Comma-separated profile names to collect (default: all).
 .PARAMETER Project
@@ -26,8 +27,6 @@
   Disable default size exclusions.
 .PARAMETER NoSecrets
   Skip credential files instead of collecting them.
-.PARAMETER NoLive
-  Skip the live system snapshot.
 .PARAMETER NoProjects
   Skip project-level artifact discovery.
 .PARAMETER NoDocker
@@ -58,7 +57,6 @@ param(
   [Alias('p')][string[]]$Project = @(),
   [switch]$Full,
   [switch]$NoSecrets,
-  [switch]$NoLive,
   [switch]$NoProjects,
   [switch]$NoDocker,
   [int]$MaxFileSizeMB = 256,
@@ -1379,7 +1377,6 @@ openclaw|*clawdbot*
 nanobot|*nanobot*
 '@
 
-$AGENT_PROC_RE = 'claude|gemini|antigravity|codex|copilot|cursor|windsurf|codeium|devin|ollama|aider|opencode|\\amp(\.exe)?( |$)|goose|continue|\\cn(\.exe)?( |$)|\\zed(\.exe)?( |$)|qwen|kiro|cline|roo-cline|kilo|augment|auggie|droid|crush|amazon-q|hermes|openclaw|clawdbot|nanobot|letta|openhands|openinterpreter|interpreter|sgpt|tabby|twinny|little-coder|agent-zero|\\pi(\.exe)?( |$)'
 
 if ($Version) { Write-Output "$TOOL $ToolVersion"; exit 0 }
 
@@ -1561,7 +1558,7 @@ $Mode = 'live'
 if ($Root -ne '') {
   if (-not (Test-PathQuiet $Root 'Container')) { Write-Error "Root is not a directory: $Root"; exit 2 }
   $Root = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\', '/')
-  $Mode = 'image'; $NoLive = $true
+  $Mode = 'image'
 }
 if (-not (Test-PathQuiet $OutputDir 'Any')) { try { New-Item -ItemType Directory -Path $OutputDir -Force -ErrorAction Stop | Out-Null } catch { Write-Error "Cannot create output dir: $OutputDir"; exit 2 } }
 $OutputDir = (Resolve-Path -LiteralPath $OutputDir).Path.TrimEnd('\', '/')
@@ -1756,38 +1753,6 @@ try { $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.Windo
 if ($Mode -eq 'live' -and -not $IsAdmin) { Write-Log "WARNING: not running as Administrator; other users' profiles will probably be unreadable" }
 if ($UserList.Count -eq 0) { Write-Log 'WARNING: no user profile directories found' }
 foreach ($ih in $script:InaccessibleHomes) { Write-Log "profile not accessible (skipped): $ih" }
-
-# ---------------------------------------------------------------------------
-# Live snapshot
-# ---------------------------------------------------------------------------
-function Write-LiveFile([string]$rel, [scriptblock]$body) {
-  $p = Join-PathSafe $Stage $rel
-  $d = Split-Path -Path $p -Parent
-  if (-not (Test-PathQuiet $d 'Any')) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
-  $text = ''
-  try { $text = (& $body | Out-String -Width 4096) } catch { $text = "error: $($_.Exception.Message)" }
-  [System.IO.File]::AppendAllText($p, $text, $Utf8NoBom)
-}
-function Register-Generated([string]$agent, [string]$rel) {
-  $p = Join-PathSafe $Stage $rel
-  if (-not (Test-PathQuiet $p 'Any')) { return }
-  $it = Get-Item -LiteralPath $p -Force
-  if ($it.Length -eq 0) { Remove-Item -LiteralPath $p -Force; return }
-  Write-Row '' '' $agent '' $rel 'file' ([int64]$it.Length) (Get-Epoch $it.LastWriteTimeUtc) (Get-Epoch $it.LastAccessTimeUtc) 0 (Get-Epoch $it.CreationTimeUtc) '' '' (Get-FileSha256 $p) $false 'collected' '' ''
-}
-
-if (-not $NoLive) {
-  Write-Log 'Live snapshot'
-  Write-LiveFile 'live/system.txt' { "# hostname`n$HostName"; "# date -u`n$((Get-Date).ToUniversalTime().ToString('o'))"; '# Win32_OperatingSystem'; Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture, InstallDate, LastBootUpTime, LocalDateTime, RegisteredUser | Format-List; '# Win32_ComputerSystem'; Get-CimInstance Win32_ComputerSystem | Select-Object Name, Domain, Manufacturer, Model, UserName, TotalPhysicalMemory | Format-List; '# whoami'; whoami.exe /all; '# volumes'; Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID, VolumeName, FileSystem, Size, FreeSpace | Format-Table -AutoSize }
-  Write-LiveFile 'live/users.txt' { '# ProfileList'; Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' | ForEach-Object { $v = Get-ItemProperty -LiteralPath $_.PSPath; "$($_.PSChildName)`t$($v.ProfileImagePath)" }; '# Win32_UserAccount (local)'; Get-CimInstance Win32_UserAccount -Filter 'LocalAccount=True' | Select-Object Name, SID, Disabled, Lockout, PasswordRequired | Format-Table -AutoSize }
-  Write-LiveFile 'live/logins.txt' { '# query user'; query.exe user 2>&1; '# Win32_LoggedOnUser'; Get-CimInstance Win32_LoggedOnUser | ForEach-Object { "$($_.Antecedent.Domain)\$($_.Antecedent.Name)`tLogon $($_.Dependent.LogonId)" } | Sort-Object -Unique }
-  Write-LiveFile 'live/processes.txt' { Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId, SessionId, @{n='CreationDate';e={$_.CreationDate.ToUniversalTime().ToString('o')}}, ExecutablePath, CommandLine | Format-Table -AutoSize -Wrap }
-  Write-LiveFile 'live/agent-processes.txt' { Get-CimInstance Win32_Process | Where-Object { ($_.CommandLine -and $_.CommandLine -match $AGENT_PROC_RE) -or ($_.ExecutablePath -and $_.ExecutablePath -match $AGENT_PROC_RE) } | Where-Object { $_.CommandLine -notmatch 'Collect-AgentArtifacts' } | ForEach-Object { $o = $null; try { $o = $_ | Invoke-CimMethod -MethodName GetOwner } catch { }; [pscustomobject]@{ ProcessId = $_.ProcessId; ParentProcessId = $_.ParentProcessId; User = $(if ($o) { "$($o.Domain)\$($o.User)" } else { '' }); CreationDate = $_.CreationDate.ToUniversalTime().ToString('o'); ExecutablePath = $_.ExecutablePath; CommandLine = $_.CommandLine } } | Format-List }
-  Write-LiveFile 'live/network.txt' { if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) { Get-NetTCPConnection | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess, @{n='Process';e={(Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName}} | Format-Table -AutoSize } else { netstat.exe -ano } }
-  Write-LiveFile 'live/services.txt' { Get-CimInstance Win32_Service | Select-Object Name, State, StartMode, StartName, PathName | Format-Table -AutoSize -Wrap }
-  Write-LiveFile 'live/scheduled-tasks.txt' { if (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) { Get-ScheduledTask | ForEach-Object { $t = $_; foreach ($a in $t.Actions) { [pscustomobject]@{ TaskPath = $t.TaskPath; TaskName = $t.TaskName; State = $t.State; Author = $t.Author; Execute = $a.Execute; Arguments = $a.Arguments } } } | Format-Table -AutoSize -Wrap } else { schtasks.exe /query /fo LIST /v } }
-  foreach ($lf in @('system', 'users', 'logins', 'processes', 'agent-processes', 'network', 'services', 'scheduled-tasks')) { Register-Generated 'live' "live/$lf.txt" }
-}
 
 # ---------------------------------------------------------------------------
 # Per-user collection
@@ -2090,7 +2055,7 @@ $summary = [ordered]@{
   run_as = $(try { [Security.Principal.WindowsIdentity]::GetCurrent().Name } catch { [Environment]::UserDomainName + '\' + [Environment]::UserName })
   run_as_admin = $IsAdmin
   started = $StartTs; finished = $EndTs
-  options = [ordered]@{ full = $Full.IsPresent; no_secrets = $NoSecrets.IsPresent; no_live = [bool]$NoLive; max_file_size_bytes = $MaxSize; users_filter = $Users; no_docker = $NoDocker.IsPresent }
+  options = [ordered]@{ full = $Full.IsPresent; no_secrets = $NoSecrets.IsPresent; max_file_size_bytes = $MaxSize; users_filter = $Users; no_docker = $NoDocker.IsPresent }
   capabilities = [ordered]@{ hash_tool = 'Get-FileHash'; archiver = $(if ($TarExe) { 'tar.exe' } else { 'ZipFile' }) }
   users = @($UserList | ForEach-Object { $_.user })
   homes = @($UserList | ForEach-Object { $_.home })

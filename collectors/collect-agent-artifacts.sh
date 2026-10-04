@@ -8,8 +8,8 @@
 # Collects the on-disk state of AI coding agents (Claude Code, Gemini CLI,
 # Antigravity, Codex CLI, Copilot CLI, Cursor, Windsurf, Continue, Aider,
 # Ollama, ...) for every user on a host, from Docker and Podman named
-# volumes, plus shell histories and a live system snapshot, into a single
-# tar.gz with a JSONL manifest.
+# volumes, plus shell histories, into a single tar.gz with a JSONL manifest.
+# Host state (processes, users, network) is left to the EDR it supplements.
 #
 # Portability: POSIX sh only. Runs under bash 3.2 (macOS /bin/sh), dash,
 # ash/busybox, FreeBSD/OpenBSD sh and zsh in sh emulation. External tools used:
@@ -1347,7 +1347,6 @@ openclaw|*clawdbot*
 nanobot|*nanobot*
 '
 
-AGENT_PROC_RE='claude|gemini|antigravity|codex|copilot|cursor|windsurf|codeium|devin|ollama|aider|opencode|[/ ]amp( |$)|goose|continue|[/ ]cn( |$)|[/ ]zed( |$)|qwen|kiro|cline|roo-cline|kilo|augment|auggie|droid|crush|amazon-q|hermes|openclaw|clawdbot|nanobot|letta|openhands|openinterpreter|interpreter|sgpt|tabby|twinny|little-coder|agent-zero|[/ ]pi( |$)'
 
 # ---------------------------------------------------------------------------
 # Shared helper functions. Defined as a string so they can be eval'd here and
@@ -1473,14 +1472,12 @@ usage() {
 Usage: $0 [options]
 
   -o, --output DIR        Directory for the archive (default: current dir)
-  -r, --root DIR          Alternate root, e.g. a mounted disk image (image mode;
-                          disables the live snapshot)
+  -r, --root DIR          Alternate root, e.g. a mounted disk image (image mode)
   -u, --users LIST        Comma-separated usernames to collect (default: all)
   -p, --project DIR       Extra project directory to collect (repeatable)
       --full              Disable default size exclusions (model blobs, caches,
                           extension binaries)
       --no-secrets        Skip credential files instead of collecting them
-      --no-live           Skip the live system snapshot
       --no-projects       Skip project-level artifact discovery
       --no-docker         Skip Docker and Podman volume enumeration
       --max-file-size MB  Skip files larger than this (default 256, 0 = none)
@@ -1501,7 +1498,6 @@ USERS=
 EXTRA_PROJECTS=
 FULL=0
 NO_SECRETS=0
-NO_LIVE=0
 NO_PROJECTS=0
 NO_DOCKER=0
 MAX_MB=256
@@ -1518,7 +1514,6 @@ while [ $# -gt 0 ]; do
 $2"; shift ;;
     --full)             FULL=1 ;;
     --no-secrets)       NO_SECRETS=1 ;;
-    --no-live)          NO_LIVE=1 ;;
     --no-projects)      NO_PROJECTS=1 ;;
     --no-docker)        NO_DOCKER=1 ;;
     --max-file-size)    [ $# -ge 2 ] || { usage >&2; exit 1; }; MAX_MB=$2; shift ;;
@@ -1551,7 +1546,7 @@ if [ -n "$ROOT" ]; then
   [ "$ROOT" = / ] && ROOT=
 fi
 MODE=live
-[ -n "$ROOT" ] && { MODE=image; NO_LIVE=1; }
+[ -n "$ROOT" ] && MODE=image
 
 [ -d "$OUTDIR" ] || mkdir -p "$OUTDIR" 2>/dev/null || { printf 'Cannot create output dir: %s\n' "$OUTDIR" >&2; exit 2; }
 OUTDIR=$(cd "$OUTDIR" && pwd) || exit 2
@@ -1713,58 +1708,6 @@ if [ -z "$USER_LIST" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Live snapshot
-record_generated() { # record_generated AGENT RELPATH
-  _rg_agent=$1; _rg_rel=$2; _rg_f="$STAGE/$2"
-  [ -s "$_rg_f" ] || { rm -f "$_rg_f"; return; }
-  _rg_st=$(stat_file "$_rg_f"); [ -n "$_rg_st" ] || _rg_st='0 0 0 0 0 0 0 0'
-  _rg_secret=false; case "$_rg_rel" in live/environ/*) _rg_secret=true ;; esac
-  # shellcheck disable=SC2086
-  set -- $_rg_st
-  emit_row "$MANIFEST" "" "" "$_rg_agent" "" "$_rg_rel" file "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$(hash_file "$_rg_f")" "$_rg_secret" collected "" ""
-}
-live_cmd() { # live_cmd RELPATH CMD...
-  _lc_rel=$1; shift
-  { printf '# %s\n' "$*"; "$@" 2>&1; } >>"$STAGE/$_lc_rel"
-}
-
-if [ "$NO_LIVE" != 1 ]; then
-  log_line "Live snapshot"
-  mkdir -p "$STAGE/live"
-  live_cmd live/system.txt hostname
-  live_cmd live/system.txt uname -a
-  live_cmd live/system.txt date -u
-  live_cmd live/system.txt uptime
-  live_cmd live/system.txt id
-  live_cmd live/system.txt mount
-  live_cmd live/system.txt df -k
-  [ -f /etc/os-release ] && live_cmd live/system.txt cat /etc/os-release
-  command -v sw_vers >/dev/null 2>&1 && live_cmd live/system.txt sw_vers
-  if command -v getent >/dev/null 2>&1; then live_cmd live/users.txt getent passwd; else live_cmd live/users.txt cat /etc/passwd; fi
-  command -v dscl >/dev/null 2>&1 && live_cmd live/users.txt dscl . -list /Users NFSHomeDirectory
-  live_cmd live/logins.txt who
-  live_cmd live/logins.txt last -n 50
-  if ! ps -axo pid,ppid,user,lstart,etime,args >>"$STAGE/live/processes.txt" 2>/dev/null; then
-    ps -eo pid,ppid,user,etime,args >>"$STAGE/live/processes.txt" 2>/dev/null || ps aux >>"$STAGE/live/processes.txt" 2>/dev/null || ps >>"$STAGE/live/processes.txt" 2>&1
-  fi
-  grep -iE "$AGENT_PROC_RE" "$STAGE/live/processes.txt" | grep -v "$TOOL" >"$STAGE/live/agent-processes.txt" 2>/dev/null
-  if [ -d /proc ] && [ "$NO_SECRETS" != 1 ]; then
-    for _pid in $(awk 'NR>0 && $1 ~ /^[0-9]+$/ {print $1}' "$STAGE/live/agent-processes.txt"); do
-      if [ -r "/proc/$_pid/environ" ]; then
-        mkdir -p "$STAGE/live/environ"
-        tr '\0' '\n' <"/proc/$_pid/environ" >"$STAGE/live/environ/$_pid.txt" 2>/dev/null
-        readlink "/proc/$_pid/cwd" >>"$STAGE/live/environ/$_pid.txt" 2>/dev/null
-      fi
-    done
-  fi
-  if command -v ss >/dev/null 2>&1; then live_cmd live/network.txt ss -tunap
-  elif command -v netstat >/dev/null 2>&1; then netstat -anp >>"$STAGE/live/network.txt" 2>/dev/null || live_cmd live/network.txt netstat -an; fi
-  command -v launchctl >/dev/null 2>&1 && live_cmd live/services.txt launchctl list
-  command -v systemctl >/dev/null 2>&1 && live_cmd live/services.txt systemctl list-units --type=service --all --no-pager
-  for _lf in system users logins processes agent-processes network services; do record_generated live "live/$_lf.txt"; done
-  for _ef in "$STAGE"/live/environ/*.txt; do [ -f "$_ef" ] && record_generated live "live/environ/${_ef##*/}"; done
-fi
-
 # ---------------------------------------------------------------------------
 # Per-user collection
 printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
@@ -2039,7 +1982,7 @@ cat >"$SUMMARY" <<EOF
   "run_as_uid": "$(id -u 2>/dev/null)",
   "started": "$START_TS",
   "finished": "$END_TS",
-  "options": {"full": $( [ "$FULL" = 1 ] && printf true || printf false ), "no_secrets": $( [ "$NO_SECRETS" = 1 ] && printf true || printf false ), "no_live": $( [ "$NO_LIVE" = 1 ] && printf true || printf false ), "max_file_size_bytes": $MAX_SIZE, "users_filter": "$(json_str "$USERS")", "no_docker": $( [ "$NO_DOCKER" = 1 ] && printf true || printf false )},
+  "options": {"full": $( [ "$FULL" = 1 ] && printf true || printf false ), "no_secrets": $( [ "$NO_SECRETS" = 1 ] && printf true || printf false ), "max_file_size_bytes": $MAX_SIZE, "users_filter": "$(json_str "$USERS")", "no_docker": $( [ "$NO_DOCKER" = 1 ] && printf true || printf false )},
   "capabilities": {"hash_tool": "$HASH_TOOL", "stat_mode": "$STAT_MODE", "worker_shell": "$(json_str "$WORKER_SH")"},
   "users": $(json_list "$(printf '%s\n' "$USER_LIST" | cut -d: -f1)"),
   "homes": $(json_list "$(printf '%s\n' "$USER_LIST" | sed 's/^[^:]*://')"),

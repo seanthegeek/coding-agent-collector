@@ -691,7 +691,8 @@ check "summary counts skipped_unmatched_volume" "grep -q '\"skipped_unmatched_vo
 check "summary docker counts" "grep -q '\"docker\": {\"volumes_found\": 3, \"volumes_collected\": 2, \"unreadable\": 0' \"\$S\""
 check "summary no_docker option false" "grep -q '\"no_docker\": false' \"\$S\""
 check "stdout docker line" "grep -q '^docker:     3 volumes found, 2 collected, 0 unreadable\$' \"$OUT/default.stdout\""
-check "no live dir in image mode" "! tar -tzf \"\$A\" | grep -q '^./live/'"
+check "no live snapshot directory" "! tar -tzf \"\$A\" | grep -q '^./live/'"
+check "summary has no no_live option" "! grep -q no_live \"\$S\""
 check "manifest and summary inside archive" "tar -tzf \"\$A\" | grep -q '^./manifest.jsonl' && tar -tzf \"\$A\" | grep -q '^./collection.json'"
 check "staging removed" "[ -z \"\$(ls -d \"$OUT/default\"/.stage-* 2>/dev/null)\" ]"
 check "no copy errors" "grep -q '\"error_copy\": 0' \"\$S\""
@@ -756,6 +757,16 @@ run desktop; check "docker desktop exit 0" "[ $? -eq 0 ]"
 check "docker desktop noted in stdout" "grep -q '^docker:     3 volumes found, 2 collected, 0 unreadable; Docker Desktop VM disk not collected\$' \"$OUT/desktop.stdout\""
 check "docker desktop noted in collection.json" "grep -q '\"docker: Docker Desktop data at .*com.docker.docker; volumes inside its virtual machine disk are not collected\"' \"\$S\" && grep -q '\"docker_desktop\": true' \"\$S\""
 rm -rf "$B/Library/Containers"
+
+# ---- live mode without the snapshot (1.6.0) --------------------------------
+mkdir -p "$OUT/livehost"
+COLLECTOR_SH="$SHELL_UNDER_TEST" "$SHELL_UNDER_TEST" "$SCRIPT" -o "$OUT/livehost" -q -u no-such-user-cac --no-docker --no-projects >/dev/null 2>&1
+check "live mode exit 0" "[ $? -eq 0 ]"
+LA=$(ls "$OUT/livehost"/*.tar.gz 2>/dev/null)
+check "live mode writes no live directory" "! tar -tzf \"$LA\" | grep -q '^./live/'"
+check "live mode manifest has no live rows" "! tar -xzOf \"$LA\" ./manifest.jsonl | grep -q '\"agent\":\"live\"'"
+check "live mode collection.json has hostname and no no_live" "tar -xzOf \"$LA\" ./collection.json | grep -q '\"hostname\": \"[^\"]' && ! tar -xzOf \"$LA\" ./collection.json | grep -q no_live"
+check "--no-live is no longer an option" "! \"$SHELL_UNDER_TEST\" \"$SCRIPT\" --no-live -o \"$OUT/nolive\" -q >/dev/null 2>&1"
 
 # ---- --list ---------------------------------------------------------------
 check "--list prints catalog" "\"$SHELL_UNDER_TEST\" \"$SCRIPT\" --list | grep -q '^claude-code|.claude$'"

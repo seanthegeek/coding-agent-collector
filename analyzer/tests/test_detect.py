@@ -164,7 +164,7 @@ class ArchiveTests(unittest.TestCase):
         root = build_image(self.tmp / "image")
         out = self.tmp / "out"
         out.mkdir()
-        r = subprocess.run(["sh", str(COLLECTOR), "-r", str(root), "-o", str(out), "-q", "--no-live"],
+        r = subprocess.run(["sh", str(COLLECTOR), "-r", str(root), "-o", str(out), "-q"],
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         archives = list(out.glob("*.tar.gz"))

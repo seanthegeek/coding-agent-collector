@@ -24,9 +24,9 @@ Live Terminal), run locally by a responder, or
 pointed at a mounted disk image of any of the three platforms. They also
 collect Docker and Podman named volumes that belong to known agents. Output
 is one `tar.gz` (a `.zip` from the Windows collector where `tar.exe` is
-missing) holding the collected files, a hashed JSONL manifest, a run summary
-and, on a live host, a snapshot of the system, users, logins, processes,
-network connections and services.
+missing) holding the collected files, a hashed JSONL manifest and a run
+summary. Host state such as processes and network connections is left to the
+EDR the collectors supplement.
 
 Usage, options, the list of covered tools, the manifest schema and the test
 matrix are in [collectors/README.md](collectors/README.md).

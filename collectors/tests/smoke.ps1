@@ -689,12 +689,13 @@ Check 'rootless volume collected as tabby' { $r -and $r.user -eq 'docker' -and $
 Check 'Public profile skipped' { $null -eq (Row 'Public/Desktop/readme.txt') }
 Check 'Default profile skipped' { $null -eq (Row 'Default/NTUSER.DAT') }
 $entries = ArchiveEntries
-Check 'no live dir in image mode' { -not ($entries | Where-Object { $_ -match '(^|/)live/' }) }
+Check 'no live snapshot directory' { -not ($entries | Where-Object { $_ -match '(^|/)live/' }) }
 Check 'manifest and summary inside archive' { ($entries | Where-Object { $_ -match 'manifest\.jsonl$' }) -and ($entries | Where-Object { $_ -match 'collection\.json$' }) }
 Check 'archive layout is fs/<path relative to root>' { @($entries | Where-Object { $_ -match '(^|\./)fs/Users/alice/\.claude/history\.jsonl$' }).Count -eq 1 }
 Check 'staging removed' { -not (Get-ChildItem -LiteralPath (Join-Path $Out 'default') -Filter '.stage-*' -Force) }
 $sum = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
 Check 'summary is valid JSON with zero copy errors' { $sum.counts.error_copy -eq 0 }
+Check 'summary has no no_live option' { $null -eq $sum.options.PSObject.Properties['no_live'] }
 Check 'summary counts match manifest' { $sum.counts.collected -eq @($script:Rows | Where-Object { $_.status -eq 'collected' }).Count }
 Check 'manifest rows all parsed as JSON' { $script:Rows.Count -eq @(Get-Content -LiteralPath $script:M.FullName).Count }
 Check 'archive layout for a docker volume file is fs/<path relative to root>' { @($entries | Where-Object { $_ -match '(^|\./)fs/var/lib/docker/volumes/a0_usr/_data/chats/ctx1/chat\.json$' }).Count -eq 1 }
@@ -748,6 +749,19 @@ $sum = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
 Check 'Docker Desktop noted in collection.json' { $sum.docker.docker_desktop -eq $true -and @($sum.notes | Where-Object { $_ -like 'docker: Docker Desktop data at *' }).Count -eq 1 }
 Check 'Docker Desktop noted in stdout' { $script:stdout -match '(?m)^docker:     3 volumes found, 2 collected, 0 unreadable; Docker Desktop VM disk not collected\s*$' }
 Remove-Item -LiteralPath (P 'Users/alice/AppData/Local/Docker') -Recurse -Force
+
+# ---- live mode without the snapshot (1.6.0) --------------------------------
+$lo = Join-Path $Out 'livemode'
+New-Item -ItemType Directory -Path $lo -Force | Out-Null
+$global:LASTEXITCODE = 0
+$null = & $Collector -OutputDir $lo -Quiet -Users 'no-such-user-cac' -NoDocker -NoProjects 2>&1
+Check 'live mode exit 0' { $LASTEXITCODE -eq 0 }
+$lm = Get-ChildItem -LiteralPath $lo -Filter '*.manifest.jsonl' | Select-Object -First 1
+$lj = Get-ChildItem -LiteralPath $lo -Filter '*.collection.json' | Select-Object -First 1
+Check 'live mode manifest has no live rows' { $lm -and -not (Select-String -LiteralPath $lm.FullName -SimpleMatch '"agent":"live"') }
+Check 'live mode collection.json has hostname and no no_live' { $j = Get-Content -LiteralPath $lj.FullName -Raw | ConvertFrom-Json; $j.hostname -ne '' -and $null -eq $j.options.PSObject.Properties['no_live'] }
+Check 'live mode writes no live directory' { -not (Test-Path -LiteralPath (Join-Path $lo 'live')) -and -not (Get-ChildItem -LiteralPath $lo -Filter '.stage-*' -Force) }
+Check '-NoLive is no longer a parameter' { $threw = $false; try { & $Collector -NoLive -List | Out-Null } catch { $threw = $true }; $threw }
 
 # ---- -List ----------------------------------------------------------------
 Check '-List prints catalog' { @(& $Collector -List | Select-String -SimpleMatch 'claude-code|.claude').Count -ge 1 }

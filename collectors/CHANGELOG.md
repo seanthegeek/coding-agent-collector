@@ -10,6 +10,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- The live system snapshot. Both collectors no longer write the `live/`
+  directory (`system.txt`, `users.txt`, `logins.txt`, `processes.txt`,
+  `agent-processes.txt`, `network.txt`, `services.txt`,
+  `scheduled-tasks.txt`, and the sh collector's `live/environ/<pid>.txt`
+  process environments). The collectors supplement an EDR, which already
+  records processes, logins, network connections and services.
+- Manifest: the `live` agent name and the `live/<file>` archive paths are
+  gone; no row has an empty `path` any more.
+- The `--no-live` / `-NoLive` option. Passing it is now a usage error.
+- `collection.json`: the `options.no_live` field. The host name stays in
+  `hostname`.
+
 ## [1.5.0] - 2026-10-04
 
 ### Added

@@ -9,11 +9,9 @@ It gathers the on-disk artifacts of AI agents that run on the host, coding
 agents first (Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot CLI,
 Cursor, VS Code chat extensions, Windsurf, Aider, Ollama, and others), for
 every user on a host, plus shell histories, into one archive with a hashed
-manifest. It supplements an EDR rather than duplicating it, so host state
-(processes, logins, network, services) is not collected. The criterion for the catalog is an agent
-that executes tools or shell commands on the host and leaves transcripts,
-configuration or credentials on disk; it need not be an editor or coding
-tool. When a non-coding agent is added, widen the wording in the top-level
+manifest. The criterion for the catalog is an agent that executes tools or
+shell commands on the host and leaves transcripts, configuration or
+credentials on disk; it need not be an editor or coding tool. When a non-coding agent is added, widen the wording in the top-level
 README in the same commit.
 
 The project supplements the EDR a responder already has during an incident
@@ -331,7 +329,8 @@ find. The validation for every current entry is recorded in the table in
    point) at the end of `EXCLUDES` and `SECRET_GLOBS`.
 5. If the tool records project paths, add extraction to `discover_projects`
    in the sh collector and `Find-Projects` in the PowerShell collector, and
-   any per-project files to `PROJECT_CATALOG`.
+   any per-project files to `PROJECT_CATALOG`. Process names are not
+   listed anywhere: running processes are the EDR's job (see Purpose).
 6. Add a fixture and assertions to `collectors/tests/smoke.sh` and
    `collectors/tests/smoke.ps1`. Both files build the fake image in labelled
    blocks (one per catalog revision) followed by `check "name" "expr"`
