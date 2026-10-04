@@ -35,6 +35,7 @@ parsed:
 Not parsed: `logs/chunk-logs/` (stream chunks cut to 200 characters) and
 the retired Letta server's `sqlite.db` (column encodings unverified).
 """
+
 from __future__ import annotations
 
 import base64
@@ -85,7 +86,9 @@ def _bare_messages(session: SessionFile) -> SessionFile:
     out.errors = session.errors
     for n, rec in session.entries:
         meta = rec.get("metadata") if isinstance(rec.get("metadata"), dict) else {}
-        out.entries.append((n, {"type": "message", "timestamp": meta.get("created_at"), "message": rec}))
+        out.entries.append(
+            (n, {"type": "message", "timestamp": meta.get("created_at"), "message": rec})
+        )
     return out
 
 
@@ -111,8 +114,11 @@ class LettaParser(Parser):
     name = "letta"
 
     def wants(self, artifact: Artifact) -> bool:
-        return (artifact.rel == SESSIONS_REL or bool(TRANSCRIPT_RX.match(artifact.rel))
-                or bool(LOCAL_RX.match(artifact.rel)))
+        return (
+            artifact.rel == SESSIONS_REL
+            or bool(TRANSCRIPT_RX.match(artifact.rel))
+            or bool(LOCAL_RX.match(artifact.rel))
+        )
 
     def parse(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         if artifact.rel == SESSIONS_REL:
@@ -132,8 +138,11 @@ class LettaParser(Parser):
         key = decode_key(dirname)
         sid = str(session.header.get("id") or key.partition(":")[2])
         cwd = str(session.header.get("cwd") or "")
-        if not session.header and session.entries and all(
-                "role" in rec and rec.get("type") != "message" for _, rec in session.entries):
+        if (
+            not session.header
+            and session.entries
+            and all("role" in rec and rec.get("type") != "message" for _, rec in session.entries)
+        ):
             session = _bare_messages(session)
         else:
             session = _last_snapshots(session)
@@ -142,8 +151,10 @@ class LettaParser(Parser):
             row.source_line = session.header_line
             row.timestamp_utc = to_utc(session.header.get("timestamp"))
             row.session_id, row.project_path, row.turn_type = sid, cwd, "system"
-            row.text = compact("letta local-backend conversation start: %s cwd=%s" % (key or sid, cwd),
-                               opts.max_text_length)
+            row.text = compact(
+                "letta local-backend conversation start: %s cwd=%s" % (key or sid, cwd),
+                opts.max_text_length,
+            )
             yield row
         yield from entry_rows(self, artifact, session, opts, sid, cwd)
         if session.errors:
@@ -177,15 +188,19 @@ class LettaParser(Parser):
                     out.append((ts, str(rec.get("project"))))
         return sorted(out)
 
-    def _parse_transcript(self, artifact: Artifact, agent_dir: str, conv_dir: str, opts: Options) -> Iterator[Row]:
+    def _parse_transcript(
+        self, artifact: Artifact, agent_dir: str, conv_dir: str, opts: Options
+    ) -> Iterator[Row]:
         twin = self._local_twin(artifact, agent_dir, conv_dir)
         if twin is not None:
             row = self.base_row(artifact)
             row.session_id, row.turn_type = conv_dir, "system"
-            row.text = compact("letta transcript for agent %s not repeated: the same conversation's "
-                               "local-backend messages.jsonl was collected (%s)" % (
-                                   agent_dir, twin.relative_to(artifact.home.disk_path).as_posix()),
-                               opts.max_text_length)
+            row.text = compact(
+                "letta transcript for agent %s not repeated: the same conversation's "
+                "local-backend messages.jsonl was collected (%s)"
+                % (agent_dir, twin.relative_to(artifact.home.disk_path).as_posix()),
+                opts.max_text_length,
+            )
             yield row
             return
         sessions = self._sessions(artifact, agent_dir)
@@ -256,12 +271,23 @@ class LettaParser(Parser):
             row.turn_type = "system"
             dur = rec.get("duration") if isinstance(rec.get("duration"), dict) else {}
             if "exit_reason" in rec or "message_count" in rec:
-                text = "letta session end: agent=%s exit_reason=%s messages=%s tool_calls=%s wall_ms=%s" % (
-                    rec.get("agent_id") or "", rec.get("exit_reason") or "", rec.get("message_count", ""),
-                    rec.get("tool_call_count", ""), dur.get("wall_ms", ""))
+                text = (
+                    "letta session end: agent=%s exit_reason=%s messages=%s tool_calls=%s wall_ms=%s"
+                    % (
+                        rec.get("agent_id") or "",
+                        rec.get("exit_reason") or "",
+                        rec.get("message_count", ""),
+                        rec.get("tool_call_count", ""),
+                        dur.get("wall_ms", ""),
+                    )
+                )
             else:
                 text = "letta session start: agent=%s provider=%s model=%s project=%s" % (
-                    rec.get("agent_id") or "", rec.get("provider") or "", row.model, row.project_path)
+                    rec.get("agent_id") or "",
+                    rec.get("provider") or "",
+                    row.model,
+                    row.project_path,
+                )
             row.text = compact(text, opts.max_text_length)
             yield row
         if errors:

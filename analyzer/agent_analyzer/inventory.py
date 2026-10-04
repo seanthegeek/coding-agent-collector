@@ -14,6 +14,7 @@ A host line opens a run; the agent lines after it belong to that run until
 the next host line. Anything else on a line (console banners, prompts, a
 PowerShell error record) is junk: skipped and counted, never fatal.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,8 +26,18 @@ from .timeutil import to_utc
 DEFAULT_NAME = "fleet-inventory.csv"
 
 INVENTORY_COLUMNS = [
-    "host", "collector", "mode", "at", "user", "agent", "files", "bytes",
-    "first", "last", "projects", "evidence",
+    "host",
+    "collector",
+    "mode",
+    "at",
+    "user",
+    "agent",
+    "files",
+    "bytes",
+    "first",
+    "last",
+    "projects",
+    "evidence",
 ]
 
 HOST_FIELDS = ("host", "collector", "mode", "at")

@@ -48,6 +48,7 @@ synthetic fixture; see `research/pi.md`. Files:
 The session reader (`read_session`, `entry_rows`) is shared with
 `letta.py`, whose local backend writes the same format.
 """
+
 from __future__ import annotations
 
 import json
@@ -118,9 +119,15 @@ def _label(prefix: str, text: str) -> str:
     return "%s: %s" % (prefix, text) if text else prefix
 
 
-def entry_rows(parser: Parser, artifact: Artifact, session: SessionFile, opts: Options,
-               session_id: str = "", project_path: str = "",
-               skip: set[tuple[str, str]] | None = None) -> Iterator[Row]:
+def entry_rows(
+    parser: Parser,
+    artifact: Artifact,
+    session: SessionFile,
+    opts: Options,
+    session_id: str = "",
+    project_path: str = "",
+    skip: set[tuple[str, str]] | None = None,
+) -> Iterator[Row]:
     """Timeline rows for the entries of a pi-format session. `skip` holds
     (id, timestamp) keys to drop (entries a fork copied from its parent)."""
     skip = skip or set()
@@ -150,22 +157,47 @@ def entry_rows(parser: Parser, artifact: Artifact, session: SessionFile, opts: O
             yield from _message_rows(msg, rec, base, emit, opts)
         elif etype == "model_change":
             model = str(rec.get("modelId") or "")
-            yield emit(base(model), "system", "model_change: %s/%s" % (rec.get("provider") or "", model))
+            yield emit(
+                base(model), "system", "model_change: %s/%s" % (rec.get("provider") or "", model)
+            )
         elif etype == "thinking_level_change":
-            yield emit(base(), "system", "thinking_level_change: %s" % (rec.get("thinkingLevel") or ""))
+            yield emit(
+                base(), "system", "thinking_level_change: %s" % (rec.get("thinkingLevel") or "")
+            )
         elif etype == "compaction":
-            yield emit(base(), "system", _label("compaction: tokensBefore=%s" % (rec.get("tokensBefore") or ""),
-                                               str(rec.get("summary") or "")))
+            yield emit(
+                base(),
+                "system",
+                _label(
+                    "compaction: tokensBefore=%s" % (rec.get("tokensBefore") or ""),
+                    str(rec.get("summary") or ""),
+                ),
+            )
         elif etype == "branch_summary":
-            yield emit(base(), "system", _label("branch_summary from %s" % (rec.get("fromId") or ""),
-                                               str(rec.get("summary") or "")))
+            yield emit(
+                base(),
+                "system",
+                _label(
+                    "branch_summary from %s" % (rec.get("fromId") or ""),
+                    str(rec.get("summary") or ""),
+                ),
+            )
         elif etype == "custom_message":
-            yield emit(base(), "system", _label("custom_message %s" % (rec.get("customType") or ""),
-                                               text_of(rec.get("content"))))
+            yield emit(
+                base(),
+                "system",
+                _label(
+                    "custom_message %s" % (rec.get("customType") or ""), text_of(rec.get("content"))
+                ),
+            )
         elif etype == "context_edit":
             rep = rec.get("replacement")
             what = text_of(rep.get("content")) if isinstance(rep, dict) else "omitted from context"
-            yield emit(base(), "system", _label("context_edit target=%s" % (rec.get("targetId") or ""), what))
+            yield emit(
+                base(),
+                "system",
+                _label("context_edit target=%s" % (rec.get("targetId") or ""), what),
+            )
         elif etype == "session_info":
             yield emit(base(), "system", "session_info: name=%s" % (rec.get("name") or ""))
         # custom, label, usage and unknown types carry no conversation content.
@@ -196,20 +228,38 @@ def _message_rows(msg: dict, rec: dict, base, emit, opts: Options) -> Iterator[R
                     yield emit(base(model), "thinking", text)
             elif ptype == "toolCall":
                 name = str(part.get("name") or "")
-                yield emit(base(model), "tool_use", args_summary(part.get("arguments")),
-                           tool_name=name, tool_use_id=str(part.get("id") or ""))
+                yield emit(
+                    base(model),
+                    "tool_use",
+                    args_summary(part.get("arguments")),
+                    tool_name=name,
+                    tool_use_id=str(part.get("id") or ""),
+                )
         if msg.get("stopReason") in ("error", "aborted"):
-            yield emit(base(model), "system", _label("assistant stopReason=%s" % msg.get("stopReason"),
-                                                     str(msg.get("errorMessage") or "")))
+            yield emit(
+                base(model),
+                "system",
+                _label(
+                    "assistant stopReason=%s" % msg.get("stopReason"),
+                    str(msg.get("errorMessage") or ""),
+                ),
+            )
     elif role == "toolResult":
         text = text_of(msg.get("content"))
         if msg.get("isError"):
             text = "[error] " + text
-        yield emit(base(), "tool_result", text, tool_name=str(msg.get("toolName") or ""),
-                   tool_use_id=str(msg.get("toolCallId") or ""))
+        yield emit(
+            base(),
+            "tool_result",
+            text,
+            tool_name=str(msg.get("toolName") or ""),
+            tool_use_id=str(msg.get("toolCallId") or ""),
+        )
     elif role == "bashExecution":
         eid = str(rec.get("id") or "")
-        yield emit(base(), "tool_use", str(msg.get("command") or ""), tool_name="bash", tool_use_id=eid)
+        yield emit(
+            base(), "tool_use", str(msg.get("command") or ""), tool_name="bash", tool_use_id=eid
+        )
         out = str(msg.get("output") or "")
         notes = []
         if msg.get("exitCode") not in (None, 0):
@@ -224,13 +274,18 @@ def _message_rows(msg: dict, rec: dict, base, emit, opts: Options) -> Iterator[R
     elif role == "system":
         yield emit(base(), "system", _label("system prompt", text_of(msg.get("content"))))
     elif role == "custom":
-        yield emit(base(), "system", _label("custom %s" % (msg.get("customType") or ""), text_of(msg.get("content"))))
+        yield emit(
+            base(),
+            "system",
+            _label("custom %s" % (msg.get("customType") or ""), text_of(msg.get("content"))),
+        )
     elif role in ("branchSummary", "compactionSummary"):
         yield emit(base(), "system", _label(role, str(msg.get("summary") or "")))
 
 
-def error_row(parser: Parser, artifact: Artifact, errors: list, session_id: str = "",
-              project_path: str = "") -> Row:
+def error_row(
+    parser: Parser, artifact: Artifact, errors: list, session_id: str = "", project_path: str = ""
+) -> Row:
     row = parser.base_row(artifact)
     row.session_id = session_id
     row.project_path = project_path
@@ -249,10 +304,10 @@ def home_file(artifact: Artifact, original: str, marker: str) -> Path | None:
     rels = []
     h = artifact.home.original.replace("\\", "/").rstrip("/")
     if h and p.startswith(h + "/"):
-        rels.append(p[len(h) + 1:])
+        rels.append(p[len(h) + 1 :])
     i = p.rfind("/" + marker)
     if i >= 0:
-        rels.append(p[i + 1:])
+        rels.append(p[i + 1 :])
     root = artifact.home.disk_path
     for rel in rels:
         parts = [x for x in rel.split("/") if x]
@@ -314,15 +369,21 @@ class PiParser(Parser):
                 skip = self._parent_cache[pf]
         dropped = 0
         if skip:
-            dropped = sum(1 for _, r in session.entries
-                          if (str(r.get("id") or ""), str(r.get("timestamp") or "")) in skip)
+            dropped = sum(
+                1
+                for _, r in session.entries
+                if (str(r.get("id") or ""), str(r.get("timestamp") or "")) in skip
+            )
             if dropped:
                 row = self.base_row(artifact)
                 row.source_line = session.header_line
                 row.timestamp_utc = to_utc(h.get("timestamp"))
                 row.session_id, row.project_path, row.turn_type = sid, cwd, "system"
-                row.text = compact("fork: %d entries copied from the parent session %s omitted; "
-                                   "they are in the parent's rows" % (dropped, parent), opts.max_text_length)
+                row.text = compact(
+                    "fork: %d entries copied from the parent session %s omitted; "
+                    "they are in the parent's rows" % (dropped, parent),
+                    opts.max_text_length,
+                )
                 yield row
 
         yield from entry_rows(self, artifact, session, opts, sid, cwd, skip if dropped else None)
@@ -333,8 +394,10 @@ class PiParser(Parser):
             row.source_line = session.header_line
             row.timestamp_utc = to_utc(h.get("timestamp"))
             row.session_id, row.project_path, row.turn_type = sid, cwd, "system"
-            row.text = compact("session driven by little-coder (pi launcher): %s" % "; ".join(why),
-                               opts.max_text_length)
+            row.text = compact(
+                "session driven by little-coder (pi launcher): %s" % "; ".join(why),
+                opts.max_text_length,
+            )
             yield row
         if session.errors:
             yield error_row(self, artifact, session.errors, sid, cwd)
@@ -353,8 +416,11 @@ class PiParser(Parser):
             meta = {}
         row.timestamp_utc = to_utc(meta.get("createdAt"))
         row.project_path = str(meta.get("cwd") or "")
-        row.text = compact("experimental durable session created: cwd=%s (transcript in session.sqlite, "
-                           "not parsed)" % row.project_path, opts.max_text_length)
+        row.text = compact(
+            "experimental durable session created: cwd=%s (transcript in session.sqlite, "
+            "not parsed)" % row.project_path,
+            opts.max_text_length,
+        )
         yield row
 
 
@@ -369,7 +435,11 @@ def little_coder_markers(artifact: Artifact, session: SessionFile) -> list[str]:
                 types.setdefault(ct)
         elif rec.get("type") == "message":
             msg = rec.get("message")
-            if isinstance(msg, dict) and msg.get("role") == "assistant" and msg.get("provider") == "llamacpp":
+            if (
+                isinstance(msg, dict)
+                and msg.get("role") == "assistant"
+                and msg.get("provider") == "llamacpp"
+            ):
                 llamacpp = True
     why = []
     if types:

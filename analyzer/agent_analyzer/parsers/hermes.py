@@ -40,6 +40,7 @@ is `sessions.cwd`, else `git_repo_root`, and `git_branch` is
 `sessions.git_branch`. The legacy `sessions/<id>.json` snapshots, `/save`
 exports and `response_store.db` are not parsed.
 """
+
 from __future__ import annotations
 
 import json
@@ -66,17 +67,21 @@ def decode_content(value):
     multimodal parts behind the NUL-prefixed JSON sentinel."""
     if isinstance(value, str) and value.startswith(JSON_PREFIX):
         try:
-            return json.loads(value[len(JSON_PREFIX):])
+            return json.loads(value[len(JSON_PREFIX) :])
         except ValueError:
-            return value[len(JSON_PREFIX):]
+            return value[len(JSON_PREFIX) :]
     return value
 
 
 def content_text(value) -> str:
     content = decode_content(value)
     if isinstance(content, list):
-        content = [{"type": "image"} if isinstance(b, dict) and b.get("type") in ("image_url", "input_image")
-                   else b for b in content]
+        content = [
+            {"type": "image"}
+            if isinstance(b, dict) and b.get("type") in ("image_url", "input_image")
+            else b
+            for b in content
+        ]
     return text_of(content)
 
 
@@ -134,8 +139,15 @@ class HermesParser(Parser):
         row.text = text
         return row
 
-    def _message_rows(self, artifact: Artifact, m: dict, session: dict, line: int,
-                      tool_names: dict[str, str], opts: Options) -> Iterator[Row]:
+    def _message_rows(
+        self,
+        artifact: Artifact,
+        m: dict,
+        session: dict,
+        line: int,
+        tool_names: dict[str, str],
+        opts: Options,
+    ) -> Iterator[Row]:
         ts = to_utc(m.get("timestamp"))
         role = str(m.get("role") or "")
         marker = "[rewound] " if m.get("active", 1) in (0, "0", False) else ""
@@ -189,15 +201,28 @@ class HermesParser(Parser):
                     return
                 sessions: dict[str, dict] = {}
                 if "sessions" in tables:
-                    for s in con.execute("select rowid as _rowid, * from sessions order by started_at, rowid"):
+                    for s in con.execute(
+                        "select rowid as _rowid, * from sessions order by started_at, rowid"
+                    ):
                         s = dict(s)
                         sessions[str(s.get("id") or "")] = s
-                        row = self._system(artifact, s["_rowid"], s, compact(_join(
-                            "session start", str(s.get("title") or ""),
-                            "source=%s" % s["source"] if s.get("source") else "",
-                            "parent=%s" % s["parent_session_id"] if s.get("parent_session_id") else "",
-                            "end=%s" % s["end_reason"] if s.get("end_reason") else "",
-                        ), opts.max_text_length))
+                        row = self._system(
+                            artifact,
+                            s["_rowid"],
+                            s,
+                            compact(
+                                _join(
+                                    "session start",
+                                    str(s.get("title") or ""),
+                                    "source=%s" % s["source"] if s.get("source") else "",
+                                    "parent=%s" % s["parent_session_id"]
+                                    if s.get("parent_session_id")
+                                    else "",
+                                    "end=%s" % s["end_reason"] if s.get("end_reason") else "",
+                                ),
+                                opts.max_text_length,
+                            ),
+                        )
                         row.timestamp_utc = to_utc(s.get("started_at"))
                         yield row
                 tool_names: dict[str, str] = {}
@@ -205,7 +230,9 @@ class HermesParser(Parser):
                     m = dict(m)
                     sid = str(m.get("session_id") or "")
                     session = sessions.get(sid) or {"id": sid}
-                    yield from self._message_rows(artifact, m, session, m.get("id") or 0, tool_names, opts)
+                    yield from self._message_rows(
+                        artifact, m, session, m.get("id") or 0, tool_names, opts
+                    )
         except sqlite3.DatabaseError as e:
             yield self._system(artifact, 0, {}, "parser: SQLite error: %s" % e)
 
@@ -217,5 +244,9 @@ class HermesParser(Parser):
         for n, rec in iter_jsonl(artifact.disk_path, errors):
             yield from self._message_rows(artifact, rec, session, n, tool_names, opts)
         if errors:
-            yield self._system(artifact, errors[0][0], session,
-                               "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0]))
+            yield self._system(
+                artifact,
+                errors[0][0],
+                session,
+                "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0]),
+            )

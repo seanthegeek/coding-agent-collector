@@ -42,6 +42,7 @@ thread-start row carries `initial_project_snapshot.timestamp`, falling back
 to `created_at`. `source_line` is the SQLite `rowid` of the thread or
 sidebar row. The git branch is the one captured at thread start.
 """
+
 from __future__ import annotations
 
 import io
@@ -158,7 +159,9 @@ class ZedParser(Parser):
         with open_copy(artifact.disk_path) as con:
             if "sidebar_threads" not in table_names(con):
                 return
-            for r in con.execute("select rowid as _rowid, * from sidebar_threads order by updated_at"):
+            for r in con.execute(
+                "select rowid as _rowid, * from sidebar_threads order by updated_at"
+            ):
                 r = dict(r)
                 if not r.get("agent_id"):
                     continue
@@ -168,9 +171,15 @@ class ZedParser(Parser):
                 row.timestamp_utc = to_utc(r.get("interacted_at") or r.get("updated_at"))
                 row.project_path = first_folder(r.get("folder_paths"))
                 row.turn_type = "system"
-                row.text = compact("external agent thread (no transcript in threads.db): agent=%s title=%s%s" % (
-                    r["agent_id"], r.get("title_override") or r.get("title") or "",
-                    " archived" if r.get("archived") else ""), opts.max_text_length)
+                row.text = compact(
+                    "external agent thread (no transcript in threads.db): agent=%s title=%s%s"
+                    % (
+                        r["agent_id"],
+                        r.get("title_override") or r.get("title") or "",
+                        " archived" if r.get("archived") else "",
+                    ),
+                    opts.max_text_length,
+                )
                 yield row
 
     # -- threads/threads.db -------------------------------------------------------
@@ -200,29 +209,54 @@ class ZedParser(Parser):
 
         thread, err = self._decode(r)
         if thread is None:
-            yield base("system", "thread %s could not be decoded (%s): %s" % (
-                session_id, err, r.get("summary") or ""))
+            yield base(
+                "system",
+                "thread %s could not be decoded (%s): %s"
+                % (session_id, err, r.get("summary") or ""),
+            )
             return
 
-        snap = thread.get("initial_project_snapshot") if isinstance(thread.get("initial_project_snapshot"), dict) else {}
+        snap = (
+            thread.get("initial_project_snapshot")
+            if isinstance(thread.get("initial_project_snapshot"), dict)
+            else {}
+        )
         worktrees = [w for w in (snap.get("worktree_snapshots") or []) if isinstance(w, dict)]
         if not project and worktrees:
             project = str(worktrees[0].get("worktree_path") or "")
-        branches = [(w.get("worktree_path") == project, str(w["git_state"]["current_branch"])) for w in worktrees
-                    if isinstance(w.get("git_state"), dict) and w["git_state"].get("current_branch")]
+        branches = [
+            (w.get("worktree_path") == project, str(w["git_state"]["current_branch"]))
+            for w in worktrees
+            if isinstance(w.get("git_state"), dict) and w["git_state"].get("current_branch")
+        ]
         branch = max(branches, key=lambda b: b[0])[1] if branches else ""
         m = thread.get("model") if isinstance(thread.get("model"), dict) else {}
         model = "/".join(str(x) for x in (m.get("provider"), m.get("model")) if x)
         if not updated:
             updated = to_utc(thread.get("updated_at"))
 
-        parent = r.get("parent_id") or ((thread.get("subagent_context") or {}).get("parent_thread_id")
-                                        if isinstance(thread.get("subagent_context"), dict) else "")
+        parent = r.get("parent_id") or (
+            (thread.get("subagent_context") or {}).get("parent_thread_id")
+            if isinstance(thread.get("subagent_context"), dict)
+            else ""
+        )
         start_ts = to_utc(snap.get("timestamp")) or to_utc(r.get("created_at")) or updated
-        yield base("system", " ".join(x for x in (
-            "thread start:", str(thread.get("title") or r.get("summary") or ""),
-            "version=%s" % thread["version"] if thread.get("version") else "",
-            "parent=%s" % parent if parent else "") if x), start_ts, model, branch)
+        yield base(
+            "system",
+            " ".join(
+                x
+                for x in (
+                    "thread start:",
+                    str(thread.get("title") or r.get("summary") or ""),
+                    "version=%s" % thread["version"] if thread.get("version") else "",
+                    "parent=%s" % parent if parent else "",
+                )
+                if x
+            ),
+            start_ts,
+            model,
+            branch,
+        )
 
         for kind, text, tool_name, tool_id in self._messages(thread):
             if kind == "thinking" and not opts.include_thinking:
@@ -309,10 +343,19 @@ class ZedParser(Parser):
                 res = {}
             text = content_text(res.get("content"))
             if not text and res.get("output") is not None:
-                text = content_text(res["output"]) if not isinstance(res["output"], dict) else compact_json(res["output"])
+                text = (
+                    content_text(res["output"])
+                    if not isinstance(res["output"], dict)
+                    else compact_json(res["output"])
+                )
             if res.get("is_error"):
                 text = "[error] " + text
-            return "tool_result", text, str(res.get("tool_name") or ""), str(res.get("tool_use_id") or key)
+            return (
+                "tool_result",
+                text,
+                str(res.get("tool_name") or ""),
+                str(res.get("tool_use_id") or key),
+            )
 
         content = a.get("content")
         if isinstance(content, (str, dict)):
@@ -361,7 +404,12 @@ class ZedParser(Parser):
                 yield "thinking", "[redacted thinking]", "", ""
         for tu in msg.get("tool_uses") or []:
             if isinstance(tu, dict):
-                yield "tool_use", tool_input_text(tu), str(tu.get("name") or ""), str(tu.get("id") or "")
+                yield (
+                    "tool_use",
+                    tool_input_text(tu),
+                    str(tu.get("name") or ""),
+                    str(tu.get("id") or ""),
+                )
         for res in msg.get("tool_results") or []:
             if isinstance(res, dict):
                 text = content_text(res.get("content"))

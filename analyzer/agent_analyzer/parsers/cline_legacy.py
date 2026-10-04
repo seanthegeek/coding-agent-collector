@@ -55,6 +55,7 @@ the message `ts` as `tool_use_id`; `command_output`, `mcp_server_response`,
 they are `system`. `source_line` is the record's 1-based position in the
 JSON array. No git branch is recorded by either agent.
 """
+
 from __future__ import annotations
 
 import json
@@ -73,14 +74,37 @@ API_FILES = ("api_conversation_history.json", "claude_messages.json")
 METADATA_FILE = "task_metadata.json"
 
 USER_KINDS = ("task", "user_feedback", "user_feedback_diff")
-ASSISTANT_KINDS = ("text", "completion_result", "plan_completion_result", "followup",
-                   "plan_mode_respond", "act_mode_respond")
-TOOL_USE_KINDS = ("tool", "command", "use_mcp_server", "browser_action_launch", "browser_action",
-                  "new_task", "use_subagents", "condense", "summarize_task")
-TOOL_RESULT_KINDS = ("command_output", "mcp_server_response", "browser_action_result",
-                     "codebase_search_result", "subtask_result")
-TOOL_NAMES = {"command": "execute_command", "browser_action_launch": "browser_action",
-              "browser_action": "browser_action"}
+ASSISTANT_KINDS = (
+    "text",
+    "completion_result",
+    "plan_completion_result",
+    "followup",
+    "plan_mode_respond",
+    "act_mode_respond",
+)
+TOOL_USE_KINDS = (
+    "tool",
+    "command",
+    "use_mcp_server",
+    "browser_action_launch",
+    "browser_action",
+    "new_task",
+    "use_subagents",
+    "condense",
+    "summarize_task",
+)
+TOOL_RESULT_KINDS = (
+    "command_output",
+    "mcp_server_response",
+    "browser_action_result",
+    "codebase_search_result",
+    "subtask_result",
+)
+TOOL_NAMES = {
+    "command": "execute_command",
+    "browser_action_launch": "browser_action",
+    "browser_action": "browser_action",
+}
 
 
 # ---- tolerant JSON readers ----------------------------------------------------
@@ -94,7 +118,9 @@ def _skip_ws(s: str, i: int) -> int:
     return i
 
 
-def iter_array_at(s: str, i: int, errors: list, end: list | None = None) -> Iterator[tuple[int, object]]:
+def iter_array_at(
+    s: str, i: int, errors: list, end: list | None = None
+) -> Iterator[tuple[int, object]]:
     """Yield (1-based position, element) from the JSON array starting at
     `s[i]`. A truncated or corrupt element stops the walk and is recorded in
     `errors` as (position, message); the elements before it are kept. When
@@ -155,7 +181,7 @@ def iter_json_array(path: Path, errors: list) -> Iterator[tuple[int, object]]:
     for n, v in iter_array_at(s, 0, errors, end):
         count = n
         yield n, v
-    if end and s[end[0]:].strip(_WS):
+    if end and s[end[0] :].strip(_WS):
         errors.append((count + 1, "unparseable data after the JSON array"))
 
 
@@ -179,7 +205,9 @@ def loads_or_none(s) -> dict | None:
     return v if isinstance(v, dict) else None
 
 
-def error_row(parser: Parser, artifact: Artifact, errors: list, session_id: str = "", project_path: str = "") -> Row:
+def error_row(
+    parser: Parser, artifact: Artifact, errors: list, session_id: str = "", project_path: str = ""
+) -> Row:
     row = parser.base_row(artifact)
     row.session_id = session_id
     row.project_path = project_path
@@ -199,6 +227,7 @@ def _fmt_counts(d: dict, keys) -> str:
 
 # ---- task context ---------------------------------------------------------------
 
+
 class TaskContext:
     """What one task directory knows about itself: id, project, models and a
     start time for records that carry none."""
@@ -212,7 +241,9 @@ class TaskContext:
         usage = metadata.get("model_usage")
         self.model_usage: list[tuple[float, str]] = sorted(
             (float(u.get("ts") or 0), str(u.get("model_id") or ""))
-            for u in (usage if isinstance(usage, list) else []) if isinstance(u, dict) and u.get("model_id"))
+            for u in (usage if isinstance(usage, list) else [])
+            if isinstance(u, dict) and u.get("model_id")
+        )
         self.start = self._start(task_id, item, metadata)
 
     @staticmethod
@@ -241,6 +272,7 @@ class TaskContext:
 
 # ---- parser -----------------------------------------------------------------------
 
+
 class LegacyTaskParser(Parser):
     """Subclasses set ROOT (a regex for the storage root, home-relative) and
     PROJECT_KEY, and implement history_item()."""
@@ -250,8 +282,10 @@ class LegacyTaskParser(Parser):
 
     def __init__(self) -> None:
         self._task_rx = re.compile(
-            r"^%s/tasks/([^/]+)/(ui_messages|api_conversation_history|claude_messages|task_metadata)\.json$" % self.ROOT,
-            re.I)
+            r"^%s/tasks/([^/]+)/(ui_messages|api_conversation_history|claude_messages|task_metadata)\.json$"
+            % self.ROOT,
+            re.I,
+        )
         self._cache: dict[tuple, object] = {}
 
     # Subclass hook: the HistoryItem for a task, or None.
@@ -270,8 +304,9 @@ class LegacyTaskParser(Parser):
 
     # Subclass hook: rows for one API history message. The default reads
     # native content blocks; PearAI's Roo fork overrides it for XML tool calls.
-    def api_content_rows(self, msg: dict, n: int, base_turn: str,
-                         include_thinking: bool) -> Iterator[tuple[str, str, str, str]]:
+    def api_content_rows(
+        self, msg: dict, n: int, base_turn: str, include_thinking: bool
+    ) -> Iterator[tuple[str, str, str, str]]:
         return content_rows(msg.get("content"), base_turn, include_thinking)
 
     def task_match(self, artifact: Artifact):
@@ -323,7 +358,12 @@ class LegacyTaskParser(Parser):
             kind = msg.get("say") if msg.get("type") == "say" else msg.get("ask")
             kind = str(kind or msg.get("say") or msg.get("ask") or msg.get("type") or "")
             reasoning = msg.get("reasoning")
-            if opts.include_thinking and isinstance(reasoning, str) and reasoning and kind != "reasoning":
+            if (
+                opts.include_thinking
+                and isinstance(reasoning, str)
+                and reasoning
+                and kind != "reasoning"
+            ):
                 row = self._row(artifact, ctx, n, to_utc(ts), row_model)
                 row.turn_type = "thinking"
                 row.text = compact(reasoning, opts.max_text_length)
@@ -360,28 +400,43 @@ class LegacyTaskParser(Parser):
             ts = to_utc(msg.get("ts")) or ctx.start
             model = ctx.model_at(msg.get("ts"))
             role = msg.get("role")
-            base_turn = "user" if role == "user" else "assistant" if role == "assistant" else "system"
+            base_turn = (
+                "user" if role == "user" else "assistant" if role == "assistant" else "system"
+            )
             if msg.get("type") == "reasoning":
                 if opts.include_thinking:
                     row = self._row(artifact, ctx, n, ts, model)
                     row.turn_type = "thinking"
-                    row.text = compact(text_of(msg.get("summary")) or msg.get("text") or msg.get("reasoning_content")
-                                       or "[encrypted reasoning]", opts.max_text_length)
+                    row.text = compact(
+                        text_of(msg.get("summary"))
+                        or msg.get("text")
+                        or msg.get("reasoning_content")
+                        or "[encrypted reasoning]",
+                        opts.max_text_length,
+                    )
                     yield row
                 continue
             if msg.get("isSummary") or msg.get("isTruncationMarker"):
                 row = self._row(artifact, ctx, n, ts, model)
                 row.turn_type = "system"
                 label = "summary" if msg.get("isSummary") else "truncation marker"
-                row.text = compact("%s: %s" % (label, text_of(msg.get("content"))), opts.max_text_length)
+                row.text = compact(
+                    "%s: %s" % (label, text_of(msg.get("content"))), opts.max_text_length
+                )
                 yield row
                 continue
-            if opts.include_thinking and isinstance(msg.get("reasoning_content"), str) and msg["reasoning_content"]:
+            if (
+                opts.include_thinking
+                and isinstance(msg.get("reasoning_content"), str)
+                and msg["reasoning_content"]
+            ):
                 row = self._row(artifact, ctx, n, ts, model)
                 row.turn_type = "thinking"
                 row.text = compact(msg["reasoning_content"], opts.max_text_length)
                 yield row
-            for turn, text, name, tid in self.api_content_rows(msg, n, base_turn, opts.include_thinking):
+            for turn, text, name, tid in self.api_content_rows(
+                msg, n, base_turn, opts.include_thinking
+            ):
                 row = self._row(artifact, ctx, n, ts, model)
                 row.turn_type = turn
                 row.tool_name = name
@@ -396,8 +451,13 @@ class LegacyTaskParser(Parser):
     def _parse_metadata(self, artifact: Artifact, ctx: TaskContext, opts: Options) -> Iterator[Row]:
         data = load_json(artifact.disk_path)
         if not isinstance(data, dict):
-            yield error_row(self, artifact, [(0, "task_metadata.json is not a JSON object")],
-                            ctx.task_id, ctx.project_path)
+            yield error_row(
+                self,
+                artifact,
+                [(0, "task_metadata.json is not a JSON object")],
+                ctx.task_id,
+                ctx.project_path,
+            )
             return
         events = []
         seen = set()
@@ -412,17 +472,53 @@ class LegacyTaskParser(Parser):
                 if sig in seen:
                     continue
                 seen.add(sig)
-                events.append((ts, n, "", "file %s: %s (source=%s state=%s)" % (
-                    key[:-5], e.get("path") or "", e.get("record_source") or "", e.get("record_state") or "")))
+                events.append(
+                    (
+                        ts,
+                        n,
+                        "",
+                        "file %s: %s (source=%s state=%s)"
+                        % (
+                            key[:-5],
+                            e.get("path") or "",
+                            e.get("record_source") or "",
+                            e.get("record_state") or "",
+                        ),
+                    )
+                )
         for n, e in enumerate(data.get("model_usage") or [], 1):
             if isinstance(e, dict):
-                events.append((e.get("ts") or 0, n, str(e.get("model_id") or ""), "model_usage: %s" % _fmt_counts(
-                    e, ("model_id", "model_provider_id", "mode"))))
+                events.append(
+                    (
+                        e.get("ts") or 0,
+                        n,
+                        str(e.get("model_id") or ""),
+                        "model_usage: %s"
+                        % _fmt_counts(e, ("model_id", "model_provider_id", "mode")),
+                    )
+                )
         for n, e in enumerate(data.get("environment_history") or [], 1):
             if isinstance(e, dict):
-                events.append((e.get("ts") or 0, n, "", "environment: %s" % _fmt_counts(
-                    e, ("os_name", "os_version", "os_arch", "host_name", "host_version", "cline_version"))))
-        events.sort(key=lambda x: (x[0] if isinstance(x[0], (int, float)) else 0))
+                events.append(
+                    (
+                        e.get("ts") or 0,
+                        n,
+                        "",
+                        "environment: %s"
+                        % _fmt_counts(
+                            e,
+                            (
+                                "os_name",
+                                "os_version",
+                                "os_arch",
+                                "host_name",
+                                "host_version",
+                                "cline_version",
+                            ),
+                        ),
+                    )
+                )
+        events.sort(key=lambda x: x[0] if isinstance(x[0], (int, float)) else 0)
         for ts, n, model, text in events:
             row = self._row(artifact, ctx, n, to_utc(ts), model)
             row.turn_type = "system"
@@ -439,8 +535,23 @@ class LegacyTaskParser(Parser):
         row.project_path = str(item.get(self.PROJECT_KEY) or "")
         row.model = str(item.get("modelId") or "")
         row.turn_type = "system"
-        extra = _fmt_counts(item, ("tokensIn", "tokensOut", "cacheWrites", "cacheReads", "totalCost", "size",
-                                   "apiProvider", "mode", "status", "apiConfigName", "parentTaskId", "rootTaskId"))
+        extra = _fmt_counts(
+            item,
+            (
+                "tokensIn",
+                "tokensOut",
+                "cacheWrites",
+                "cacheReads",
+                "totalCost",
+                "size",
+                "apiProvider",
+                "mode",
+                "status",
+                "apiConfigName",
+                "parentTaskId",
+                "rootTaskId",
+            ),
+        )
         row.text = compact("task: %s | %s" % (item.get("task") or "", extra), opts.max_text_length)
         return row
 
@@ -462,8 +573,14 @@ def map_ui(kind: str, msg: dict, first: bool) -> tuple[str, str, str] | None:
         if j is not None:
             opts = j.get("options") or j.get("suggest")
             if isinstance(opts, list):
-                opts = "; ".join(o if isinstance(o, str) else str(o.get("answer") or compact_json(o))
-                                 if isinstance(o, dict) else str(o) for o in opts)
+                opts = "; ".join(
+                    o
+                    if isinstance(o, str)
+                    else str(o.get("answer") or compact_json(o))
+                    if isinstance(o, dict)
+                    else str(o)
+                    for o in opts
+                )
             text = _join(j.get("question") or j.get("response") or "", opts or "")
         return ("assistant", text, "") if text else None
     if kind in TOOL_USE_KINDS:
@@ -472,14 +589,31 @@ def map_ui(kind: str, msg: dict, first: bool) -> tuple[str, str, str] | None:
     if kind in TOOL_RESULT_KINDS:
         if kind == "browser_action_result":
             j = loads_or_none(text) or {}
-            text = _join(j.get("currentUrl"), j.get("logs"), "[screenshot]" if j.get("screenshot") else "")
-        name = {"command_output": "execute_command", "browser_action_result": "browser_action",
-                "codebase_search_result": "codebaseSearch", "subtask_result": "new_task"}.get(kind, "")
+            text = _join(
+                j.get("currentUrl"), j.get("logs"), "[screenshot]" if j.get("screenshot") else ""
+            )
+        name = {
+            "command_output": "execute_command",
+            "browser_action_result": "browser_action",
+            "codebase_search_result": "codebaseSearch",
+            "subtask_result": "new_task",
+        }.get(kind, "")
         return ("tool_result", text, name) if text else None
     if kind in ("api_req_started", "api_req_finished", "api_req_deleted"):
         j = loads_or_none(text) or {}
-        detail = _fmt_counts(j, ("tokensIn", "tokensOut", "cacheWrites", "cacheReads", "cost", "apiProtocol",
-                                 "cancelReason", "streamingFailedMessage"))
+        detail = _fmt_counts(
+            j,
+            (
+                "tokensIn",
+                "tokensOut",
+                "cacheWrites",
+                "cacheReads",
+                "cost",
+                "apiProtocol",
+                "cancelReason",
+                "streamingFailedMessage",
+            ),
+        )
         return ("system", "%s: %s" % (kind, detail) if detail else kind, "")
     if kind == "condense_context":
         cc = msg.get("contextCondense") or {}
@@ -497,9 +631,21 @@ def tool_use_text(kind: str, text: str) -> tuple[str, str]:
         if j is None:
             return "tool", text
         batch = j.get("batchFiles")
-        paths = "; ".join(str(b.get("path")) for b in batch if isinstance(b, dict)) if isinstance(batch, list) else ""
-        body = _join(j.get("path"), paths, j.get("regex"), j.get("filePattern"), j.get("query"), j.get("mode"),
-                     j.get("reason"), j.get("diff") or j.get("content"))
+        paths = (
+            "; ".join(str(b.get("path")) for b in batch if isinstance(b, dict))
+            if isinstance(batch, list)
+            else ""
+        )
+        body = _join(
+            j.get("path"),
+            paths,
+            j.get("regex"),
+            j.get("filePattern"),
+            j.get("query"),
+            j.get("mode"),
+            j.get("reason"),
+            j.get("diff") or j.get("content"),
+        )
         return str(j.get("tool") or "tool"), body
     if kind == "use_mcp_server":
         j = loads_or_none(text)
@@ -518,7 +664,9 @@ def tool_use_text(kind: str, text: str) -> tuple[str, str]:
     return TOOL_NAMES.get(kind, kind), text
 
 
-def content_rows(content, base_turn: str, include_thinking: bool) -> Iterator[tuple[str, str, str, str]]:
+def content_rows(
+    content, base_turn: str, include_thinking: bool
+) -> Iterator[tuple[str, str, str, str]]:
     """(turn_type, text, tool_name, tool_use_id) per content block of an
     Anthropic-style message, shared by the legacy API history and Cline's SDK
     messages."""
@@ -543,7 +691,12 @@ def content_rows(content, base_turn: str, include_thinking: bool) -> Iterator[tu
                 yield base_turn, str(b["text"]), "", ""
         elif t == "tool_use":
             name = str(b.get("name") or "")
-            yield "tool_use", tool_summary(name, b.get("input")), name, str(b.get("id") or b.get("call_id") or "")
+            yield (
+                "tool_use",
+                tool_summary(name, b.get("input")),
+                name,
+                str(b.get("id") or b.get("call_id") or ""),
+            )
         elif t == "tool_result":
             c = b.get("content")
             body = text_of(c) if isinstance(c, (str, list)) or c is None else compact_json(c)

@@ -34,6 +34,7 @@ is not `done`) sharing the step `id`. `<think>` blocks become `thinking`
 rows, opt-in, and are removed from the assistant text. There is no
 project path, git branch or line number: `source_line` is 0.
 """
+
 from __future__ import annotations
 
 import re
@@ -59,6 +60,7 @@ def split_think(content: str):
         if m.group(2).strip():
             thoughts.append(m.group(2).strip())
         return ""
+
     return THINK_RX.sub(keep, content).strip(), thoughts
 
 
@@ -74,11 +76,21 @@ class TwinnyParser(Parser):
         state, problems = read_item(artifact.disk_path, ITEM_KEY)
         if isinstance(state, dict):
             convs = state.get(CONVERSATIONS)
-            convs = list(convs.values()) if isinstance(convs, dict) else convs if isinstance(convs, list) else []
+            convs = (
+                list(convs.values())
+                if isinstance(convs, dict)
+                else convs
+                if isinstance(convs, list)
+                else []
+            )
             convs = [c for c in convs if isinstance(c, dict)]
             active = state.get(ACTIVE)
             ids = {str(c.get("id")) for c in convs}
-            if isinstance(active, dict) and active.get("messages") and str(active.get("id")) not in ids:
+            if (
+                isinstance(active, dict)
+                and active.get("messages")
+                and str(active.get("id")) not in ids
+            ):
                 convs.append(active)
             for conv in convs:
                 yield from self._conversation(artifact, conv, opts)
@@ -95,7 +107,9 @@ class TwinnyParser(Parser):
         ts = to_utc(conv.get("updatedAt"))
         sid = str(conv.get("id") or "")
         messages = conv.get("messages")
-        messages = [m for m in messages if isinstance(m, dict)] if isinstance(messages, list) else []
+        messages = (
+            [m for m in messages if isinstance(m, dict)] if isinstance(messages, list) else []
+        )
 
         def row(turn: str, text, model: str = "", name: str = "", tid: str = "") -> Row:
             r = self.base_row(artifact)
@@ -108,8 +122,11 @@ class TwinnyParser(Parser):
             r.text = compact(text, opts.max_text_length)
             return r
 
-        yield row("system", "conversation: %s | messages=%d%s" % (
-            conv.get("title") or "", len(messages), "" if ts else " | updatedAt unknown"))
+        yield row(
+            "system",
+            "conversation: %s | messages=%d%s"
+            % (conv.get("title") or "", len(messages), "" if ts else " | updatedAt unknown"),
+        )
         for msg in messages:
             role = msg.get("role")
             meta = msg.get("meta") if isinstance(msg.get("meta"), dict) else {}
@@ -124,15 +141,25 @@ class TwinnyParser(Parser):
             if isinstance(images, list) and images:
                 text = ("%s\n[%d image(s)]" % (text, len(images))).strip()
             if text:
-                turn = "user" if role == "user" else "assistant" if role == "assistant" else "system"
-                yield row(turn, text if turn != "system" else "%s: %s" % (role or "unknown", text),
-                          model if turn != "user" else "")
+                turn = (
+                    "user" if role == "user" else "assistant" if role == "assistant" else "system"
+                )
+                yield row(
+                    turn,
+                    text if turn != "system" else "%s: %s" % (role or "unknown", text),
+                    model if turn != "user" else "",
+                )
             for step in msg.get("toolSteps") or []:
                 if not isinstance(step, dict):
                     continue
                 name, tid = str(step.get("name") or ""), str(step.get("id") or "")
                 args = step.get("args")
-                body = step.get("command") or (compact_json(args) if args else "") or step.get("summary") or ""
+                body = (
+                    step.get("command")
+                    or (compact_json(args) if args else "")
+                    or step.get("summary")
+                    or ""
+                )
                 yield row("tool_use", body, model, name, tid)
                 out = step.get("output")
                 out = out if isinstance(out, str) else compact_json(out) if out is not None else ""

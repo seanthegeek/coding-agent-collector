@@ -64,6 +64,7 @@ that is inference), so `wants()` ignores it until the format is confirmed
 from a shipped binary or a real install. The Kiro IDE stores are not parsed
 either.
 """
+
 from __future__ import annotations
 
 import json
@@ -77,7 +78,8 @@ from ..timeutil import to_utc
 from .base import Options, Parser, compact_json
 
 DB_RX = re.compile(
-    r"^(?:\.local/share|Library/Application Support|AppData/Local)/(?:amazon-q|kiro-cli)/data\.sqlite3$")
+    r"^(?:\.local/share|Library/Application Support|AppData/Local)/(?:amazon-q|kiro-cli)/data\.sqlite3$"
+)
 SESSIONS_RX = re.compile(r"^\.kiro/sessions/")
 SNIFF_BYTES = 4096
 
@@ -183,11 +185,15 @@ class KiroParser(Parser):
         with open_copy(artifact.disk_path) as con:
             tables = table_names(con)
             if "conversations" in tables:
-                for n, r in enumerate(con.execute("select key, value from conversations order by rowid"), 1):
+                for n, r in enumerate(
+                    con.execute("select key, value from conversations order by rowid"), 1
+                ):
                     value = r["value"]
                     if isinstance(value, bytes):
                         value = value.decode("utf-8", errors="replace")
-                    yield from self._conversation(artifact, opts, str(value or ""), str(r["key"] or ""), n)
+                    yield from self._conversation(
+                        artifact, opts, str(value or ""), str(r["key"] or ""), n
+                    )
             if "history" in tables:
                 yield from self._shell_history(artifact, opts, con)
 
@@ -201,8 +207,11 @@ class KiroParser(Parser):
             row.session_id = str(r.get("session_id") or "")
             row.project_path = str(r.get("cwd") or "")
             row.turn_type = "system"
-            extras = ["%s=%s" % (k, r[k]) for k in ("exit_code", "shell", "hostname", "duration")
-                      if r.get(k) not in (None, "")]
+            extras = [
+                "%s=%s" % (k, r[k])
+                for k in ("exit_code", "shell", "hostname", "duration")
+                if r.get(k) not in (None, "")
+            ]
             text = "shell history: %s" % (r.get("command") or "")
             if extras:
                 text += " (%s)" % " ".join(extras)
@@ -216,7 +225,9 @@ class KiroParser(Parser):
         yield from self._conversation(artifact, opts, text, "", 0)
 
     # -- ConversationState --------------------------------------------------------
-    def _conversation(self, artifact: Artifact, opts: Options, text: str, key: str, line: int) -> Iterator[Row]:
+    def _conversation(
+        self, artifact: Artifact, opts: Options, text: str, key: str, line: int
+    ) -> Iterator[Row]:
         state, err = salvage(text)
         if state is None or not isinstance(state.get("history"), list):
             if err:
@@ -296,10 +307,16 @@ class KiroParser(Parser):
         summary = state.get("latest_summary")
         if isinstance(summary, list) and summary:
             smeta = summary[1] if len(summary) > 1 and isinstance(summary[1], dict) else {}
-            ts = to_utc(smeta.get("stream_end_timestamp_ms")) or to_utc(smeta.get("request_start_timestamp_ms"))
+            ts = to_utc(smeta.get("stream_end_timestamp_ms")) or to_utc(
+                smeta.get("request_start_timestamp_ms")
+            )
             row = base(ts, str(smeta.get("model_id") or ""))
             row.turn_type = "system"
-            yield fill(row, "summary: %s" % (summary[0] if isinstance(summary[0], str) else compact_json(summary[0])))
+            yield fill(
+                row,
+                "summary: %s"
+                % (summary[0] if isinstance(summary[0], str) else compact_json(summary[0])),
+            )
 
         pending = state.get("next_message")
         if isinstance(pending, dict):
@@ -307,7 +324,10 @@ class KiroParser(Parser):
             prompt = body.get("prompt") if tag in ("Prompt", "CancelledToolUses") else None
             row = base(to_utc(pending.get("timestamp")))
             row.turn_type = "system"
-            yield fill(row, "pending message (not sent): %s" % (prompt or compact_json(pending.get("content"))))
+            yield fill(
+                row,
+                "pending message (not sent): %s" % (prompt or compact_json(pending.get("content"))),
+            )
 
         if err:
             row = self.base_row(artifact)
@@ -316,7 +336,9 @@ class KiroParser(Parser):
             row.project_path = project
             row.turn_type = "system"
             row.text = "parser: truncated conversation, %d history entries recovered: %s" % (
-                len(state["history"]), err)
+                len(state["history"]),
+                err,
+            )
             yield row
 
     @staticmethod

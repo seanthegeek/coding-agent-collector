@@ -1,5 +1,6 @@
 """Parser interface. A parser owns one agent name from the catalog, says which
 of that agent's artifacts it reads, and yields timeline rows from each."""
+
 from __future__ import annotations
 
 import json
@@ -12,7 +13,7 @@ from ..model import Row
 
 @dataclass
 class Options:
-    max_text_length: int = 0   # 0 means unlimited
+    max_text_length: int = 0  # 0 means unlimited
     include_thinking: bool = False
 
 
@@ -32,7 +33,12 @@ class Parser:
         raise NotImplementedError
 
     def base_row(self, artifact: Artifact) -> Row:
-        return Row(host=artifact.home.host, user=artifact.home.user, agent=self.agent, source_file=artifact.original)
+        return Row(
+            host=artifact.home.host,
+            user=artifact.home.user,
+            agent=self.agent,
+            source_file=artifact.original,
+        )
 
 
 def iter_jsonl(path, errors: list) -> Iterator[tuple[int, dict]]:

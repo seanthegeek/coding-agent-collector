@@ -13,6 +13,7 @@ The database is opened through `sqlite_util.open_copy`, so the `-wal`
 sidecar is applied and the evidence copy is never opened. A file that is
 not SQLite at all yields nothing; a damaged SQLite file or a value that is
 not JSON is reported in the returned problem list."""
+
 from __future__ import annotations
 
 import json

@@ -70,6 +70,7 @@ else the message's ms timestamp, else the row's `created_at`. `source_line`
 is the `transcript_events` (or archive table) rowid, or the JSONL line. No
 git branch is recorded.
 """
+
 from __future__ import annotations
 
 import json
@@ -87,7 +88,9 @@ STATE = r"(?:\.openclaw(?:-[^/]+)?|\.clawdbot|\.moltbot)"
 DB_RX = re.compile(r"^" + STATE + r"/agents/[^/]+/agent/openclaw-agent\.sqlite$")
 SESSIONS = r"^" + STATE + r"/(?:agents/[^/]+/)?sessions/"
 ARCHIVE_SUFFIX = r"\.jsonl\.(reset|deleted)\.\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d(?:\.\d{3})?Z(?:\.[0-9a-f]{32})?(?:\.zst)?"
-JSONL_RX = re.compile(SESSIONS + r"(?P<name>[^/]+?)(?:(?P<archive>" + ARCHIVE_SUFFIX + r")|\.jsonl)$")
+JSONL_RX = re.compile(
+    SESSIONS + r"(?P<name>[^/]+?)(?:(?P<archive>" + ARCHIVE_SUFFIX + r")|\.jsonl)$"
+)
 COLD_RX = re.compile(SESSIONS + r"cold/[0-9a-f]{64}\.jsonl\.zst$")
 SKIP_NAME_RX = re.compile(r"\.checkpoint\.[0-9a-fA-F-]{36}$|\.trajectory$")
 ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
@@ -167,8 +170,19 @@ class OpenClawParser(Parser):
             yield from self._parse_file(artifact, opts)
 
     # -- rows -------------------------------------------------------------------
-    def _row(self, artifact: Artifact, s: _Session, line: int, ts: str, turn_type: str, text: str,
-             opts: Options, model: str = "", tool_name: str = "", tool_use_id: str = "") -> Row:
+    def _row(
+        self,
+        artifact: Artifact,
+        s: _Session,
+        line: int,
+        ts: str,
+        turn_type: str,
+        text: str,
+        opts: Options,
+        model: str = "",
+        tool_name: str = "",
+        tool_use_id: str = "",
+    ) -> Row:
         row = self.base_row(artifact)
         row.source_line = line
         row.session_id = s.session_id
@@ -181,8 +195,15 @@ class OpenClawParser(Parser):
         row.text = compact(text, opts.max_text_length)
         return row
 
-    def _start(self, artifact: Artifact, s: _Session, line: int, ts: str, header: dict | None,
-               opts: Options) -> Row:
+    def _start(
+        self,
+        artifact: Artifact,
+        s: _Session,
+        line: int,
+        ts: str,
+        header: dict | None,
+        opts: Options,
+    ) -> Row:
         s.started = True
         header = header or {}
         if header.get("id") and not s.session_id:
@@ -190,17 +211,24 @@ class OpenClawParser(Parser):
         if isinstance(header.get("cwd"), str):
             s.cwd = header["cwd"]
         parent = header.get("parentSession")
-        text = " ".join(x for x in (
-            "session start:",
-            "key=%s" % s.key if s.key else "",
-            s.extra,
-            "version=%s" % header["version"] if header.get("version") is not None else "",
-            "parent_session=%s" % parent if parent else "",
-        ) if x)
-        return self._row(artifact, s, line, ts or to_utc(header.get("timestamp")), "system", text, opts, s.model)
+        text = " ".join(
+            x
+            for x in (
+                "session start:",
+                "key=%s" % s.key if s.key else "",
+                s.extra,
+                "version=%s" % header["version"] if header.get("version") is not None else "",
+                "parent_session=%s" % parent if parent else "",
+            )
+            if x
+        )
+        return self._row(
+            artifact, s, line, ts or to_utc(header.get("timestamp")), "system", text, opts, s.model
+        )
 
-    def _entry_rows(self, artifact: Artifact, s: _Session, line: int, rec: dict, created_at,
-                    opts: Options) -> Iterator[Row]:
+    def _entry_rows(
+        self, artifact: Artifact, s: _Session, line: int, rec: dict, created_at, opts: Options
+    ) -> Iterator[Row]:
         etype = rec.get("type")
         msg = rec.get("message") if isinstance(rec.get("message"), dict) else {}
         ts = to_utc(rec.get("timestamp")) or to_utc(msg.get("timestamp")) or to_utc(created_at)
@@ -218,33 +246,63 @@ class OpenClawParser(Parser):
 
         if etype == "model_change":
             s.model = str(rec.get("modelId") or "")
-            yield system("model change: %s" % "/".join(str(x) for x in (rec.get("provider"), rec.get("modelId")) if x),
-                         s.model)
+            yield system(
+                "model change: %s"
+                % "/".join(str(x) for x in (rec.get("provider"), rec.get("modelId")) if x),
+                s.model,
+            )
         elif etype == "thinking_level_change":
             yield system("thinking level: %s" % (rec.get("thinkingLevel") or ""))
         elif etype == "compaction":
-            tokens = " ".join(x for x in (
-                "tokens_before=%s" % rec["tokensBefore"] if rec.get("tokensBefore") is not None else "",
-                "tokens_after=%s" % rec["tokensAfter"] if rec.get("tokensAfter") is not None else "") if x)
-            yield system("compaction%s: %s" % (" (%s)" % tokens if tokens else "", rec.get("summary") or ""))
+            tokens = " ".join(
+                x
+                for x in (
+                    "tokens_before=%s" % rec["tokensBefore"]
+                    if rec.get("tokensBefore") is not None
+                    else "",
+                    "tokens_after=%s" % rec["tokensAfter"]
+                    if rec.get("tokensAfter") is not None
+                    else "",
+                )
+                if x
+            )
+            yield system(
+                "compaction%s: %s" % (" (%s)" % tokens if tokens else "", rec.get("summary") or "")
+            )
         elif etype == "reset":
             yield system("reset: %s" % (rec.get("reason") or ""))
         elif etype == "branch_summary":
             yield system("branch summary: %s" % (rec.get("summary") or ""))
         elif etype == "custom":
-            yield system("custom %s: %s" % (rec.get("customType") or "", compact_json(rec.get("data"))))
+            yield system(
+                "custom %s: %s" % (rec.get("customType") or "", compact_json(rec.get("data")))
+            )
         elif etype == "custom_message":
-            yield system("custom message %s: %s" % (rec.get("customType") or "", text_of(rec.get("content"))))
+            yield system(
+                "custom message %s: %s" % (rec.get("customType") or "", text_of(rec.get("content")))
+            )
         elif etype == "label":
-            yield system("label: %s (entry %s)" % (rec.get("label") or "", rec.get("targetId") or ""))
+            yield system(
+                "label: %s (entry %s)" % (rec.get("label") or "", rec.get("targetId") or "")
+            )
         elif etype == "session_info":
             yield system("session name: %s" % (rec.get("name") or ""))
         else:
-            rest = {k: v for k, v in rec.items() if k not in ("type", "id", "parentId", "timestamp")}
+            rest = {
+                k: v for k, v in rec.items() if k not in ("type", "id", "parentId", "timestamp")
+            }
             yield system("%s: %s" % (etype or "entry", compact_json(rest)))
 
-    def _message_rows(self, artifact: Artifact, s: _Session, line: int, ts: str, rec: dict, msg: dict,
-                      opts: Options) -> Iterator[Row]:
+    def _message_rows(
+        self,
+        artifact: Artifact,
+        s: _Session,
+        line: int,
+        ts: str,
+        rec: dict,
+        msg: dict,
+        opts: Options,
+    ) -> Iterator[Row]:
         role = msg.get("role")
         if role == "user":
             text = text_of(msg.get("content"))
@@ -265,51 +323,124 @@ class OpenClawParser(Parser):
                 bt = b.get("type")
                 if bt == "text":
                     if b.get("text"):
-                        yield self._row(artifact, s, line, ts, "assistant", str(b["text"]), opts, model)
+                        yield self._row(
+                            artifact, s, line, ts, "assistant", str(b["text"]), opts, model
+                        )
                 elif bt == "thinking":
                     if opts.include_thinking:
-                        t = b.get("thinking") or ("[redacted thinking]" if b.get("redacted") else "")
+                        t = b.get("thinking") or (
+                            "[redacted thinking]" if b.get("redacted") else ""
+                        )
                         if t:
                             yield self._row(artifact, s, line, ts, "thinking", str(t), opts, model)
                 elif bt == "toolCall":
-                    yield self._row(artifact, s, line, ts, "tool_use", tool_args_text(b.get("arguments")), opts,
-                                    model, str(b.get("name") or ""), str(b.get("id") or ""))
+                    yield self._row(
+                        artifact,
+                        s,
+                        line,
+                        ts,
+                        "tool_use",
+                        tool_args_text(b.get("arguments")),
+                        opts,
+                        model,
+                        str(b.get("name") or ""),
+                        str(b.get("id") or ""),
+                    )
                 elif bt == "image":
                     yield self._row(artifact, s, line, ts, "assistant", "[image]", opts, model)
             stop = msg.get("stopReason")
             if stop in ("error", "aborted") or msg.get("errorMessage"):
-                yield self._row(artifact, s, line, ts, "system", "assistant %s: %s" % (
-                    stop or "error", msg.get("errorMessage") or ""), opts, model)
+                yield self._row(
+                    artifact,
+                    s,
+                    line,
+                    ts,
+                    "system",
+                    "assistant %s: %s" % (stop or "error", msg.get("errorMessage") or ""),
+                    opts,
+                    model,
+                )
         elif role == "toolResult":
             text = text_of(msg.get("content"))
             if msg.get("isError"):
                 text = "[error] " + text
-            yield self._row(artifact, s, line, ts, "tool_result", text, opts, "",
-                            str(msg.get("toolName") or ""), str(msg.get("toolCallId") or ""))
+            yield self._row(
+                artifact,
+                s,
+                line,
+                ts,
+                "tool_result",
+                text,
+                opts,
+                "",
+                str(msg.get("toolName") or ""),
+                str(msg.get("toolCallId") or ""),
+            )
         elif role == "bashExecution":
             tid = str(rec.get("id") or "")
-            yield self._row(artifact, s, line, ts, "tool_use", str(msg.get("command") or ""), opts, "", "bash", tid)
+            yield self._row(
+                artifact,
+                s,
+                line,
+                ts,
+                "tool_use",
+                str(msg.get("command") or ""),
+                opts,
+                "",
+                "bash",
+                tid,
+            )
             status = "exit=%s" % msg.get("exitCode")
             if msg.get("cancelled"):
                 status += " cancelled"
             if msg.get("truncated"):
                 status += " truncated"
-            yield self._row(artifact, s, line, ts, "tool_result", "[%s] %s" % (status, msg.get("output") or ""),
-                            opts, "", "bash", tid)
+            yield self._row(
+                artifact,
+                s,
+                line,
+                ts,
+                "tool_result",
+                "[%s] %s" % (status, msg.get("output") or ""),
+                opts,
+                "",
+                "bash",
+                tid,
+            )
         elif role in ("branchSummary", "compactionSummary"):
             label = "branch summary" if role == "branchSummary" else "compaction summary"
-            yield self._row(artifact, s, line, ts, "system", "%s: %s" % (label, msg.get("summary") or ""), opts)
+            yield self._row(
+                artifact, s, line, ts, "system", "%s: %s" % (label, msg.get("summary") or ""), opts
+            )
         elif role == "custom":
-            yield self._row(artifact, s, line, ts, "system", "custom %s: %s" % (
-                msg.get("customType") or "", text_of(msg.get("content"))), opts)
+            yield self._row(
+                artifact,
+                s,
+                line,
+                ts,
+                "system",
+                "custom %s: %s" % (msg.get("customType") or "", text_of(msg.get("content"))),
+                opts,
+            )
         else:
-            yield self._row(artifact, s, line, ts, "system", "%s: %s" % (
-                role or "message", text_of(msg.get("content")) or compact_json(msg)), opts)
+            yield self._row(
+                artifact,
+                s,
+                line,
+                ts,
+                "system",
+                "%s: %s" % (role or "message", text_of(msg.get("content")) or compact_json(msg)),
+                opts,
+            )
 
-    def _bad(self, artifact: Artifact, s: _Session, line: int, text: str, opts: Options, ts: str = "") -> Row:
+    def _bad(
+        self, artifact: Artifact, s: _Session, line: int, text: str, opts: Options, ts: str = ""
+    ) -> Row:
         return self._row(artifact, s, line, ts, "system", "parser: " + text, opts)
 
-    def _records(self, artifact: Artifact, s: _Session, records, opts: Options, fixed_line: int = 0) -> Iterator[Row]:
+    def _records(
+        self, artifact: Artifact, s: _Session, records, opts: Options, fixed_line: int = 0
+    ) -> Iterator[Row]:
         """Rows from (line, record) pairs of a JSONL transcript or a cold
         archive envelope; `fixed_line` overrides the line for blobs."""
         for n, rec in records:
@@ -324,11 +455,19 @@ class OpenClawParser(Parser):
                 try:
                     entry = json.loads(inner.get("event_json") or "")
                 except (TypeError, ValueError) as e:
-                    yield self._bad(artifact, s, line, "cold archive event seq %s unreadable: %s" % (
-                        inner.get("seq"), e), opts, to_utc(inner.get("created_at")))
+                    yield self._bad(
+                        artifact,
+                        s,
+                        line,
+                        "cold archive event seq %s unreadable: %s" % (inner.get("seq"), e),
+                        opts,
+                        to_utc(inner.get("created_at")),
+                    )
                     continue
                 if isinstance(entry, dict):
-                    yield from self._entry_rows(artifact, s, line, entry, inner.get("created_at"), opts)
+                    yield from self._entry_rows(
+                        artifact, s, line, entry, inner.get("created_at"), opts
+                    )
                 continue
             yield from self._entry_rows(artifact, s, line, rec, None, opts)
 
@@ -337,7 +476,7 @@ class OpenClawParser(Parser):
         m = JSONL_RX.match(artifact.rel)
         s = _Session(session_id=m.group("name") if m else "")
         if m and m.group("archive"):
-            s.extra = "archive=%s" % m.group("archive")[len(".jsonl."):]
+            s.extra = "archive=%s" % m.group("archive")[len(".jsonl.") :]
         if m:
             s.key = self._legacy_key(artifact, s.session_id)
         with open(artifact.disk_path, "rb") as fh:
@@ -349,8 +488,13 @@ class OpenClawParser(Parser):
         errors: list = []
         yield from self._records(artifact, s, _iter_lines(data, errors), opts)
         if errors:
-            yield self._bad(artifact, s, errors[0][0], "%d unparseable line(s), first at line %d" % (
-                len(errors), errors[0][0]), opts)
+            yield self._bad(
+                artifact,
+                s,
+                errors[0][0],
+                "%d unparseable line(s), first at line %d" % (len(errors), errors[0][0]),
+                opts,
+            )
 
     @staticmethod
     def _legacy_key(artifact: Artifact, session_id: str) -> str:
@@ -385,23 +529,42 @@ class OpenClawParser(Parser):
                 yield from self._db_cold(artifact, con, windows, opts)
 
     @staticmethod
-    def _window_session(session_id: str, windows: dict[str, dict], key: str = "", extra: str = "") -> _Session:
+    def _window_session(
+        session_id: str, windows: dict[str, dict], key: str = "", extra: str = ""
+    ) -> _Session:
         w = windows.get(session_id) or {}
         parts: list[str] = []
-        for col in ("channel", "account_id", "chat_type", "reason", "previous_session_id",
-                    "parent_session_key", "spawned_by", "display_name"):
+        for col in (
+            "channel",
+            "account_id",
+            "chat_type",
+            "reason",
+            "previous_session_id",
+            "parent_session_key",
+            "spawned_by",
+            "display_name",
+        ):
             if w.get(col) not in (None, ""):
                 parts.append("%s=%s" % (col, w[col]))
         if extra:
             parts.append(extra)
         if w.get("model_provider"):
             parts.append("model_provider=%s" % w["model_provider"])
-        return _Session(session_id, key or str(w.get("session_key") or ""), " ".join(parts), str(w.get("model") or ""))
+        return _Session(
+            session_id,
+            key or str(w.get("session_key") or ""),
+            " ".join(parts),
+            str(w.get("model") or ""),
+        )
 
-    def _db_events(self, artifact: Artifact, con, windows: dict[str, dict], opts: Options) -> Iterator[Row]:
+    def _db_events(
+        self, artifact: Artifact, con, windows: dict[str, dict], opts: Options
+    ) -> Iterator[Row]:
         s: _Session | None = None
-        for r in con.execute("select rowid as _rowid, session_id, seq, event_json, event_zstd, created_at "
-                             "from transcript_events order by session_id, seq"):
+        for r in con.execute(
+            "select rowid as _rowid, session_id, seq, event_json, event_zstd, created_at "
+            "from transcript_events order by session_id, seq"
+        ):
             r = dict(r)
             sid = str(r.get("session_id") or "")
             if s is None or s.session_id != sid:
@@ -412,66 +575,128 @@ class OpenClawParser(Parser):
                 data, err = _maybe_zstd(r["event_zstd"])
                 if data is None:
                     if not s.started:
-                        yield self._start(artifact, s, line, to_utc(r.get("created_at")), None, opts)
-                    yield self._bad(artifact, s, line, "event seq %s could not be decompressed (%s)" % (
-                        r.get("seq"), err), opts, to_utc(r.get("created_at")))
+                        yield self._start(
+                            artifact, s, line, to_utc(r.get("created_at")), None, opts
+                        )
+                    yield self._bad(
+                        artifact,
+                        s,
+                        line,
+                        "event seq %s could not be decompressed (%s)" % (r.get("seq"), err),
+                        opts,
+                        to_utc(r.get("created_at")),
+                    )
                     continue
                 raw = data.decode("utf-8", errors="replace")
             try:
-                rec = json.loads(raw if isinstance(raw, str) else bytes(raw or b"").decode("utf-8", errors="replace"))
+                rec = json.loads(
+                    raw
+                    if isinstance(raw, str)
+                    else bytes(raw or b"").decode("utf-8", errors="replace")
+                )
             except ValueError as e:
                 rec = None
                 err = str(e)
             if not isinstance(rec, dict):
                 if not s.started:
                     yield self._start(artifact, s, line, to_utc(r.get("created_at")), None, opts)
-                yield self._bad(artifact, s, line, "event seq %s unreadable: %s" % (
-                    r.get("seq"), err if rec is None else "not a JSON object"), opts, to_utc(r.get("created_at")))
+                yield self._bad(
+                    artifact,
+                    s,
+                    line,
+                    "event seq %s unreadable: %s"
+                    % (r.get("seq"), err if rec is None else "not a JSON object"),
+                    opts,
+                    to_utc(r.get("created_at")),
+                )
                 continue
             yield from self._entry_rows(artifact, s, line, rec, r.get("created_at"), opts)
 
-    def _db_archives(self, artifact: Artifact, con, windows: dict[str, dict], opts: Options) -> Iterator[Row]:
-        for r in con.execute("select rowid as _rowid, session_id, session_key, reason, encoding, archive_name, "
-                             "created_at, published_at, archive_blob from session_transcript_archives "
-                             "order by created_at"):
+    def _db_archives(
+        self, artifact: Artifact, con, windows: dict[str, dict], opts: Options
+    ) -> Iterator[Row]:
+        for r in con.execute(
+            "select rowid as _rowid, session_id, session_key, reason, encoding, archive_name, "
+            "created_at, published_at, archive_blob from session_transcript_archives "
+            "order by created_at"
+        ):
             r = dict(r)
             sid = str(r.get("session_id") or "")
             extra = "archive=%s name=%s" % (r.get("reason") or "", r.get("archive_name") or "")
             s = self._window_session(sid, windows, str(r.get("session_key") or ""), extra)
             line = r["_rowid"]
             if r.get("published_at"):
-                yield self._row(artifact, s, line, to_utc(r.get("created_at")), "system",
-                                "session %s archive %s is in the sessions directory as %s; its rows come from that file"
-                                % (r.get("reason") or "", sid, r.get("archive_name") or ""), opts)
+                yield self._row(
+                    artifact,
+                    s,
+                    line,
+                    to_utc(r.get("created_at")),
+                    "system",
+                    "session %s archive %s is in the sessions directory as %s; its rows come from that file"
+                    % (r.get("reason") or "", sid, r.get("archive_name") or ""),
+                    opts,
+                )
                 continue
             data, err = _maybe_zstd(r.get("archive_blob") or b"")
             if data is None:
-                yield self._bad(artifact, s, line, "archive %s could not be decompressed (%s)" % (
-                    r.get("archive_name") or sid, err), opts, to_utc(r.get("created_at")))
+                yield self._bad(
+                    artifact,
+                    s,
+                    line,
+                    "archive %s could not be decompressed (%s)"
+                    % (r.get("archive_name") or sid, err),
+                    opts,
+                    to_utc(r.get("created_at")),
+                )
                 continue
             errors: list = []
             yield from self._records(artifact, s, _iter_lines(data, errors), opts, fixed_line=line)
             if errors:
-                yield self._bad(artifact, s, line, "archive %s: %d unparseable line(s)" % (
-                    r.get("archive_name") or sid, len(errors)), opts)
+                yield self._bad(
+                    artifact,
+                    s,
+                    line,
+                    "archive %s: %d unparseable line(s)"
+                    % (r.get("archive_name") or sid, len(errors)),
+                    opts,
+                )
 
-    def _db_cold(self, artifact: Artifact, con, windows: dict[str, dict], opts: Options) -> Iterator[Row]:
-        for r in con.execute("select rowid as _rowid, session_id, archive_name, archived_at, archive_blob "
-                             "from session_transcript_cold_archives where storage = 'sqlite' order by archived_at"):
+    def _db_cold(
+        self, artifact: Artifact, con, windows: dict[str, dict], opts: Options
+    ) -> Iterator[Row]:
+        for r in con.execute(
+            "select rowid as _rowid, session_id, archive_name, archived_at, archive_blob "
+            "from session_transcript_cold_archives where storage = 'sqlite' order by archived_at"
+        ):
             r = dict(r)
             sid = str(r.get("session_id") or "")
-            s = self._window_session(sid, windows, extra="cold_archive=%s" % (r.get("archive_name") or ""))
+            s = self._window_session(
+                sid, windows, extra="cold_archive=%s" % (r.get("archive_name") or "")
+            )
             line = r["_rowid"]
             data, err = _maybe_zstd(r.get("archive_blob") or b"")
             if data is None:
-                yield self._bad(artifact, s, line, "cold archive %s could not be decompressed (%s)" % (
-                    r.get("archive_name") or sid, err), opts, to_utc(r.get("archived_at")))
+                yield self._bad(
+                    artifact,
+                    s,
+                    line,
+                    "cold archive %s could not be decompressed (%s)"
+                    % (r.get("archive_name") or sid, err),
+                    opts,
+                    to_utc(r.get("archived_at")),
+                )
                 continue
             errors: list = []
             yield from self._records(artifact, s, _iter_lines(data, errors), opts, fixed_line=line)
             if errors:
-                yield self._bad(artifact, s, line, "cold archive %s: %d unparseable line(s)" % (
-                    r.get("archive_name") or sid, len(errors)), opts)
+                yield self._bad(
+                    artifact,
+                    s,
+                    line,
+                    "cold archive %s: %d unparseable line(s)"
+                    % (r.get("archive_name") or sid, len(errors)),
+                    opts,
+                )
 
 
 __all__ = ["OpenClawParser", "tool_args_text"]

@@ -1,6 +1,7 @@
 """Output schema. `timeline.csv` and `sessions.csv` are interfaces that
 analysts build on; add columns at the end, never rename or remove them
 without a README note."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
@@ -104,9 +105,18 @@ class SessionSummary:
 
     def as_list(self) -> list[object]:
         return [
-            self.host, self.user, self.agent, self.session_id, self.project_path,
-            self.first_timestamp_utc, self.last_timestamp_utc, " ".join(self.models),
-            self.user_turns, self.assistant_turns, self.tool_calls, self.source_file,
+            self.host,
+            self.user,
+            self.agent,
+            self.session_id,
+            self.project_path,
+            self.first_timestamp_utc,
+            self.last_timestamp_utc,
+            " ".join(self.models),
+            self.user_turns,
+            self.assistant_turns,
+            self.tool_calls,
+            self.source_file,
         ]
 
 

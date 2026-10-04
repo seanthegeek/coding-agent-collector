@@ -1,4 +1,5 @@
 """Parser registry. Add a parser module here and in the README's table."""
+
 from __future__ import annotations
 
 from .agent_zero import AgentZeroParser

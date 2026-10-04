@@ -1,6 +1,7 @@
 """Timestamp normalisation. Every timestamp the analyzer emits is UTC ISO 8601
 with millisecond precision and a trailing Z, so rows from different agents
 sort together."""
+
 from __future__ import annotations
 
 import re

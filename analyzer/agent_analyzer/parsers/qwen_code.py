@@ -33,6 +33,7 @@ stream, not Gemini's. Files:
 Not parsed: `checkpoint-<tag>.json` (a raw `Content[]` without timestamps)
 and `shell_history`.
 """
+
 from __future__ import annotations
 
 import json
@@ -48,7 +49,17 @@ SESSION_RX = re.compile(r"^\.qwen/projects/[^/]+/chats/(?:archive/)?[^/]+\.jsonl
 LOGS_RX = re.compile(r"^\.qwen/tmp/[^/]+/logs\.json$")
 SIDECAR_SUFFIX = ".ledger.jsonl"
 
-ARG_KEYS = ("command", "absolute_path", "file_path", "path", "pattern", "url", "query", "prompt", "description")
+ARG_KEYS = (
+    "command",
+    "absolute_path",
+    "file_path",
+    "path",
+    "pattern",
+    "url",
+    "query",
+    "prompt",
+    "description",
+)
 
 
 def args_summary(args) -> str:
@@ -142,7 +153,11 @@ class QwenCodeParser(Parser):
 
             parts = _parts(rec)
             if rtype == "user":
-                text = "\n".join(p["text"] for p in parts if isinstance(p.get("text"), str) and not p.get("thought"))
+                text = "\n".join(
+                    p["text"]
+                    for p in parts
+                    if isinstance(p.get("text"), str) and not p.get("thought")
+                )
                 if not text:
                     payload = rec.get("systemPayload")
                     if isinstance(payload, dict):
@@ -169,7 +184,11 @@ class QwenCodeParser(Parser):
             elif rtype == "tool_result":
                 tcr = rec.get("toolCallResult")
                 tcr = tcr if isinstance(tcr, dict) else {}
-                responses = [p["functionResponse"] for p in parts if isinstance(p.get("functionResponse"), dict)]
+                responses = [
+                    p["functionResponse"]
+                    for p in parts
+                    if isinstance(p.get("functionResponse"), dict)
+                ]
                 fr = responses[0] if responses else {}
                 display = tcr.get("resultDisplay")
                 if isinstance(display, str) and display:
@@ -180,7 +199,11 @@ class QwenCodeParser(Parser):
                     text = compact_json(display) if display else ""
                 status = str(tcr.get("status") or "")
                 if status and status != "success":
-                    tag = status if not tcr.get("errorType") else "%s %s" % (status, tcr.get("errorType"))
+                    tag = (
+                        status
+                        if not tcr.get("errorType")
+                        else "%s %s" % (status, tcr.get("errorType"))
+                    )
                     text = "[%s] %s" % (tag, text)
                 row = base("tool_result", text)
                 row.tool_name = str(fr.get("name") or "")
@@ -217,10 +240,17 @@ class QwenCodeParser(Parser):
                     except ValueError:
                         event = message
                 if etype == "model_switch" and isinstance(event, dict):
-                    text = "model_switch: %s -> %s (%s)" % (event.get("fromModel"), event.get("toModel"), event.get("reason"))
+                    text = "model_switch: %s -> %s (%s)" % (
+                        event.get("fromModel"),
+                        event.get("toModel"),
+                        event.get("reason"),
+                    )
                     row.model = str(event.get("toModel") or "")
                 else:
-                    text = "%s: %s" % (etype, event if isinstance(event, str) else compact_json(event))
+                    text = "%s: %s" % (
+                        etype,
+                        event if isinstance(event, str) else compact_json(event),
+                    )
             row.text = compact(text, opts.max_text_length)
             yield row
         if errors:
@@ -265,10 +295,17 @@ class QwenCodeParser(Parser):
         if pos >= n:
             errors.append((idx + 1, "unterminated JSON array"))
 
-    def _error_row(self, artifact: Artifact, session_id: str, errors: list, unit: str = "line") -> Row:
+    def _error_row(
+        self, artifact: Artifact, session_id: str, errors: list, unit: str = "line"
+    ) -> Row:
         row = self.base_row(artifact)
         row.session_id = session_id
         row.turn_type = "system"
         row.source_line = errors[0][0]
-        row.text = "parser: %d unparseable %s(s), first at %s %d" % (len(errors), unit, unit, errors[0][0])
+        row.text = "parser: %d unparseable %s(s), first at %s %d" % (
+            len(errors),
+            unit,
+            unit,
+            errors[0][0],
+        )
         return row

@@ -42,6 +42,7 @@ without a timestamp inherit the previous one, else the metadata
 branch is recorded. `/new` empties a session file, so earlier turns may
 survive only in `memory/history.jsonl`.
 """
+
 from __future__ import annotations
 
 import base64
@@ -55,8 +56,10 @@ from .base import Options, Parser, iter_jsonl, text_of
 from .openclaw import tool_args_text
 
 STATE = r"\.nanobot(?:-[^/]+)?"
-SESSION_RX = re.compile(r"^" + STATE + r"/sessions/(?:(?P<ws>[0-9a-f]{32})/(?:\.migration-conflicts/)?)?"
-                        r"(?P<stem>[^/]+)\.jsonl$")
+SESSION_RX = re.compile(
+    r"^" + STATE + r"/sessions/(?:(?P<ws>[0-9a-f]{32})/(?:\.migration-conflicts/)?)?"
+    r"(?P<stem>[^/]+)\.jsonl$"
+)
 HISTORY_RX = re.compile(r"^" + STATE + r"/(?:.+/)?memory/history\.jsonl$")
 ORIGINAL_MEMORY_RX = re.compile(r"^(.*)[\\/]memory[\\/]history\.jsonl$")
 
@@ -108,7 +111,9 @@ class NanobotParser(Parser):
         last_ts = ""
         errors: list = []
 
-        def row(n: int, turn_type: str, text: str, tool_name: str = "", tool_use_id: str = "") -> Row:
+        def row(
+            n: int, turn_type: str, text: str, tool_name: str = "", tool_use_id: str = ""
+        ) -> Row:
             r = self.base_row(artifact)
             r.source_line = n
             r.session_id = session_id
@@ -129,14 +134,25 @@ class NanobotParser(Parser):
                 meta = rec.get("metadata") if isinstance(rec.get("metadata"), dict) else {}
                 model = str(meta.get("_nanobot_model_preset") or "")
                 last_ts = to_utc(rec.get("created_at")) or to_utc(rec.get("updated_at"))
-                yield row(n, "system", " ".join(x for x in (
-                    "session start: key=%s" % session_id,
-                    "last_channel=%s" % meta["last_channel"] if meta.get("last_channel") else "",
-                    "updated_at=%s" % rec["updated_at"] if rec.get("updated_at") else "",
-                    "workspace=%s" % project if project else "") if x))
+                yield row(
+                    n,
+                    "system",
+                    " ".join(
+                        x
+                        for x in (
+                            "session start: key=%s" % session_id,
+                            "last_channel=%s" % meta["last_channel"]
+                            if meta.get("last_channel")
+                            else "",
+                            "updated_at=%s" % rec["updated_at"] if rec.get("updated_at") else "",
+                            "workspace=%s" % project if project else "",
+                        )
+                        if x
+                    ),
+                )
                 continue
             if rtype is not None and "role" not in rec:
-                continue    # provider_state and future record types
+                continue  # provider_state and future record types
             last_ts = to_utc(rec.get("timestamp")) or last_ts
             role = rec.get("role")
             text = text_of(rec.get("content"))
@@ -155,15 +171,29 @@ class NanobotParser(Parser):
                     if not isinstance(tc, dict):
                         continue
                     fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
-                    yield row(n, "tool_use", tool_args_text(fn.get("arguments")), str(fn.get("name") or ""),
-                              str(tc.get("id") or ""))
+                    yield row(
+                        n,
+                        "tool_use",
+                        tool_args_text(fn.get("arguments")),
+                        str(fn.get("name") or ""),
+                        str(tc.get("id") or ""),
+                    )
             elif role == "tool":
-                yield row(n, "tool_result", text, str(rec.get("name") or ""), str(rec.get("tool_call_id") or ""))
+                yield row(
+                    n,
+                    "tool_result",
+                    text,
+                    str(rec.get("name") or ""),
+                    str(rec.get("tool_call_id") or ""),
+                )
             else:
                 yield row(n, "system", "%s: %s" % (role or "message", text))
         if errors:
-            yield row(errors[0][0], "system", "parser: %d unparseable line(s), first at line %d" % (
-                len(errors), errors[0][0]))
+            yield row(
+                errors[0][0],
+                "system",
+                "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0]),
+            )
 
     def _parse_history(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         m = ORIGINAL_MEMORY_RX.match(artifact.original or "")
@@ -176,15 +206,20 @@ class NanobotParser(Parser):
             r.project_path = project
             r.timestamp_utc = to_utc(rec.get("timestamp"))
             r.turn_type = "system"
-            r.text = compact("memory history #%s: %s" % (rec.get("cursor", ""), rec.get("content") or ""),
-                             opts.max_text_length)
+            r.text = compact(
+                "memory history #%s: %s" % (rec.get("cursor", ""), rec.get("content") or ""),
+                opts.max_text_length,
+            )
             yield r
         if errors:
             r = self.base_row(artifact)
             r.source_line = errors[0][0]
             r.project_path = project
             r.turn_type = "system"
-            r.text = "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0])
+            r.text = "parser: %d unparseable line(s), first at line %d" % (
+                len(errors),
+                errors[0][0],
+            )
             yield r
 
 

@@ -58,6 +58,7 @@ recorded. `source_line` is the log item's `no`. A `chat.json` that does not
 parse yields one `system` row plus whatever complete log items can be
 recovered from it, without the history.
 """
+
 from __future__ import annotations
 
 import json
@@ -190,8 +191,12 @@ class AgentZeroParser(Parser):
             if not isinstance(chat, dict):
                 raise ValueError("top level is not an object")
         except ValueError as e:
-            yield self._row(base, "system", "parser: chat.json did not parse (%s); log items recovered without history" % e,
-                            opts)
+            yield self._row(
+                base,
+                "system",
+                "parser: chat.json did not parse (%s); log items recovered without history" % e,
+                opts,
+            )
             yield from self._log_rows(base, recover_logs(raw), {}, None, opts)
             return
 
@@ -199,12 +204,22 @@ class AgentZeroParser(Parser):
         data = chat.get("data") if isinstance(chat.get("data"), dict) else {}
         if data.get("project"):
             base.project_path = "/a0/usr/projects/%s" % data["project"]
-        start = self._row(base, "system", " | ".join(x for x in (
-            "chat start", str(chat.get("name") or ""),
-            "type=%s" % chat["type"] if chat.get("type") else "",
-            "profile=%s" % chat["agent_profile"] if chat.get("agent_profile") else "",
-            "project=%s" % data["project"] if data.get("project") else "",
-        ) if x), opts)
+        start = self._row(
+            base,
+            "system",
+            " | ".join(
+                x
+                for x in (
+                    "chat start",
+                    str(chat.get("name") or ""),
+                    "type=%s" % chat["type"] if chat.get("type") else "",
+                    "profile=%s" % chat["agent_profile"] if chat.get("agent_profile") else "",
+                    "project=%s" % data["project"] if data.get("project") else "",
+                )
+                if x
+            ),
+            opts,
+        )
         start.timestamp_utc = to_utc(chat.get("created_at"))
         yield start
 
@@ -223,7 +238,12 @@ class AgentZeroParser(Parser):
                 try:
                     hist = json.loads(hist) if hist else {}
                 except ValueError as e:
-                    yield self._row(base, "system", "parser: history of agent %s did not parse (%s)" % (agentno, e), opts)
+                    yield self._row(
+                        base,
+                        "system",
+                        "parser: history of agent %s did not parse (%s)" % (agentno, e),
+                        opts,
+                    )
                     continue
             for kind, node in walk_history(hist, trimmed):
                 ordered.append((agentno, kind, node))
@@ -231,23 +251,37 @@ class AgentZeroParser(Parser):
                     history.setdefault(str(node["id"]), (agentno, node))
 
         if trimmed:
-            yield self._row(base, "system", "log trimmed to its last %d items; earlier turns follow from the agent "
-                                            "history without timestamps" % LOG_SIZE, opts)
+            yield self._row(
+                base,
+                "system",
+                "log trimmed to its last %d items; earlier turns follow from the agent "
+                "history without timestamps" % LOG_SIZE,
+                opts,
+            )
             log_ids = {str(i.get("id")) for i in logs if i.get("id")}
             for agentno, kind, node in ordered:
                 if kind == "summary":
-                    yield self._row(base, "system", self._prefix(agentno, "[summary] " + _content_text(node["summary"])), opts)
+                    yield self._row(
+                        base,
+                        "system",
+                        self._prefix(agentno, "[summary] " + _content_text(node["summary"])),
+                        opts,
+                    )
                 elif str(node.get("id") or "") not in log_ids:
                     yield from self._history_rows(base, agentno, node, opts)
 
-        yield from self._log_rows(base, logs, history, path.parent / "messages" if not legacy else None, opts)
+        yield from self._log_rows(
+            base, logs, history, path.parent / "messages" if not legacy else None, opts
+        )
 
     # -- helpers -----------------------------------------------------------------------
     @staticmethod
     def _prefix(agentno, text: str) -> str:
         return "[agent %s] %s" % (agentno, text) if agentno not in (0, None, "0") else text
 
-    def _row(self, base: Row, turn_type: str, text: str, opts: Options, line: int = 0, ts: str = "") -> Row:
+    def _row(
+        self, base: Row, turn_type: str, text: str, opts: Options, line: int = 0, ts: str = ""
+    ) -> Row:
         row = Row(**base.__dict__)
         row.turn_type = turn_type
         row.text = compact(text, opts.max_text_length)
@@ -277,20 +311,41 @@ class AgentZeroParser(Parser):
                 row.model = model
                 yield row
             if parsed and parsed.get("tool_name"):
-                row = self._row(base, "tool_use", self._prefix(agentno, args_summary(parsed.get("tool_args"))), opts)
+                row = self._row(
+                    base,
+                    "tool_use",
+                    self._prefix(agentno, args_summary(parsed.get("tool_args"))),
+                    opts,
+                )
                 row.tool_name, row.model = str(parsed["tool_name"]), model
                 yield row
         elif isinstance(content, dict) and "tool_result" in content:
-            row = self._row(base, "tool_result", self._prefix(agentno, _content_text(content.get("tool_result"))), opts)
+            row = self._row(
+                base,
+                "tool_result",
+                self._prefix(agentno, _content_text(content.get("tool_result"))),
+                opts,
+            )
             row.tool_name, row.tool_use_id = str(content.get("tool_name") or ""), mid
             yield row
         elif isinstance(content, dict) and "user_message" in content:
-            yield self._row(base, "user", self._prefix(agentno, _content_text(content.get("user_message"))), opts)
+            yield self._row(
+                base,
+                "user",
+                self._prefix(agentno, _content_text(content.get("user_message"))),
+                opts,
+            )
         else:
             yield self._row(base, "system", self._prefix(agentno, _content_text(content)), opts)
 
-    def _log_rows(self, base: Row, logs: list[dict], history: dict[str, tuple[int, dict]], msg_dir,
-                  opts: Options) -> Iterator[Row]:
+    def _log_rows(
+        self,
+        base: Row,
+        logs: list[dict],
+        history: dict[str, tuple[int, dict]],
+        msg_dir,
+        opts: Options,
+    ) -> Iterator[Row]:
         for item in logs:
             kind = str(item.get("type") or "")
             line = item.get("no") if isinstance(item.get("no"), int) else 0
@@ -306,8 +361,11 @@ class AgentZeroParser(Parser):
                 return self._row(base, turn_type, self._prefix(agentno, text), opts, line, ts)
 
             if kind == "user":
-                text = _content_text(hcontent.get("user_message")) if isinstance(hcontent, dict) \
-                    and "user_message" in hcontent else _content_text(content)
+                text = (
+                    _content_text(hcontent.get("user_message"))
+                    if isinstance(hcontent, dict) and "user_message" in hcontent
+                    else _content_text(content)
+                )
                 att = kvps.get("attachments")
                 if isinstance(att, list) and att:
                     text += " [attachments: %s]" % ", ".join(str(a) for a in att)
@@ -319,8 +377,12 @@ class AgentZeroParser(Parser):
                     row.model = model
                     yield row
                 parsed = parse_ai(hcontent) if hist else None
-                text = headline_text(kvps) or (headline_text(parsed) if parsed else "") \
-                    or (_content_text(hcontent) if hist and not parsed else "") or _content_text(content)
+                text = (
+                    headline_text(kvps)
+                    or (headline_text(parsed) if parsed else "")
+                    or (_content_text(hcontent) if hist and not parsed else "")
+                    or _content_text(content)
+                )
                 if text:
                     row = mk("assistant", text)
                     row.model = model
@@ -328,8 +390,11 @@ class AgentZeroParser(Parser):
             elif kind == "response":
                 yield mk("assistant", _content_text(content))
             elif kind in TOOL_TYPES:
-                tool_name = str(kvps.get("_tool_name") or (hcontent.get("tool_name") if isinstance(hcontent, dict) else "")
-                                or kind)
+                tool_name = str(
+                    kvps.get("_tool_name")
+                    or (hcontent.get("tool_name") if isinstance(hcontent, dict) else "")
+                    or kind
+                )
                 tool_id = item_id or "log:%s" % line
                 row = mk("tool_use", args_summary(kvps))
                 row.tool_name, row.tool_use_id = tool_name, tool_id

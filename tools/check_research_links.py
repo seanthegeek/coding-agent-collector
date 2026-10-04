@@ -14,6 +14,7 @@ instead of the network (name the checkout after the repository, e.g.
 DIR/gemini-cli). Otherwise each file is fetched once from
 raw.githubusercontent.com. Exit status 1 when any link fails.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,7 +28,8 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PAT = re.compile(
     r"https://github\.com/([^/\s)]+/[^/\s)]+)/blob/([0-9a-f]{40})/([^\s)#]+)"
-    r"(?:#L(\d+)(?:-L(\d+))?)?")
+    r"(?:#L(\d+)(?:-L(\d+))?)?"
+)
 
 
 def line_count_local(repos: pathlib.Path, repo: str, sha: str, path: str):
@@ -35,8 +37,9 @@ def line_count_local(repos: pathlib.Path, repo: str, sha: str, path: str):
     d = repos / name
     if not (d / ".git").exists():
         return None
-    head = subprocess.run(["git", "-C", str(d), "rev-parse", "HEAD"],
-                          capture_output=True, text=True).stdout.strip()
+    head = subprocess.run(
+        ["git", "-C", str(d), "rev-parse", "HEAD"], capture_output=True, text=True
+    ).stdout.strip()
     if head != sha:
         return None
     f = d / path
@@ -65,7 +68,8 @@ def main() -> int:
     args = ap.parse_args()
     files = args.files or sorted(
         list((ROOT / "collectors" / "research").glob("*.md"))
-        + list((ROOT / "analyzer" / "research").glob("*.md")))
+        + list((ROOT / "analyzer" / "research").glob("*.md"))
+    )
     cache = {}
     total = bad = 0
     for f in files:

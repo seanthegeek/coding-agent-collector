@@ -15,6 +15,7 @@ one, homes are discovered by matching the catalog against the tree and the
 user is inferred from the path, which the output marks by leaving `host`
 empty unless `--host` is given.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -41,18 +42,18 @@ ROOT_HOMES = ("root", "var/root")
 
 @dataclass
 class Home:
-    disk_path: Path          # where the home is on the analyst's disk
-    original: str            # path on the source host, best effort
+    disk_path: Path  # where the home is on the analyst's disk
+    original: str  # path on the source host, best effort
     user: str
     host: str = ""
-    inferred: bool = False   # True when user/original came from the path, not a manifest
+    inferred: bool = False  # True when user/original came from the path, not a manifest
 
 
 @dataclass
 class Artifact:
     disk_path: Path
-    original: str            # path on the source host
-    rel: str                 # path relative to the home, posix
+    original: str  # path on the source host
+    rel: str  # path relative to the home, posix
     agent: str
     home: Home
     manifest: dict | None = None
@@ -61,8 +62,8 @@ class Artifact:
 @dataclass
 class Collection:
     source: Path
-    kind: str                # archive | collected | loose
-    root: Path               # directory that holds fs/ (collected) or the tree itself (loose)
+    kind: str  # archive | collected | loose
+    root: Path  # directory that holds fs/ (collected) or the tree itself (loose)
     host: str = ""
     manifest: list[dict] | None = None
     summary: dict | None = None
@@ -86,7 +87,9 @@ class Collection:
         return list(seen)
 
 
-def open_input(path: Path, catalog: Catalog, work_dir: Path | None = None, host: str = "") -> Collection:
+def open_input(
+    path: Path, catalog: Catalog, work_dir: Path | None = None, host: str = ""
+) -> Collection:
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)
@@ -106,6 +109,7 @@ def open_input(path: Path, catalog: Catalog, work_dir: Path | None = None, host:
 
 
 # ---- archives -----------------------------------------------------------------
+
 
 def _open_archive(path: Path, work_dir: Path | None) -> Collection:
     if work_dir:
@@ -165,8 +169,11 @@ def _extract_tar(path: Path, dest: Path) -> None:
         if hasattr(tarfile, "data_filter"):
             tf.extractall(dest, filter=_skip_links)
             return
-        members = [m for m in tf.getmembers()
-                   if _safe_member(dest, m.name) and not (m.issym() or m.islnk() or m.isdev())]
+        members = [
+            m
+            for m in tf.getmembers()
+            if _safe_member(dest, m.name) and not (m.issym() or m.islnk() or m.isdev())
+        ]
         tf.extractall(dest, members=members)
 
 
@@ -186,6 +193,7 @@ def _extract_zip(path: Path, dest: Path) -> None:
 
 
 # ---- collected layout (manifest present) --------------------------------------
+
 
 def _load_collected(col: Collection, catalog: Catalog) -> None:
     root = col.root
@@ -220,15 +228,26 @@ def _load_collected(col: Collection, catalog: Catalog) -> None:
         key = (user, home_orig)
         home = homes.get(key)
         if home is None:
-            home = Home(disk_path=root / _archive_dir_for_home(r), original=home_orig, user=user, host=col.host)
+            home = Home(
+                disk_path=root / _archive_dir_for_home(r),
+                original=home_orig,
+                user=user,
+                host=col.host,
+            )
             homes[key] = home
         orig = str(r.get("path") or "")
         archive_path = str(r.get("archive_path") or "")
         rel = _relative_to_home(orig, home_orig)
-        col.artifacts.append(Artifact(
-            disk_path=root / archive_path, original=orig, rel=rel,
-            agent=str(r.get("agent") or ""), home=home, manifest=r,
-        ))
+        col.artifacts.append(
+            Artifact(
+                disk_path=root / archive_path,
+                original=orig,
+                rel=rel,
+                agent=str(r.get("agent") or ""),
+                home=home,
+                manifest=r,
+            )
+        )
     col.homes = list(homes.values())
 
 
@@ -254,9 +273,12 @@ def _relative_to_home(path: str, home: str) -> str:
 
 # ---- loose layout (no manifest) ------------------------------------------------
 
+
 def _discover_loose(col: Collection, catalog: Catalog) -> None:
     root = col.root
-    tree = root / "fs" if (root / "fs").is_dir() and not (root / "manifest.jsonl").exists() else root
+    tree = (
+        root / "fs" if (root / "fs").is_dir() and not (root / "manifest.jsonl").exists() else root
+    )
     if tree is not root:
         col.notes.append("fs/ found without manifest.jsonl; treating fs/ as the root")
     homes: list[Home] = []
@@ -267,8 +289,13 @@ def _discover_loose(col: Collection, catalog: Catalog) -> None:
     for e in catalog.entries:
         if len(e.segments) == 1 and e.agent != "shared" and e.regexes[0].fullmatch(tree.name):
             parent = tree.resolve().parent
-            home = Home(disk_path=tree.parent, original="", user=_user_from_parts(parent.parts[1:]),
-                        host=col.host, inferred=True)
+            home = Home(
+                disk_path=tree.parent,
+                original="",
+                user=_user_from_parts(parent.parts[1:]),
+                host=col.host,
+                inferred=True,
+            )
             col.notes.append("root is a %s directory; treating its parent as the home" % e.agent)
             homes.append(home)
             _add_hits(col, home, [(e, tree), *list(catalog.nested_matches(tree))])
@@ -286,7 +313,7 @@ def _discover_loose(col: Collection, catalog: Catalog) -> None:
             if any(entry.agent != "shared" for entry, _ in hits):
                 homes.append(_make_home(here, tree, col.host))
                 _add_hits(col, homes[-1], hits)
-                dirnames[:] = []       # a home does not contain other homes
+                dirnames[:] = []  # a home does not contain other homes
                 continue
         dirnames[:] = [d for d in dirnames if not (here / d).is_symlink()]
     col.homes = homes
@@ -311,8 +338,10 @@ def _make_home(here: Path, tree: Path, host: str) -> Home:
     parts = rel.split("/") if rel else []
     user = _user_from_parts(parts)
     if not user and parts and parts[-1] != "fs":
-        user = parts[-1]       # a directory that holds agent state is usually named after its owner
-    return Home(disk_path=here, original="/" + rel if rel else "", user=user, host=host, inferred=True)
+        user = parts[-1]  # a directory that holds agent state is usually named after its owner
+    return Home(
+        disk_path=here, original="/" + rel if rel else "", user=user, host=host, inferred=True
+    )
 
 
 def _add_hits(col: Collection, home: Home, hits) -> None:
@@ -327,10 +356,15 @@ def _add_hits(col: Collection, home: Home, hits) -> None:
                 continue
             seen[f] = None
             rel = f.relative_to(home.disk_path).as_posix()
-            col.artifacts.append(Artifact(
-                disk_path=f, original=(home.original.rstrip("/") + "/" + rel) if home.original else rel,
-                rel=rel, agent=entry.agent, home=home,
-            ))
+            col.artifacts.append(
+                Artifact(
+                    disk_path=f,
+                    original=(home.original.rstrip("/") + "/" + rel) if home.original else rel,
+                    rel=rel,
+                    agent=entry.agent,
+                    home=home,
+                )
+            )
 
 
 def _walk_files(p: Path) -> Iterator[Path]:

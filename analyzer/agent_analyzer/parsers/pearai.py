@@ -53,6 +53,7 @@ roles. `<environment_details>` blocks become `system` rows, and the
 `<task>` wrapper of the first prompt is removed. No model or git branch is
 recorded.
 """
+
 from __future__ import annotations
 
 import re
@@ -72,10 +73,25 @@ SESSION_RX = re.compile(r"^(?:.*/)?\.pearai/sessions/([^/]+)\.json$")
 INDEX_NAME = "sessions.json"
 EXTENSION_ID = "pearai.pearai-roo-cline"
 
-TOOL_NAMES = ("execute_command", "read_file", "write_to_file", "apply_diff", "insert_content",
-              "search_and_replace", "search_files", "list_files", "list_code_definition_names",
-              "browser_action", "use_mcp_tool", "access_mcp_resource", "ask_followup_question",
-              "attempt_completion", "switch_mode", "new_task", "fetch_instructions")
+TOOL_NAMES = (
+    "execute_command",
+    "read_file",
+    "write_to_file",
+    "apply_diff",
+    "insert_content",
+    "search_and_replace",
+    "search_files",
+    "list_files",
+    "list_code_definition_names",
+    "browser_action",
+    "use_mcp_tool",
+    "access_mcp_resource",
+    "ask_followup_question",
+    "attempt_completion",
+    "switch_mode",
+    "new_task",
+    "fetch_instructions",
+)
 BLOCK_RX = re.compile(r"<(thinking|%s)>(.*?)(?:</\1>|$)" % "|".join(TOOL_NAMES), re.S)
 PARAM_RX = re.compile(r"<([a-z_]+)>(.*?)(?:</\1>|$)", re.S)
 RESULT_RX = re.compile(r"^\[([a-z_]+)\b.*\] Result:\s*$", re.S)
@@ -87,7 +103,7 @@ def xml_blocks(text: str, include_thinking: bool) -> Iterator[tuple[str, str, st
     """(turn_type, text, tool_name) for Roo assistant text with XML tool tags."""
     pos = 0
     for m in BLOCK_RX.finditer(text):
-        before = text[pos:m.start()].strip()
+        before = text[pos : m.start()].strip()
         if before:
             yield "assistant", before, ""
         pos = m.end()
@@ -111,7 +127,7 @@ class PearAiParser(LegacyTaskParser):
 
     def __init__(self) -> None:
         super().__init__()
-        self._continue = ContinueParser()     # for its cached sessions.json reader
+        self._continue = ContinueParser()  # for its cached sessions.json reader
         self._state: dict[tuple, object] = {}
 
     def wants(self, artifact: Artifact) -> bool:
@@ -144,8 +160,9 @@ class PearAiParser(LegacyTaskParser):
                 return e
         return None
 
-    def api_content_rows(self, msg: dict, n: int, base_turn: str,
-                         include_thinking: bool) -> Iterator[tuple[str, str, str, str]]:
+    def api_content_rows(
+        self, msg: dict, n: int, base_turn: str, include_thinking: bool
+    ) -> Iterator[tuple[str, str, str, str]]:
         content = msg.get("content")
         if base_turn == "assistant":
             k = 0
@@ -223,7 +240,9 @@ class PearAiParser(LegacyTaskParser):
         ts = to_utc(entry.get("dateCreated"))
         project = str(sess.get("workspaceDirectory") or entry.get("workspaceDirectory") or "")
         history = sess.get("history") if isinstance(sess.get("history"), list) else []
-        search = sess.get("perplexityHistory") if isinstance(sess.get("perplexityHistory"), list) else []
+        search = (
+            sess.get("perplexityHistory") if isinstance(sess.get("perplexityHistory"), list) else []
+        )
 
         def base(n: int, turn: str, text, model: str = "") -> Row:
             row = self.base_row(artifact)
@@ -256,23 +275,34 @@ class PearAiParser(LegacyTaskParser):
                 if isinstance(co, dict) and co.get("model"):
                     model = str(co["model"])
             if role == "user":
-                ctx = [str(c.get("description") or c.get("name") or "") for c in item.get("contextItems") or []
-                       if isinstance(c, dict)]
+                ctx = [
+                    str(c.get("description") or c.get("name") or "")
+                    for c in item.get("contextItems") or []
+                    if isinstance(c, dict)
+                ]
                 ctx = [c for c in ctx if c]
                 if ctx:
                     text = "%s\n[context: %s]" % (text, ", ".join(ctx))
                 if text:
                     yield base(i, "user", text)
             elif role == "assistant":
-                cites = [str(c.get("url") or c.get("title") or "") for c in item.get("citations") or []
-                         if isinstance(c, dict)]
+                cites = [
+                    str(c.get("url") or c.get("title") or "")
+                    for c in item.get("citations") or []
+                    if isinstance(c, dict)
+                ]
                 cites = [c for c in cites if c]
                 if cites:
                     text = "%s\n[citations: %s]" % (text, ", ".join(cites))
                 if text:
                     yield base(i, "assistant", text, model)
             elif text:
-                yield base(i, "system", text if role == "system" else "%s: %s" % (role or "unknown", text), model)
+                yield base(
+                    i,
+                    "system",
+                    text if role == "system" else "%s: %s" % (role or "unknown", text),
+                    model,
+                )
 
         if problem:
             yield base(0, "system", "parser: " + problem)

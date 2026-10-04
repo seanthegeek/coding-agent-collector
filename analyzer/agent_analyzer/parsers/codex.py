@@ -35,6 +35,7 @@ Validated against a real install (Codex CLI, October 2026). Files, under
   imported_at, source_modified_at?}]}` (times epoch seconds), one `system`
   row per record. See `open_interpreter.py`.
 """
+
 from __future__ import annotations
 
 import json
@@ -49,8 +50,10 @@ from .base import Options, Parser, compact_json, iter_jsonl, text_of
 ROLLOUT_TMPL = r"^%s/(?:archived_)?sessions/(?:.*/)?rollout-[^/]*\.jsonl(?:\.zst)?$"
 ROLLOUT_RX = re.compile(ROLLOUT_TMPL % re.escape(".codex"))
 HISTORY_REL = ".codex/history.jsonl"
-UUID_TAIL_RX = re.compile(r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
-                          r"\.jsonl(?:\.zst)?$")
+UUID_TAIL_RX = re.compile(
+    r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
+    r"\.jsonl(?:\.zst)?$"
+)
 
 CALL_TYPES = ("function_call", "custom_tool_call", "local_shell_call", "web_search_call")
 OUTPUT_TYPES = ("function_call_output", "custom_tool_call_output", "local_shell_call_output")
@@ -71,7 +74,9 @@ def call_summary(payload: dict) -> str:
         v = payload.get(key)
         if v not in (None, ""):
             return v if isinstance(v, str) else compact_json(v)
-    return compact_json({k: v for k, v in payload.items() if k not in ("type", "id", "call_id", "name", "status")})
+    return compact_json(
+        {k: v for k, v in payload.items() if k not in ("type", "id", "call_id", "name", "status")}
+    )
 
 
 def call_name(payload: dict) -> str:
@@ -163,8 +168,9 @@ def iter_zst_jsonl(path, errors: list, zstd) -> Iterator[tuple[int, dict]]:
 class RolloutParser(Parser):
     """Codex rollouts and prompt history under `home_prefix`. Codex forks
     that keep the format subclass this with their own agent and home."""
+
     home_prefix = ".codex"
-    ledger_name = ""   # import ledger file under home_prefix; empty when the agent has none
+    ledger_name = ""  # import ledger file under home_prefix; empty when the agent has none
 
     def __init__(self) -> None:
         self.rollout_rx = re.compile(ROLLOUT_TMPL % re.escape(self.home_prefix))
@@ -173,8 +179,11 @@ class RolloutParser(Parser):
 
     def wants(self, artifact: Artifact) -> bool:
         rel = artifact.rel
-        return (rel == self.history_rel or bool(self.rollout_rx.match(rel))
-                or bool(self.ledger_rel and rel == self.ledger_rel))
+        return (
+            rel == self.history_rel
+            or bool(self.rollout_rx.match(rel))
+            or bool(self.ledger_rel and rel == self.ledger_rel)
+        )
 
     def parse(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         if artifact.rel == self.history_rel:
@@ -210,7 +219,9 @@ class RolloutParser(Parser):
             row = self._system(artifact, "", str(rec.get("imported_thread_id") or ""), i)
             row.timestamp_utc = to_utc(rec.get("imported_at"))
             text = "imported session from %s sha256=%s" % (
-                rec.get("source_path") or "", rec.get("content_sha256") or "")
+                rec.get("source_path") or "",
+                rec.get("content_sha256") or "",
+            )
             modified = to_utc(rec.get("source_modified_at"))
             if modified:
                 text += " source_modified=%s" % modified
@@ -231,12 +242,15 @@ class RolloutParser(Parser):
     def _parse_rollout(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         errors: list = []
         m = UUID_TAIL_RX.search(artifact.rel)
-        session_id = m.group(1) if m else ""   # until session_meta says otherwise
+        session_id = m.group(1) if m else ""  # until session_meta says otherwise
         if artifact.rel.endswith(".zst"):
             zstd = _zstd_module()
             if zstd is None:
-                yield self._system(artifact, "parser: compressed rollout not read: zstandard package not installed",
-                                   session_id)
+                yield self._system(
+                    artifact,
+                    "parser: compressed rollout not read: zstandard package not installed",
+                    session_id,
+                )
                 return
             records = iter_zst_jsonl(artifact.disk_path, errors, zstd)
         else:
@@ -269,9 +283,16 @@ class RolloutParser(Parser):
                 row = base()
                 row.timestamp_utc = to_utc(payload.get("timestamp") or rec.get("timestamp"))
                 row.turn_type = "system"
-                row.text = compact("session start: %s %s provider=%s cwd=%s" % (
-                    payload.get("originator") or "codex", payload.get("cli_version") or "",
-                    payload.get("model_provider") or "", cwd), opts.max_text_length)
+                row.text = compact(
+                    "session start: %s %s provider=%s cwd=%s"
+                    % (
+                        payload.get("originator") or "codex",
+                        payload.get("cli_version") or "",
+                        payload.get("model_provider") or "",
+                        cwd,
+                    ),
+                    opts.max_text_length,
+                )
                 yield row
             elif rtype == "turn_context":
                 cwd = str(payload.get("cwd") or cwd)
@@ -284,7 +305,13 @@ class RolloutParser(Parser):
                     if not text:
                         continue
                     row = base()
-                    row.turn_type = "user" if role == "user" else "assistant" if role == "assistant" else "system"
+                    row.turn_type = (
+                        "user"
+                        if role == "user"
+                        else "assistant"
+                        if role == "assistant"
+                        else "system"
+                    )
                     if role not in ("user", "assistant"):
                         text = "%s: %s" % (role, text)
                     yield self._fill(row, text, opts)
@@ -302,21 +329,35 @@ class RolloutParser(Parser):
                 elif ptype == "reasoning" and opts.include_thinking:
                     row = base()
                     row.turn_type = "thinking"
-                    yield self._fill(row, text_of(payload.get("summary")) or text_of(payload.get("content")), opts)
+                    yield self._fill(
+                        row,
+                        text_of(payload.get("summary")) or text_of(payload.get("content")),
+                        opts,
+                    )
             elif rtype == "event_msg":
                 ptype = payload.get("type")
                 if ptype == "task_started":
                     row = base()
                     row.turn_type = "system"
-                    yield self._fill(row, "task_started turn=%s" % (payload.get("turn_id") or ""), opts)
+                    yield self._fill(
+                        row, "task_started turn=%s" % (payload.get("turn_id") or ""), opts
+                    )
                 elif ptype == "task_complete":
                     row = base()
                     row.turn_type = "system"
-                    yield self._fill(row, "task_complete turn=%s duration_ms=%s" % (
-                        payload.get("turn_id") or "", payload.get("duration_ms") or ""), opts)
+                    yield self._fill(
+                        row,
+                        "task_complete turn=%s duration_ms=%s"
+                        % (payload.get("turn_id") or "", payload.get("duration_ms") or ""),
+                        opts,
+                    )
         if errors:
-            yield self._system(artifact, "parser: %d unparseable line(s), first at line %d" % (
-                len(errors), errors[0][0]), session_id, errors[0][0])
+            yield self._system(
+                artifact,
+                "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0]),
+                session_id,
+                errors[0][0],
+            )
 
     @staticmethod
     def _fill(row: Row, text: str, opts: Options) -> Row:

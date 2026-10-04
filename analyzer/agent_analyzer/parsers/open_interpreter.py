@@ -25,6 +25,7 @@ openinterpreter/openinterpreter at 2767e5f (see
 Not parsed: `session_index.jsonl` (thread renames) and the zcode harness's
 oversized tool results under `.zcode/cli/artifacts/`.
 """
+
 from __future__ import annotations
 
 from .codex import RolloutParser

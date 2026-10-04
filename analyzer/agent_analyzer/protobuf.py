@@ -9,6 +9,7 @@ name for a nested message. Prefix the field name with '+' for a repeated
 field (packed scalars are handled). Unknown fields are skipped, so a schema
 only needs the fields a parser reads.
 """
+
 from __future__ import annotations
 
 import struct
@@ -51,16 +52,16 @@ def iter_fields(b: bytes):
             v, i = read_varint(b, i)
             yield field, wt, v
         elif wt == 1:
-            yield field, wt, b[i:i + 8]
+            yield field, wt, b[i : i + 8]
             i += 8
         elif wt == 5:
-            yield field, wt, b[i:i + 4]
+            yield field, wt, b[i : i + 4]
             i += 4
         elif wt == 2:
             ln, i = read_varint(b, i)
             if ln > n - i:
                 raise ValueError("truncated length-delimited field")
-            yield field, wt, b[i:i + ln]
+            yield field, wt, b[i : i + ln]
             i += ln
         else:
             raise ValueError("unsupported wire type %d" % wt)
@@ -141,6 +142,7 @@ def decode(b: bytes, message: str, schema: Schema) -> dict[str, Any]:
 
 
 # ---- encoder, used by the tests to build fixtures -------------------------
+
 
 def _write_varint(n: int) -> bytes:
     out = bytearray()

@@ -17,6 +17,7 @@ Standard library only. Extraction scans for `<name>.proto` strings preceded
 by a field-1 length prefix and parses forward until the data stops looking
 like a FileDescriptorProto, so it needs no knowledge of the binary's layout.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,9 +28,26 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from agent_analyzer.protobuf import iter_fields, read_varint
 
-TYPES = {1: "double", 2: "float", 3: "int64", 4: "uint64", 5: "int32", 6: "fixed64", 7: "fixed32", 8: "bool",
-         9: "string", 10: "group", 11: "message", 12: "bytes", 13: "uint32", 14: "enum", 15: "sfixed32",
-         16: "sfixed64", 17: "sint32", 18: "sint64"}
+TYPES = {
+    1: "double",
+    2: "float",
+    3: "int64",
+    4: "uint64",
+    5: "int32",
+    6: "fixed64",
+    7: "fixed32",
+    8: "bool",
+    9: "string",
+    10: "group",
+    11: "message",
+    12: "bytes",
+    13: "uint32",
+    14: "enum",
+    15: "sfixed32",
+    16: "sfixed64",
+    17: "sint32",
+    18: "sint64",
+}
 
 
 def _s(x: bytes) -> str:
@@ -111,7 +129,7 @@ def parse_file_fields(data: bytes, start: int):
             break
         if ln > n - j or ln > 50_000_000:
             break
-        chunk = data[j:j + ln]
+        chunk = data[j : j + ln]
         if f == 1:
             if not chunk.endswith(b".proto"):
                 break

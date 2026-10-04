@@ -61,6 +61,7 @@ session's `directory` (the cwd, as in the other parsers), else the project
 recorded. `source_line` is the SQLite `rowid` of the record for databases
 and 1 for the one-record JSON files.
 """
+
 from __future__ import annotations
 
 import json
@@ -76,7 +77,17 @@ from ..timeutil import to_utc
 from .base import Options, Parser, compact_json
 
 # Which tool input field best identifies the action, in order of preference.
-TOOL_KEYS = ("command", "filePath", "file_path", "pattern", "path", "url", "query", "description", "prompt")
+TOOL_KEYS = (
+    "command",
+    "filePath",
+    "file_path",
+    "pattern",
+    "path",
+    "url",
+    "query",
+    "description",
+    "prompt",
+)
 
 
 def tool_summary(value) -> str:
@@ -169,13 +180,25 @@ class OpenCodeParser(Parser):
         self.db_rx = re.compile(r"^%s/(?:%s)(?:-[^/]+)?\.db$" % (dd, prefixes))
         self.session_rx = re.compile(r"^%s/storage/session/([^/]+)/([^/]+)\.json$" % dd)
         self.message_rx = re.compile(r"^%s/storage/message/([^/]+)/([^/]+)\.json$" % dd)
-        self.old_session_rx = re.compile(r"^%s/project/[^/]+/storage/session/info/([^/]+)\.json$" % dd)
-        self.old_message_rx = re.compile(r"^%s/project/[^/]+/storage/session/message/([^/]+)/([^/]+)\.json$" % dd)
+        self.old_session_rx = re.compile(
+            r"^%s/project/[^/]+/storage/session/info/([^/]+)\.json$" % dd
+        )
+        self.old_message_rx = re.compile(
+            r"^%s/project/[^/]+/storage/session/message/([^/]+)/([^/]+)\.json$" % dd
+        )
 
     def wants(self, artifact: Artifact) -> bool:
         rel = artifact.rel
-        return any(rx.match(rel) for rx in (self.db_rx, self.session_rx, self.message_rx,
-                                             self.old_session_rx, self.old_message_rx))
+        return any(
+            rx.match(rel)
+            for rx in (
+                self.db_rx,
+                self.session_rx,
+                self.message_rx,
+                self.old_session_rx,
+                self.old_message_rx,
+            )
+        )
 
     def parse(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         rel = artifact.rel
@@ -189,7 +212,9 @@ class OpenCodeParser(Parser):
             yield from self._parse_message_file(artifact, opts, old=True)
 
     # -- shared row builders --------------------------------------------------------
-    def _row(self, artifact: Artifact, ctx: _Ctx, source_file: str, line: int, ts: str, model: str = "") -> Row:
+    def _row(
+        self, artifact: Artifact, ctx: _Ctx, source_file: str, line: int, ts: str, model: str = ""
+    ) -> Row:
         row = self.base_row(artifact)
         if source_file:
             row.source_file = source_file
@@ -200,22 +225,43 @@ class OpenCodeParser(Parser):
         row.model = model
         return row
 
-    def _session_row(self, artifact: Artifact, ctx: _Ctx, s: dict, created, line: int, opts: Options,
-                     source_file: str = "") -> Row:
+    def _session_row(
+        self,
+        artifact: Artifact,
+        ctx: _Ctx,
+        s: dict,
+        created,
+        line: int,
+        opts: Options,
+        source_file: str = "",
+    ) -> Row:
         row = self._row(artifact, ctx, source_file, line, to_utc(created))
         row.turn_type = "system"
-        row.text = compact(_join(
-            "session start:", s.get("title") or "",
-            "slug=%s" % s["slug"] if s.get("slug") else "",
-            "version=%s" % s["version"] if s.get("version") else "",
-            "agent=%s" % s["agent"] if s.get("agent") else "",
-            "parent=%s" % (s.get("parent_id") or s.get("parentID")) if (s.get("parent_id") or s.get("parentID")) else "",
-            "directory=%s" % s["directory"] if s.get("directory") else "",
-        ), opts.max_text_length)
+        row.text = compact(
+            _join(
+                "session start:",
+                s.get("title") or "",
+                "slug=%s" % s["slug"] if s.get("slug") else "",
+                "version=%s" % s["version"] if s.get("version") else "",
+                "agent=%s" % s["agent"] if s.get("agent") else "",
+                "parent=%s" % (s.get("parent_id") or s.get("parentID"))
+                if (s.get("parent_id") or s.get("parentID"))
+                else "",
+                "directory=%s" % s["directory"] if s.get("directory") else "",
+            ),
+            opts.max_text_length,
+        )
         return row
 
-    def _message_rows(self, artifact: Artifact, ctx: _Ctx, msg: dict, msg_src: tuple[str, int, object],
-                      parts: list[tuple[dict | None, str, int, object]], opts: Options) -> Iterator[Row]:
+    def _message_rows(
+        self,
+        artifact: Artifact,
+        ctx: _Ctx,
+        msg: dict,
+        msg_src: tuple[str, int, object],
+        parts: list[tuple[dict | None, str, int, object]],
+        opts: Options,
+    ) -> Iterator[Row]:
         """Rows for one V1 message and its parts. `msg_src` and each part
         entry carry (source_file, source_line, fallback time); a part whose
         data could not be decoded is passed as None and counted."""
@@ -261,13 +307,28 @@ class OpenCodeParser(Parser):
                 self._tool_rows(mk, data)
             elif ptype == "step-finish":
                 tokens = _d(data.get("tokens"))
-                mk("system", _join("step-finish", "reason=%s" % data["reason"] if data.get("reason") else "",
-                                    "cost=%s" % data["cost"] if data.get("cost") is not None else "",
-                                    "tokens_in=%s" % tokens["input"] if tokens.get("input") is not None else "",
-                                    "tokens_out=%s" % tokens["output"] if tokens.get("output") is not None else ""))
+                mk(
+                    "system",
+                    _join(
+                        "step-finish",
+                        "reason=%s" % data["reason"] if data.get("reason") else "",
+                        "cost=%s" % data["cost"] if data.get("cost") is not None else "",
+                        "tokens_in=%s" % tokens["input"] if tokens.get("input") is not None else "",
+                        "tokens_out=%s" % tokens["output"]
+                        if tokens.get("output") is not None
+                        else "",
+                    ),
+                )
             elif ptype == "subtask":
-                mk("system", _join("subtask", "agent=%s" % data["agent"] if data.get("agent") else "",
-                                    (data.get("description") or "") + ":", data.get("prompt") or ""))
+                mk(
+                    "system",
+                    _join(
+                        "subtask",
+                        "agent=%s" % data["agent"] if data.get("agent") else "",
+                        (data.get("description") or "") + ":",
+                        data.get("prompt") or "",
+                    ),
+                )
             elif ptype == "compaction":
                 mk("system", _join("compaction", "auto" if data.get("auto") else ""))
             elif ptype == "file":
@@ -275,11 +336,22 @@ class OpenCodeParser(Parser):
             elif ptype == "agent":
                 mk("system", _join("agent:", data.get("name") or ""))
             elif ptype == "retry":
-                mk("system", _join("retry", "attempt=%s" % data["attempt"] if data.get("attempt") else "",
-                                    _error_text(data.get("error"))))
+                mk(
+                    "system",
+                    _join(
+                        "retry",
+                        "attempt=%s" % data["attempt"] if data.get("attempt") else "",
+                        _error_text(data.get("error")),
+                    ),
+                )
             elif ptype == "patch":
                 files = data.get("files")
-                mk("system", _join("patch:", " ".join(str(f) for f in files) if isinstance(files, list) else ""))
+                mk(
+                    "system",
+                    _join(
+                        "patch:", " ".join(str(f) for f in files) if isinstance(files, list) else ""
+                    ),
+                )
             elif ptype in ("step-start", "snapshot"):
                 continue
             else:
@@ -292,15 +364,24 @@ class OpenCodeParser(Parser):
             out.insert(at, row)
         yield from out
         if msg.get("error"):
-            row = self._row(artifact, ctx, msg_file, msg_line,
-                            to_utc(_d(msg.get("time")).get("completed")) or msg_ts, model)
+            row = self._row(
+                artifact,
+                ctx,
+                msg_file,
+                msg_line,
+                to_utc(_d(msg.get("time")).get("completed")) or msg_ts,
+                model,
+            )
             row.turn_type = "system"
             row.text = compact("error: " + _error_text(msg.get("error")), opts.max_text_length)
             yield row
         if bad:
             row = self._row(artifact, ctx, msg_file, msg_line, msg_ts, model)
             row.turn_type = "system"
-            row.text = "parser: %d part(s) of message %s could not be decoded" % (bad, msg.get("id") or "")
+            row.text = "parser: %d part(s) of message %s could not be decoded" % (
+                bad,
+                msg.get("id") or "",
+            )
             yield row
 
     @staticmethod
@@ -310,8 +391,11 @@ class OpenCodeParser(Parser):
         times = _d(state.get("time"))
         name = str(data.get("tool") or "")
         call_id = str(data.get("callID") or "")
-        use = mk("tool_use", tool_summary(state.get("input")) or state.get("title") or "",
-                 to_utc(times.get("start")))
+        use = mk(
+            "tool_use",
+            tool_summary(state.get("input")) or state.get("title") or "",
+            to_utc(times.get("start")),
+        )
         use.tool_name, use.tool_use_id = name, call_id
         status = state.get("status")
         if status in ("completed", "error"):
@@ -347,7 +431,9 @@ class OpenCodeParser(Parser):
                 projects[r["id"]] = dict(r)
         sessions: dict[str, tuple[int, dict]] = {}
         if "session" in tables:
-            for r in con.execute("select rowid as _rowid, * from session order by time_created, id"):
+            for r in con.execute(
+                "select rowid as _rowid, * from session order by time_created, id"
+            ):
                 sessions[r["id"]] = (r["_rowid"], dict(r))
         ctxs: dict[str, _Ctx] = {}
 
@@ -369,8 +455,10 @@ class OpenCodeParser(Parser):
         covered = set()
         if "message" in tables:
             has_parts = "part" in tables
-            for m in con.execute("select rowid as _rowid, id, session_id, time_created, data from message "
-                                 "order by session_id, time_created, id").fetchall():
+            for m in con.execute(
+                "select rowid as _rowid, id, session_id, time_created, data from message "
+                "order by session_id, time_created, id"
+            ).fetchall():
                 sid = m["session_id"] or ""
                 covered.add(sid)
                 msg = _loads(m["data"])
@@ -380,14 +468,20 @@ class OpenCodeParser(Parser):
                 msg.setdefault("id", m["id"])
                 parts = []
                 if has_parts:
-                    for p in con.execute("select rowid as _rowid, time_created, data from part "
-                                    "where message_id = ? order by id", (m["id"],)):
+                    for p in con.execute(
+                        "select rowid as _rowid, time_created, data from part "
+                        "where message_id = ? order by id",
+                        (m["id"],),
+                    ):
                         parts.append((_loads(p["data"]), "", p["_rowid"], p["time_created"]))
-                yield from self._message_rows(artifact, ctx_for(sid), msg, ("", m["_rowid"], m["time_created"]),
-                                              parts, opts)
+                yield from self._message_rows(
+                    artifact, ctx_for(sid), msg, ("", m["_rowid"], m["time_created"]), parts, opts
+                )
         if "session_message" in tables:
-            for m in con.execute("select rowid as _rowid, session_id, type, seq, time_created, data "
-                                 "from session_message order by session_id, seq, time_created").fetchall():
+            for m in con.execute(
+                "select rowid as _rowid, session_id, type, seq, time_created, data "
+                "from session_message order by session_id, seq, time_created"
+            ).fetchall():
                 sid = m["session_id"] or ""
                 if sid in covered:
                     continue
@@ -395,16 +489,31 @@ class OpenCodeParser(Parser):
                 if data is None:
                     bad += 1
                     continue
-                yield from self._v2_rows(artifact, ctx_for(sid), m["type"] or data.get("type") or "", data,
-                                         m["_rowid"], m["time_created"], opts)
+                yield from self._v2_rows(
+                    artifact,
+                    ctx_for(sid),
+                    m["type"] or data.get("type") or "",
+                    data,
+                    m["_rowid"],
+                    m["time_created"],
+                    opts,
+                )
         if bad:
             row = self.base_row(artifact)
             row.turn_type = "system"
             row.text = "parser: %d record(s) with undecodable data" % bad
             yield row
 
-    def _v2_rows(self, artifact: Artifact, ctx: _Ctx, mtype: str, data: dict, line: int, created,
-                 opts: Options) -> Iterator[Row]:
+    def _v2_rows(
+        self,
+        artifact: Artifact,
+        ctx: _Ctx,
+        mtype: str,
+        data: dict,
+        line: int,
+        created,
+        opts: Options,
+    ) -> Iterator[Row]:
         ts = to_utc(_d(data.get("time")).get("created")) or to_utc(created)
         m = _d(data.get("model"))
         model = model_name(m.get("providerID"), m.get("modelID") or m.get("id"))
@@ -430,7 +539,9 @@ class OpenCodeParser(Parser):
                 res.tool_name, res.tool_use_id = "shell", call_id
                 yield res
         elif mtype == "compaction":
-            yield mk("system", _join("compaction", data.get("reason") or "", data.get("summary") or ""))
+            yield mk(
+                "system", _join("compaction", data.get("reason") or "", data.get("summary") or "")
+            )
         elif mtype == "assistant":
             for item in data.get("content") or []:
                 item = _d(item)
@@ -444,7 +555,9 @@ class OpenCodeParser(Parser):
                     state = _d(item.get("state"))
                     times = _d(item.get("time"))
                     name, call_id = str(item.get("name") or ""), str(item.get("id") or "")
-                    use = mk("tool_use", tool_summary(state.get("input")), to_utc(times.get("created")))
+                    use = mk(
+                        "tool_use", tool_summary(state.get("input")), to_utc(times.get("created"))
+                    )
                     use.tool_name, use.tool_use_id = name, call_id
                     yield use
                     status = state.get("status")
@@ -452,15 +565,25 @@ class OpenCodeParser(Parser):
                         if status == "error":
                             text = "[error] " + _error_text(state.get("error"))
                         else:
-                            text = "\n".join(str(c.get("text")) for c in state.get("content") or []
-                                             if isinstance(c, dict) and c.get("text") is not None)
-                        res = mk("tool_result", text, to_utc(times.get("completed")) or to_utc(times.get("ran")))
+                            text = "\n".join(
+                                str(c.get("text"))
+                                for c in state.get("content") or []
+                                if isinstance(c, dict) and c.get("text") is not None
+                            )
+                        res = mk(
+                            "tool_result",
+                            text,
+                            to_utc(times.get("completed")) or to_utc(times.get("ran")),
+                        )
                         res.tool_name, res.tool_use_id = name, call_id
                         yield res
             if data.get("error"):
                 yield mk("system", "error: " + _error_text(data.get("error")))
         elif mtype:
-            yield mk("system", _join("%s:" % mtype, compact_json({k: v for k, v in data.items() if k != "time"})))
+            yield mk(
+                "system",
+                _join("%s:" % mtype, compact_json({k: v for k, v in data.items() if k != "time"})),
+            )
 
     # -- legacy JSON tree -----------------------------------------------------------
     @staticmethod
@@ -480,7 +603,11 @@ class OpenCodeParser(Parser):
     @staticmethod
     def _children(directory: Path) -> list[Path]:
         try:
-            return sorted(p for p in directory.iterdir() if p.suffix == ".json" and not p.is_symlink() and p.is_file())
+            return sorted(
+                p
+                for p in directory.iterdir()
+                if p.suffix == ".json" and not p.is_symlink() and p.is_file()
+            )
         except OSError:
             return []
 
@@ -491,7 +618,11 @@ class OpenCodeParser(Parser):
         else:
             sdir = root / "session"
             try:
-                cands = sorted(d / (session_id + ".json") for d in sdir.iterdir() if not d.is_symlink() and d.is_dir())
+                cands = sorted(
+                    d / (session_id + ".json")
+                    for d in sdir.iterdir()
+                    if not d.is_symlink() and d.is_dir()
+                )
             except OSError:
                 cands = []
             for c in cands:
@@ -502,7 +633,9 @@ class OpenCodeParser(Parser):
         s = s or {}
         path = s.get("directory") or ""
         if not path and not old and s.get("projectID"):
-            wt = (_read_json(root / "project" / (str(s["projectID"]) + ".json")) or {}).get("worktree") or ""
+            wt = (_read_json(root / "project" / (str(s["projectID"]) + ".json")) or {}).get(
+                "worktree"
+            ) or ""
             path = wt if wt != "/" else ""
         if not path:
             p = _d(msg.get("path"))
@@ -521,7 +654,11 @@ class OpenCodeParser(Parser):
             return
         path = s.get("directory") or ""
         if not path and s.get("projectID") and not self.old_session_rx.match(artifact.rel):
-            proj = artifact.disk_path.parent.parent.parent / "project" / (str(s["projectID"]) + ".json")
+            proj = (
+                artifact.disk_path.parent.parent.parent
+                / "project"
+                / (str(s["projectID"]) + ".json")
+            )
             wt = (_read_json(proj) or {}).get("worktree") or ""
             path = wt if wt != "/" else ""
         ctx = _Ctx(str(s.get("id") or artifact.disk_path.stem), str(path))

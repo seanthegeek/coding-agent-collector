@@ -49,9 +49,14 @@ class CatalogTests(unittest.TestCase):
 
     @unittest.skipUnless(COLLECTOR.exists(), "collector script not present")
     def test_bundled_copy_matches_collector_list(self):
-        out = subprocess.run(["sh", str(COLLECTOR), "--list"], capture_output=True, text=True, check=True).stdout
-        self.assertEqual(out, self.cat.text,
-                         "catalog.txt drifted; run: collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.txt")
+        out = subprocess.run(
+            ["sh", str(COLLECTOR), "--list"], capture_output=True, text=True, check=True
+        ).stdout
+        self.assertEqual(
+            out,
+            self.cat.text,
+            "catalog.txt drifted; run: collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.txt",
+        )
 
 
 if __name__ == "__main__":

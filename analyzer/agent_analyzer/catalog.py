@@ -11,6 +11,7 @@ with:
 Glob semantics match the collectors: catalog globs do not cross `/`, exclusion
 and secret globs do, `[...]` classes work everywhere.
 """
+
 from __future__ import annotations
 
 import os
@@ -108,7 +109,9 @@ def glob_segment_to_regex(seg: str) -> re.Pattern[str]:
     return re.compile("".join(out))
 
 
-def _expand(base: Path, regexes: tuple[re.Pattern[str], ...], cache: dict[Path, list[str]]) -> Iterator[Path]:
+def _expand(
+    base: Path, regexes: tuple[re.Pattern[str], ...], cache: dict[Path, list[str]]
+) -> Iterator[Path]:
     if not regexes:
         yield base
         return

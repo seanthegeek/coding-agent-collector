@@ -45,6 +45,7 @@ Not read: `<sessionId>.compaction.json`, `sessions/sessions.index.json`,
 `db/session-search.db` (a full-text copy of the transcripts),
 `teams/teams.db` and `logs/hooks.jsonl`.
 """
+
 from __future__ import annotations
 
 import json
@@ -83,8 +84,15 @@ class ClineParser(LegacyTaskParser):
 
     def wants(self, artifact: Artifact) -> bool:
         rel = artifact.rel
-        return bool(self.task_match(artifact) or STATE_RX.match(rel) or MANIFEST_RX.match(rel)
-                    or MESSAGES_RX.match(rel)) or rel == SESSIONS_DB_REL
+        return (
+            bool(
+                self.task_match(artifact)
+                or STATE_RX.match(rel)
+                or MANIFEST_RX.match(rel)
+                or MESSAGES_RX.match(rel)
+            )
+            or rel == SESSIONS_DB_REL
+        )
 
     def history_item(self, task_dir: Path, root: Path, task_id: str) -> dict | None:
         items = self.cached_json(root / "state" / "taskHistory.json")
@@ -117,8 +125,9 @@ class ClineParser(LegacyTaskParser):
 
     # -- SDK sessions
 
-    def _session_start(self, m: dict, artifact: Artifact, n: int, opts: Options, ts_key: str, label: str,
-                       keys) -> Row:
+    def _session_start(
+        self, m: dict, artifact: Artifact, n: int, opts: Options, ts_key: str, label: str, keys
+    ) -> Row:
         row = self.base_row(artifact)
         row.source_line = n
         row.timestamp_utc = to_utc(m.get(ts_key))
@@ -130,24 +139,42 @@ class ClineParser(LegacyTaskParser):
         row.text = compact("%s: %s" % (label, detail), opts.max_text_length)
         return row
 
-    START_KEYS = ("source", "provider", "model", "status", "interactive", "pid", "parent_session_id",
-                  "is_subagent", "title", "prompt")
+    START_KEYS = (
+        "source",
+        "provider",
+        "model",
+        "status",
+        "interactive",
+        "pid",
+        "parent_session_id",
+        "is_subagent",
+        "title",
+        "prompt",
+    )
     END_KEYS = ("status", "exit_code")
 
     def _parse_manifest(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         m = load_json(artifact.disk_path)
         if not isinstance(m, dict):
-            yield error_row(self, artifact, [(0, "session manifest is not a JSON object")],
-                            artifact.disk_path.parent.name)
+            yield error_row(
+                self,
+                artifact,
+                [(0, "session manifest is not a JSON object")],
+                artifact.disk_path.parent.name,
+            )
             return
         m = dict(m)
         m.setdefault("session_id", artifact.disk_path.parent.name)
         meta = m.get("metadata")
         if isinstance(meta, dict) and meta.get("title"):
             m["title"] = meta["title"]
-        yield self._session_start(m, artifact, 0, opts, "started_at", "session start", self.START_KEYS)
+        yield self._session_start(
+            m, artifact, 0, opts, "started_at", "session start", self.START_KEYS
+        )
         if m.get("ended_at"):
-            yield self._session_start(m, artifact, 0, opts, "ended_at", "session end", self.END_KEYS)
+            yield self._session_start(
+                m, artifact, 0, opts, "ended_at", "session end", self.END_KEYS
+            )
 
     def _parse_messages(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         session_id = artifact.disk_path.parent.name
@@ -185,10 +212,16 @@ class ClineParser(LegacyTaskParser):
             ts = to_utc(msg.get("ts")) or fallback
             fallback = ts
             info = msg.get("modelInfo")
-            model = str((info.get("id") if isinstance(info, dict) else "") or manifest.get("model") or "")
+            model = str(
+                (info.get("id") if isinstance(info, dict) else "") or manifest.get("model") or ""
+            )
             role = msg.get("role")
-            base_turn = "user" if role == "user" else "assistant" if role == "assistant" else "system"
-            for turn, text, name, tid in content_rows(msg.get("content"), base_turn, opts.include_thinking):
+            base_turn = (
+                "user" if role == "user" else "assistant" if role == "assistant" else "system"
+            )
+            for turn, text, name, tid in content_rows(
+                msg.get("content"), base_turn, opts.include_thinking
+            ):
                 row = self.base_row(artifact)
                 row.source_line = n
                 row.timestamp_utc = ts
@@ -224,8 +257,15 @@ class ClineParser(LegacyTaskParser):
                 meta = load_json_text(r["metadata_json"])
                 if isinstance(meta, dict) and meta.get("title"):
                     r["title"] = meta["title"]
-            yield self._session_start(r, artifact, int(r.get("_rowid") or 0), opts, "started_at",
-                                      "session index", (*self.START_KEYS, "ended_at", "exit_code"))
+            yield self._session_start(
+                r,
+                artifact,
+                int(r.get("_rowid") or 0),
+                opts,
+                "started_at",
+                "session index",
+                (*self.START_KEYS, "ended_at", "exit_code"),
+            )
 
 
 def load_json_text(s):
@@ -233,4 +273,3 @@ def load_json_text(s):
         return json.loads(s)
     except (TypeError, ValueError):
         return None
-

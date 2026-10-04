@@ -39,6 +39,7 @@ one. Parts carry no timestamp of their own: they inherit the message's
 `created_at`, except tool calls and results, which use `finished_at` or the
 finish part's `time` when set. No git branch is recorded.
 """
+
 from __future__ import annotations
 
 import json
@@ -103,8 +104,13 @@ class CrushParser(Parser):
             row = self._system(artifact, "", n)
             row.timestamp_utc = to_utc(p.get("last_accessed"))
             row.project_path = str(p.get("path") or "")
-            row.text = compact(_join("crush project last accessed",
-                                     "data_dir=%s" % p["data_dir"] if p.get("data_dir") else ""), opts.max_text_length)
+            row.text = compact(
+                _join(
+                    "crush project last accessed",
+                    "data_dir=%s" % p["data_dir"] if p.get("data_dir") else "",
+                ),
+                opts.max_text_length,
+            )
             yield row
 
     # -- .crush/crush.db ---------------------------------------------------------------
@@ -121,28 +127,43 @@ class CrushParser(Parser):
                 if "messages" not in tables:
                     return
                 if "sessions" in tables:
-                    for s in con.execute("select rowid as _rowid, * from sessions order by created_at, rowid"):
+                    for s in con.execute(
+                        "select rowid as _rowid, * from sessions order by created_at, rowid"
+                    ):
                         s = dict(s)
                         row = self._system(artifact, "", s["_rowid"])
                         row.session_id = str(s.get("id") or "")
                         row.project_path = project_path
                         row.timestamp_utc = to_utc(s.get("created_at"))
-                        row.text = compact(_join(
-                            "session start", s.get("title") or "",
-                            "parent=%s" % s["parent_session_id"] if s.get("parent_session_id") else "",
-                            "%s messages" % s["message_count"] if s.get("message_count") is not None else "",
-                            "tokens in=%s out=%s" % (s.get("prompt_tokens") or 0, s.get("completion_tokens") or 0),
-                            "cost=%s" % s["cost"] if s.get("cost") else "",
-                        ), opts.max_text_length)
+                        row.text = compact(
+                            _join(
+                                "session start",
+                                s.get("title") or "",
+                                "parent=%s" % s["parent_session_id"]
+                                if s.get("parent_session_id")
+                                else "",
+                                "%s messages" % s["message_count"]
+                                if s.get("message_count") is not None
+                                else "",
+                                "tokens in=%s out=%s"
+                                % (s.get("prompt_tokens") or 0, s.get("completion_tokens") or 0),
+                                "cost=%s" % s["cost"] if s.get("cost") else "",
+                            ),
+                            opts.max_text_length,
+                        )
                         yield row
-                for m in con.execute("select rowid as _rowid, * from messages order by created_at, rowid"):
+                for m in con.execute(
+                    "select rowid as _rowid, * from messages order by created_at, rowid"
+                ):
                     yield from self._message_rows(artifact, dict(m), project_path, opts)
         except sqlite3.DatabaseError as e:
             row = self._system(artifact, "parser: SQLite error: %s" % e)
             row.project_path = project_path
             yield row
 
-    def _message_rows(self, artifact: Artifact, m: dict, project_path: str, opts: Options) -> Iterator[Row]:
+    def _message_rows(
+        self, artifact: Artifact, m: dict, project_path: str, opts: Options
+    ) -> Iterator[Row]:
         role = str(m.get("role") or "")
         provider, model = m.get("provider") or "", m.get("model") or m.get("prism_model_id") or ""
         model = "%s/%s" % (provider, model) if provider and model else model
@@ -199,7 +220,11 @@ class CrushParser(Parser):
                 row.timestamp_utc = finished or created
                 row.tool_name = str(d.get("name") or "")
                 row.tool_use_id = str(d.get("id") or "")
-                text = d.get("input") if isinstance(d.get("input"), str) else compact_json(d.get("input"))
+                text = (
+                    d.get("input")
+                    if isinstance(d.get("input"), str)
+                    else compact_json(d.get("input"))
+                )
             elif kind == "tool_result":
                 row.turn_type = "tool_result"
                 row.timestamp_utc = finished or created
@@ -219,16 +244,21 @@ class CrushParser(Parser):
                 text = _join("finish: " + reason, d.get("message") or "", d.get("details") or "")
             elif kind == "shell_command":
                 row.turn_type = "system"
-                text = _join("shell: " + str(d.get("command") or ""),
-                             "exit=%s" % d["exit_code"] if "exit_code" in d else "", d.get("output") or "")
+                text = _join(
+                    "shell: " + str(d.get("command") or ""),
+                    "exit=%s" % d["exit_code"] if "exit_code" in d else "",
+                    d.get("output") or "",
+                )
             elif kind == "image_url":
                 row.turn_type = text_type
                 url = str(d.get("url") or "")
                 text = "[image] " + (url.split(",", 1)[0] if url.startswith("data:") else url)
             elif kind == "binary":
                 row.turn_type = text_type
-                text = "[binary] " + _join(str(d.get("Path") or d.get("path") or ""),
-                                           str(d.get("MIMEType") or d.get("mime_type") or ""))
+                text = "[binary] " + _join(
+                    str(d.get("Path") or d.get("path") or ""),
+                    str(d.get("MIMEType") or d.get("mime_type") or ""),
+                )
             else:
                 row.turn_type = "system"
                 text = "%s: %s" % (kind, compact_json(d))

@@ -39,6 +39,7 @@ file (one JSON value) and 0 for the SQLite row. A history that does not
 parse is walked chat by chat, and every interaction decoded before the
 damage is still yielded, followed by one `system` row. No git branch.
 """
+
 from __future__ import annotations
 
 import json
@@ -53,11 +54,15 @@ from ..vscode_state import EDITOR_AGENTS, STATE_DB_RX, read_item
 from .base import Options, Parser, compact_json, text_of
 from .cline_legacy import iter_array_at, read_text
 
-JETBRAINS_RX = re.compile(r"(?:^|/)Cody-nodejs/(?:[^/]+/)?JetBrains-globalState/cody-local-chatHistory-v2$")
+JETBRAINS_RX = re.compile(
+    r"(?:^|/)Cody-nodejs/(?:[^/]+/)?JetBrains-globalState/cody-local-chatHistory-v2$"
+)
 ITEM_KEY = "sourcegraph.cody-ai"
 HISTORY_KEY = "cody-local-chatHistory-v2"
 
-_DATE_KEY = r'"((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT)"\s*:\s*\{'
+_DATE_KEY = (
+    r'"((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT)"\s*:\s*\{'
+)
 _ACCOUNT_KEY = r'"([^"\\]+)"\s*:\s*\{\s*"chat"\s*:\s*\{'
 
 
@@ -140,7 +145,7 @@ class CodyParser(Parser):
                 for p in problems:
                     yield self._system(artifact, "parser: " + p, line)
                 return
-            if isinstance(state, str):      # value did not parse; read_item noted it
+            if isinstance(state, str):  # value did not parse; read_item noted it
                 history = recover_history(state)[0]
             else:
                 history = state.get(HISTORY_KEY) if isinstance(state, dict) else None
@@ -167,11 +172,13 @@ class CodyParser(Parser):
         row.text = text
         return row
 
-    def _history_rows(self, artifact: Artifact, history: dict, line: int, opts: Options) -> Iterator[Row]:
+    def _history_rows(
+        self, artifact: Artifact, history: dict, line: int, opts: Options
+    ) -> Iterator[Row]:
         seen: dict[str, int] = {}
         for acct in history.values():
             chats = acct.get("chat") if isinstance(acct, dict) else None
-            for cid in (chats if isinstance(chats, dict) else {}):
+            for cid in chats if isinstance(chats, dict) else {}:
                 seen[cid] = seen.get(cid, 0) + 1
         for account, acct in history.items():
             chats = acct.get("chat") if isinstance(acct, dict) else None
@@ -185,11 +192,16 @@ class CodyParser(Parser):
                     sid = "%s/%s" % (account, sid)
                 yield from self._chat_rows(artifact, account, sid, chat, line, opts)
 
-    def _chat_rows(self, artifact: Artifact, account: str, sid: str, chat: dict, line: int,
-                   opts: Options) -> Iterator[Row]:
+    def _chat_rows(
+        self, artifact: Artifact, account: str, sid: str, chat: dict, line: int, opts: Options
+    ) -> Iterator[Row]:
         ts = chat_time(str(chat.get("id") or ""), chat.get("lastInteractionTimestamp"))
         interactions = chat.get("interactions")
-        interactions = [i for i in interactions if isinstance(i, dict)] if isinstance(interactions, list) else []
+        interactions = (
+            [i for i in interactions if isinstance(i, dict)]
+            if isinstance(interactions, list)
+            else []
+        )
 
         def row(turn: str, text, model: str = "", name: str = "", tid: str = "") -> Row:
             r = self.base_row(artifact)
@@ -203,8 +215,11 @@ class CodyParser(Parser):
             r.text = compact(text, opts.max_text_length)
             return r
 
-        yield row("system", "chat: %s | account=%s | interactions=%d" % (
-            chat.get("chatTitle") or "", account, len(interactions)))
+        yield row(
+            "system",
+            "chat: %s | account=%s | interactions=%d"
+            % (chat.get("chatTitle") or "", account, len(interactions)),
+        )
         names: dict[str, str] = {}
         for it in interactions:
             for key in ("humanMessage", "assistantMessage"):
@@ -219,10 +234,15 @@ class CodyParser(Parser):
         text = text if isinstance(text, str) else text_of(text)
         parts = msg.get("content") if isinstance(msg.get("content"), list) else []
         if not text:
-            text = "\n".join(str(p.get("text")) for p in parts
-                             if isinstance(p, dict) and p.get("type") == "text" and p.get("text"))
+            text = "\n".join(
+                str(p.get("text"))
+                for p in parts
+                if isinstance(p, dict) and p.get("type") == "text" and p.get("text")
+            )
         if speaker == "human":
-            files = [_fs_path(f.get("uri")) for f in msg.get("contextFiles") or [] if isinstance(f, dict)]
+            files = [
+                _fs_path(f.get("uri")) for f in msg.get("contextFiles") or [] if isinstance(f, dict)
+            ]
             files = [f for f in files if f]
             if files:
                 text = "%s\n[context: %s]" % (text, ", ".join(files))
@@ -240,13 +260,28 @@ class CodyParser(Parser):
                 call_ids.add(tid)
                 names[tid] = name
                 args = tc.get("arguments")
-                yield row("tool_use", args if isinstance(args, str) else compact_json(args), model, name, tid)
+                yield row(
+                    "tool_use",
+                    args if isinstance(args, str) else compact_json(args),
+                    model,
+                    name,
+                    tid,
+                )
             elif p.get("type") == "tool_result" and isinstance(p.get("tool_result"), dict):
                 tr = p["tool_result"]
                 tid = str(tr.get("id") or "")
                 c = tr.get("content")
-                yield row("tool_result", c if isinstance(c, str) else text_of(c) if isinstance(c, list)
-                          else compact_json(c), model, names.get(tid, ""), tid)
+                yield row(
+                    "tool_result",
+                    c
+                    if isinstance(c, str)
+                    else text_of(c)
+                    if isinstance(c, list)
+                    else compact_json(c),
+                    model,
+                    names.get(tid, ""),
+                    tid,
+                )
         for proc in msg.get("processes") or []:
             if not isinstance(proc, dict) or proc.get("type") != "tool":
                 continue

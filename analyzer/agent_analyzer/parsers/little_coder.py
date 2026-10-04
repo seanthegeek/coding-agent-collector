@@ -23,6 +23,7 @@ reads what little-coder writes itself:
   and the project path from the pi session header when that file was
   collected in the same home.
 """
+
 from __future__ import annotations
 
 import os
@@ -44,7 +45,9 @@ SESSION_FILE_RX = re.compile(r"_([^_/]+)\.jsonl$")
 
 def _regular_files(d: Path) -> list[os.DirEntry]:
     try:
-        return sorted((e for e in os.scandir(d) if e.is_file(follow_symlinks=False)), key=lambda e: e.name)
+        return sorted(
+            (e for e in os.scandir(d) if e.is_file(follow_symlinks=False)), key=lambda e: e.name
+        )
     except OSError:
         return []
 
@@ -94,7 +97,7 @@ class LittleCoderParser(Parser):
         set_name = CHECKPOINT_RX.match(artifact.rel).group(1)
         files = _regular_files(artifact.disk_path.parent)
         if not files or files[0].name != artifact.disk_path.name:
-            return    # the set's row comes from its first file
+            return  # the set's row comes from its first file
         mtimes: list[float] = []
         names: list[tuple[str, bool]] = []
         for e in files:
@@ -116,7 +119,9 @@ class LittleCoderParser(Parser):
         row.timestamp_utc = to_utc(min(mtimes)) if mtimes else ""
         listed = "; ".join(n + (" (did not exist)" if a else "") for n, a in names)
         what = "pi session %s" % set_name if m else "no session file (%s)" % set_name
-        row.text = compact("little-coder checkpoints for %s: %d pre-edit file(s)%s: %s" % (
-            what, len(names), "" if header else ", session file not collected", listed), opts.max_text_length)
+        row.text = compact(
+            "little-coder checkpoints for %s: %d pre-edit file(s)%s: %s"
+            % (what, len(names), "" if header else ", session file not collected", listed),
+            opts.max_text_length,
+        )
         yield row
-

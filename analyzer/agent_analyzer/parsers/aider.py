@@ -39,6 +39,7 @@ No model, git branch or tool call id is recorded. Each `TO LLM` request
 becomes one `system` row naming the message count and the last user
 message; the full prompt is at `source_file:source_line`.
 """
+
 from __future__ import annotations
 
 import bisect
@@ -82,7 +83,7 @@ def sibling(original: str, name: str) -> str:
 
 def project_dir(original: str) -> str:
     i = max(original.rfind("/"), original.rfind("\\"))
-    return original[:i] if i > 0 else original[:i + 1]
+    return original[:i] if i > 0 else original[: i + 1]
 
 
 def read_input_history(path: Path, errors: list | None = None) -> list[tuple[int, str, str]]:
@@ -116,7 +117,12 @@ class AiderParser(Parser):
         return bool(FILE_RX.match(artifact.rel))
 
     def base_row(self, artifact: Artifact) -> Row:
-        row = Row(host=artifact.home.host, user=artifact.home.user, agent="aider", source_file=artifact.original)
+        row = Row(
+            host=artifact.home.host,
+            user=artifact.home.user,
+            agent="aider",
+            source_file=artifact.original,
+        )
         row.project_path = project_dir(artifact.original)
         return row
 
@@ -140,6 +146,7 @@ class AiderParser(Parser):
                 return ""
             i = bisect.bisect_right(headers, ts.replace("T", " ")[:19])
             return "%s#%s" % (chat, headers[i - 1]) if i else ""
+
         return lookup
 
     # ---- .aider.chat.history.md ------------------------------------------------
@@ -273,8 +280,11 @@ class AiderParser(Parser):
                 if role == "USER":
                     last_user = "\n".join(body)
             row.turn_type = "system"
-            row.text = compact("TO LLM: %d message(s) (%s); last user message: %s" % (
-                len(msgs), ", ".join("%s %d" % kv for kv in counts.items()), last_user), opts.max_text_length)
+            row.text = compact(
+                "TO LLM: %d message(s) (%s); last user message: %s"
+                % (len(msgs), ", ".join("%s %d" % kv for kv in counts.items()), last_user),
+                opts.max_text_length,
+            )
             yield row
 
         for n, line in _lines(artifact.disk_path):
@@ -294,7 +304,10 @@ class AiderParser(Parser):
             row = self.base_row(artifact)
             row.turn_type = "system"
             row.source_line = errors[0][0]
-            row.text = "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0])
+            row.text = "parser: %d unparseable line(s), first at line %d" % (
+                len(errors),
+                errors[0][0],
+            )
             yield row
 
 
@@ -302,5 +315,5 @@ def _strip_role(line: str, role: str) -> str:
     if line == role:
         return ""
     if role and line.startswith(role + " "):
-        return line[len(role) + 1:]
+        return line[len(role) + 1 :]
     return line

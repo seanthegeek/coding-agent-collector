@@ -47,6 +47,7 @@ the request time). Contiguous markdown and inline references become one
 `source_line` is the log line that created the request (`.jsonl`) or 0
 (`.json`).
 """
+
 from __future__ import annotations
 
 import json
@@ -60,11 +61,15 @@ from ..timeutil import to_utc
 from .antigravity import uri_to_path
 from .base import Options, Parser, compact_json, iter_jsonl
 
-USER_DIR = (r"^(?:(?:\.config|Library/Application Support|AppData/Roaming)/(?:Code[^/]*|VSCodium[^/]*|Positron|Trae[^/]*)"
-            r"|\.vscode-server[^/]*/data|\.vscodium-server[^/]*/data|\.positron-server/data)/User/")
-SESSION_RX = re.compile(USER_DIR + r"(?:workspaceStorage/[^/]+/chatSessions/[^/]+\.jsonl?"
-                        r"|globalStorage/emptyWindowChatSessions/[^/]+\.jsonl?"
-                        r"|globalStorage/transferredChatSessions/[^/]+\.json)$")
+USER_DIR = (
+    r"^(?:(?:\.config|Library/Application Support|AppData/Roaming)/(?:Code[^/]*|VSCodium[^/]*|Positron|Trae[^/]*)"
+    r"|\.vscode-server[^/]*/data|\.vscodium-server[^/]*/data|\.positron-server/data)/User/"
+)
+SESSION_RX = re.compile(
+    USER_DIR + r"(?:workspaceStorage/[^/]+/chatSessions/[^/]+\.jsonl?"
+    r"|globalStorage/emptyWindowChatSessions/[^/]+\.jsonl?"
+    r"|globalStorage/transferredChatSessions/[^/]+\.json)$"
+)
 
 
 class MutationError(ValueError):
@@ -105,7 +110,7 @@ def apply_mutation(state, rec: dict):
     if not isinstance(target, list):
         raise MutationError("push to non-list at %r" % (path,))
     if isinstance(rec.get("i"), int):
-        del target[rec["i"]:]
+        del target[rec["i"] :]
     items = rec.get("v")
     target.extend(items if isinstance(items, list) else [items])
     return state
@@ -231,7 +236,9 @@ class VsCodeParser(Parser):
                 self._track(rec, state, n, req_lines)
             if errors:
                 first_bad = min(e[0] for e in errors)
-                problems.append("parser: %d unparseable line(s), first at line %d" % (len(errors), first_bad))
+                problems.append(
+                    "parser: %d unparseable line(s), first at line %d" % (len(errors), first_bad)
+                )
         else:
             try:
                 with open(artifact.disk_path, "rb") as fh:
@@ -242,7 +249,9 @@ class VsCodeParser(Parser):
         if not isinstance(state, dict):
             state = {}
         session_id = str(state.get("sessionId") or Path(artifact.rel).name.rsplit(".", 1)[0])
-        project = self._workspace_folder(artifact) or uri_to_path(str(state.get("workingDirectory") or ""))
+        project = self._workspace_folder(artifact) or uri_to_path(
+            str(state.get("workingDirectory") or "")
+        )
 
         def base(turn_type: str, text: str, ts, line: int, model: str = "") -> Row:
             row = self.base_row(artifact)
@@ -256,11 +265,25 @@ class VsCodeParser(Parser):
             return row
 
         if state:
-            yield base("system", " ".join(x for x in (
-                "session start:", "responder=%s" % state["responderUsername"] if state.get("responderUsername") else "",
-                "location=%s" % state["initialLocation"] if state.get("initialLocation") else "",
-                "title=%s" % state["customTitle"] if state.get("customTitle") else "") if x),
-                state.get("creationDate"), req_lines.get(-1, 0))
+            yield base(
+                "system",
+                " ".join(
+                    x
+                    for x in (
+                        "session start:",
+                        "responder=%s" % state["responderUsername"]
+                        if state.get("responderUsername")
+                        else "",
+                        "location=%s" % state["initialLocation"]
+                        if state.get("initialLocation")
+                        else "",
+                        "title=%s" % state["customTitle"] if state.get("customTitle") else "",
+                    )
+                    if x
+                ),
+                state.get("creationDate"),
+                req_lines.get(-1, 0),
+            )
         requests = state.get("requests") if isinstance(state.get("requests"), list) else []
         for i, req in enumerate(requests):
             if isinstance(req, dict):
@@ -283,7 +306,9 @@ class VsCodeParser(Parser):
             total = len(reqs) if isinstance(reqs, list) else 0
             start = 0
             if kind == 2:
-                start = rec["i"] if isinstance(rec.get("i"), int) else total - len(rec.get("v") or [])
+                start = (
+                    rec["i"] if isinstance(rec.get("i"), int) else total - len(rec.get("v") or [])
+                )
             for i in list(req_lines):
                 if i >= start:
                     del req_lines[i]
@@ -314,7 +339,11 @@ class VsCodeParser(Parser):
         req_ts = req.get("timestamp")
         resp_ts = req.get("responseTimestamp") or req_ts
         msg = req.get("message")
-        text = msg if isinstance(msg, str) else (msg.get("text") if isinstance(msg, dict) else "") or ""
+        text = (
+            msg
+            if isinstance(msg, str)
+            else (msg.get("text") if isinstance(msg, dict) else "") or ""
+        )
         names = []
         vd = req.get("variableData")
         for v in (vd.get("variables") if isinstance(vd, dict) else None) or []:

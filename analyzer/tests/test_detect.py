@@ -36,20 +36,34 @@ class LooseDetectTests(unittest.TestCase):
         by_user = self.agents_by_user(col)
         self.assertEqual(set(by_user), {"alice", "bob", "carol"})
         expected_alice = {
-            "claude-code", "codex-cli", "gemini-cli", "antigravity", "vscode", "cline",
+            "claude-code",
+            "codex-cli",
+            "gemini-cli",
+            "antigravity",
+            "vscode",
+            "cline",
             "qwen-code",
             "kiro",
-            "crush", "goose",
-            "continue", "aider",
+            "crush",
+            "goose",
+            "continue",
+            "aider",
             "zed",
             "roo-code",
             "tabby",
-            "openhands", "shellgpt",
-            "pi", "little-coder", "letta",
-            "hermes", "agent-zero",
+            "openhands",
+            "shellgpt",
+            "pi",
+            "little-coder",
+            "letta",
+            "hermes",
+            "agent-zero",
             "open-interpreter",
-            "openclaw", "nanobot",
-            "cody", "twinny", "pearai",
+            "openclaw",
+            "nanobot",
+            "cody",
+            "twinny",
+            "pearai",
         }
         self.assertLessEqual(expected_alice, by_user["alice"])
         self.assertEqual(by_user["carol"], {"codex-cli"})
@@ -65,10 +79,15 @@ class LooseDetectTests(unittest.TestCase):
             by_rel = {a.rel: a.agent for a in col.artifacts}
             self.assertEqual(by_rel[".gemini/antigravity-cli/history.jsonl"], "antigravity", root)
             self.assertEqual(by_rel[".gemini/settings.json"], "gemini-cli", root)
-            self.assertEqual(sum(1 for a in col.artifacts if a.rel == ".gemini/antigravity-cli/history.jsonl"), 1)
+            self.assertEqual(
+                sum(1 for a in col.artifacts if a.rel == ".gemini/antigravity-cli/history.jsonl"), 1
+            )
         col = open_input(self.tmp / "home", self.cat)
         by_rel = {a.rel: a.agent for a in col.artifacts}
-        self.assertEqual(by_rel[".config/Code/User/globalStorage/saoudrizwan.claude-dev/state/taskHistory.json"], "cline")
+        self.assertEqual(
+            by_rel[".config/Code/User/globalStorage/saoudrizwan.claude-dev/state/taskHistory.json"],
+            "cline",
+        )
         self.assertEqual(by_rel[".config/Code/User/globalStorage/state.vscdb"], "vscode")
 
     def test_project_dirs_inside_home_are_not_homes(self):
@@ -131,9 +150,12 @@ class LooseDetectTests(unittest.TestCase):
         home = build_home(self.tmp / "x")
         import contextlib
         import io
+
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            rc = cli.main(["detect", str(home / ".codex"), "--json", "--user", "mallory", "--host", "h1"])
+            rc = cli.main(
+                ["detect", str(home / ".codex"), "--json", "--user", "mallory", "--host", "h1"]
+            )
         self.assertEqual(rc, 0)
         out = json.loads(buf.getvalue())
         self.assertEqual(out["kind"], "loose")
@@ -163,8 +185,11 @@ class ArchiveTests(unittest.TestCase):
         root = build_image(self.tmp / "image")
         out = self.tmp / "out"
         out.mkdir()
-        r = subprocess.run(["sh", str(COLLECTOR), "-r", str(root), "-o", str(out), "-q"],
-                           capture_output=True, text=True)
+        r = subprocess.run(
+            ["sh", str(COLLECTOR), "-r", str(root), "-o", str(out), "-q"],
+            capture_output=True,
+            text=True,
+        )
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         archives = list(out.glob("*.tar.gz"))
         self.assertEqual(len(archives), 1, list(out.iterdir()))
@@ -200,6 +225,7 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(col.kind, "collected")
         import contextlib
         import io
+
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rc = cli.main(["timeline", str(extracted), "-o", str(self.tmp / "tl")])
@@ -210,7 +236,9 @@ class ArchiveTests(unittest.TestCase):
         self.assertTrue((self.tmp / "tl" / "sessions.csv").exists())
         self.assertTrue((self.tmp / "tl" / "detect.json").exists())
         # host comes from collection.json, users from the manifest
-        self.assertTrue(all(",alice," in r or ",bob," in r or ",carol," in r for r in rows[1:]), rows[1:3])
+        self.assertTrue(
+            all(",alice," in r or ",bob," in r or ",carol," in r for r in rows[1:]), rows[1:3]
+        )
 
 
 if __name__ == "__main__":

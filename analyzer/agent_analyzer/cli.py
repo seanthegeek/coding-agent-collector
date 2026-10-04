@@ -1,4 +1,5 @@
 """Command line: detect agents in an input, or write the CSV timeline."""
+
 from __future__ import annotations
 
 import argparse
@@ -27,13 +28,28 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command", required=True)
 
     def add_input(p: argparse.ArgumentParser) -> None:
-        p.add_argument("input", type=Path,
-                       help="collector archive (.tar.gz or .zip), extracted collection, or any directory")
-        p.add_argument("--host", default="", help="host name to record when the input has no collection.json")
-        p.add_argument("--user", default="", help="user name to record for a home whose owner cannot be inferred")
-        p.add_argument("--work-dir", type=Path, default=None,
-                       help="where to extract an archive (default: a temporary directory removed afterwards)")
-        p.add_argument("--keep-extracted", action="store_true", help="do not delete the extracted archive")
+        p.add_argument(
+            "input",
+            type=Path,
+            help="collector archive (.tar.gz or .zip), extracted collection, or any directory",
+        )
+        p.add_argument(
+            "--host", default="", help="host name to record when the input has no collection.json"
+        )
+        p.add_argument(
+            "--user",
+            default="",
+            help="user name to record for a home whose owner cannot be inferred",
+        )
+        p.add_argument(
+            "--work-dir",
+            type=Path,
+            default=None,
+            help="where to extract an archive (default: a temporary directory removed afterwards)",
+        )
+        p.add_argument(
+            "--keep-extracted", action="store_true", help="do not delete the extracted archive"
+        )
 
     d = sub.add_parser("detect", help="list the homes, users and agents found in the input")
     add_input(d)
@@ -43,21 +59,43 @@ def build_parser() -> argparse.ArgumentParser:
     t = sub.add_parser("timeline", help="parse transcripts into timeline.csv and sessions.csv")
     add_input(t)
     t.add_argument("-o", "--output", type=Path, required=True, help="output directory")
-    t.add_argument("--max-text-length", type=int, default=0,
-                   help="cut the text column to this many characters; 0 keeps the full text (default)")
-    t.add_argument("--include-thinking", action="store_true",
-                   help="emit thinking and reasoning blocks as rows of type thinking")
-    t.add_argument("--agent", action="append", default=[],
-                   help="only parse this agent (repeatable); default is every agent with a parser")
+    t.add_argument(
+        "--max-text-length",
+        type=int,
+        default=0,
+        help="cut the text column to this many characters; 0 keeps the full text (default)",
+    )
+    t.add_argument(
+        "--include-thinking",
+        action="store_true",
+        help="emit thinking and reasoning blocks as rows of type thinking",
+    )
+    t.add_argument(
+        "--agent",
+        action="append",
+        default=[],
+        help="only parse this agent (repeatable); default is every agent with a parser",
+    )
 
     i = sub.add_parser("inventory", help="merge collector --inventory outputs into one fleet CSV")
-    i.add_argument("input", type=Path, nargs="+",
-                   help="a saved stdout of collect-agent-artifacts --inventory, or a directory of them")
-    i.add_argument("-o", "--output", type=Path, default=Path(inventory_mod.DEFAULT_NAME),
-                   help="CSV to write (default: %s in the current directory)" % inventory_mod.DEFAULT_NAME)
+    i.add_argument(
+        "input",
+        type=Path,
+        nargs="+",
+        help="a saved stdout of collect-agent-artifacts --inventory, or a directory of them",
+    )
+    i.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=Path(inventory_mod.DEFAULT_NAME),
+        help="CSV to write (default: %s in the current directory)" % inventory_mod.DEFAULT_NAME,
+    )
 
     c = sub.add_parser("catalog", help="print the bundled artifact catalog")
-    c.add_argument("--agents", action="store_true", help="print agent names and whether a parser exists")
+    c.add_argument(
+        "--agents", action="store_true", help="print agent names and whether a parser exists"
+    )
     return ap
 
 
@@ -90,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
 
 # ---- catalog --------------------------------------------------------------------
 
+
 def cmd_catalog(args: argparse.Namespace) -> int:
     cat = catalog_mod.load()
     if not args.agents:
@@ -102,6 +141,7 @@ def cmd_catalog(args: argparse.Namespace) -> int:
 
 
 # ---- inventory ------------------------------------------------------------------
+
 
 def cmd_inventory(args: argparse.Namespace) -> int:
     try:
@@ -117,7 +157,10 @@ def cmd_inventory(args: argparse.Namespace) -> int:
             print("error: %s: %s" % (f, e), file=sys.stderr)
             return 2
         if junk:
-            print("skipped %d non-inventory line%s in %s" % (junk, "" if junk == 1 else "s", f), file=sys.stderr)
+            print(
+                "skipped %d non-inventory line%s in %s" % (junk, "" if junk == 1 else "s", f),
+                file=sys.stderr,
+            )
         rows.extend(got)
     if args.output.parent != Path(""):
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -126,7 +169,10 @@ def cmd_inventory(args: argparse.Namespace) -> int:
         w.writerow(inventory_mod.INVENTORY_COLUMNS)
         w.writerows(rows)
     hosts = {r[0] for r in rows}
-    print("rows:   %d from %d host%s in %s" % (len(rows), len(hosts), "" if len(hosts) == 1 else "s", args.output))
+    print(
+        "rows:   %d from %d host%s in %s"
+        % (len(rows), len(hosts), "" if len(hosts) == 1 else "s", args.output)
+    )
     roll = inventory_mod.rollup(rows)
     if roll:
         print()
@@ -138,6 +184,7 @@ def cmd_inventory(args: argparse.Namespace) -> int:
 
 # ---- detect ---------------------------------------------------------------------
 
+
 def detect_table(col: Collection) -> list[dict]:
     parsers = by_agent()
     rows: dict[tuple[str, str, str], dict] = OrderedDict()
@@ -146,8 +193,12 @@ def detect_table(col: Collection) -> list[dict]:
         r = rows.get(key)
         if r is None:
             r = rows[key] = {
-                "user": a.home.user, "home": a.home.original or str(a.home.disk_path),
-                "agent": a.agent, "files": 0, "bytes": 0, "parser": a.agent in parsers,
+                "user": a.home.user,
+                "home": a.home.original or str(a.home.disk_path),
+                "agent": a.agent,
+                "files": 0,
+                "bytes": 0,
+                "parser": a.agent in parsers,
                 "inferred": a.home.inferred,
             }
         r["files"] += 1
@@ -165,17 +216,30 @@ def cmd_detect(args: argparse.Namespace, col: Collection) -> int:
     table = detect_table(col)
     if args.json:
         out = {
-            "input": str(col.source), "kind": col.kind, "host": col.host, "notes": col.notes,
-            "homes": [{"user": h.user, "home": h.original, "inferred": h.inferred} for h in col.homes],
+            "input": str(col.source),
+            "kind": col.kind,
+            "host": col.host,
+            "notes": col.notes,
+            "homes": [
+                {"user": h.user, "home": h.original, "inferred": h.inferred} for h in col.homes
+            ],
             "agents": table,
         }
         if args.files:
-            out["files"] = [{"user": a.home.user, "agent": a.agent, "path": a.original} for a in col.artifacts]
+            out["files"] = [
+                {"user": a.home.user, "agent": a.agent, "path": a.original} for a in col.artifacts
+            ]
         json.dump(out, sys.stdout, indent=2)
         sys.stdout.write("\n")
         return 0
     print("input:   %s" % col.source)
-    print("kind:    %s%s" % (col.kind, "" if col.kind != "loose" else " (no manifest; user and home inferred from paths)"))
+    print(
+        "kind:    %s%s"
+        % (
+            col.kind,
+            "" if col.kind != "loose" else " (no manifest; user and home inferred from paths)",
+        )
+    )
     print("host:    %s" % (col.host or "(unknown)"))
     for n in col.notes:
         print("note:    %s" % n)
@@ -185,8 +249,17 @@ def cmd_detect(args: argparse.Namespace, col: Collection) -> int:
     print()
     print("%-14s %-32s %-18s %8s %12s  %s" % ("user", "home", "agent", "files", "bytes", "parser"))
     for r in table:
-        print("%-14s %-32s %-18s %8d %12d  %s" % (
-            r["user"] or "?", r["home"][:32], r["agent"], r["files"], r["bytes"], "yes" if r["parser"] else "detect only"))
+        print(
+            "%-14s %-32s %-18s %8d %12d  %s"
+            % (
+                r["user"] or "?",
+                r["home"][:32],
+                r["agent"],
+                r["files"],
+                r["bytes"],
+                "yes" if r["parser"] else "detect only",
+            )
+        )
     if args.files:
         print()
         for a in col.artifacts:
@@ -212,7 +285,9 @@ def parsers_for(artifact, parsers: dict[str, list]) -> list:
     return own + [p for p in ALL if artifact.agent in p.reads_agents and p not in own]
 
 
-def collect_rows(col: Collection, opts: Options, agents: list[str]) -> tuple[list[Row], Counter, list[str]]:
+def collect_rows(
+    col: Collection, opts: Options, agents: list[str]
+) -> tuple[list[Row], Counter, list[str]]:
     parsers = by_agent()
     rows: list[Row] = []
     counts: Counter = Counter()
@@ -254,8 +329,17 @@ def cmd_timeline(args: argparse.Namespace, col: Collection) -> int:
     write_csv(sess, SESSION_COLUMNS, sessions)
     detect = detect_table(col)
     with open(args.output / "detect.json", "w", encoding="utf-8") as fh:
-        json.dump({"input": str(col.source), "kind": col.kind, "host": col.host, "notes": col.notes,
-                   "agents": detect}, fh, indent=2)
+        json.dump(
+            {
+                "input": str(col.source),
+                "kind": col.kind,
+                "host": col.host,
+                "notes": col.notes,
+                "agents": detect,
+            },
+            fh,
+            indent=2,
+        )
     print("input:     %s (%s)" % (col.source, col.kind))
     print("host:      %s" % (col.host or "(unknown)"))
     for n in col.notes:
@@ -266,8 +350,10 @@ def cmd_timeline(args: argparse.Namespace, col: Collection) -> int:
     # Project-tagged files are routed to every parser, so they are never
     # "detected only" in their own right.
     unparsed = [r["agent"] for r in detect if not r["parser"] and r["agent"] != PROJECT_AGENT]
-    print("agents:    parsed %s; detected only %s" % (
-        ", ".join(parsed_agents) or "none", ", ".join(sorted(set(unparsed))) or "none"))
+    print(
+        "agents:    parsed %s; detected only %s"
+        % (", ".join(parsed_agents) or "none", ", ".join(sorted(set(unparsed))) or "none")
+    )
     print("rows:      %d in %s" % (len(rows), timeline))
     for (agent, tt), n in sorted(counts.items()):
         print("           %-14s %-12s %d" % (agent, tt, n))

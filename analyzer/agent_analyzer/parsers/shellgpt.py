@@ -36,6 +36,7 @@ file name, and `source_line` is 1 for every row since the file is one line.
 A file cut mid-write yields the messages before the cut and one `system`
 row.
 """
+
 from __future__ import annotations
 
 import json
@@ -126,7 +127,7 @@ class ShellGptParser(Parser):
             yield mk("system", "parser: not a ShellGPT chat file" + (": " + error if error else ""))
             return
 
-        names = {}          # tool call id -> function name
+        names = {}  # tool call id -> function name
         pending = ("", "")  # (synthetic id, name) of a legacy function_call awaiting its result
         for i, m in enumerate(messages):
             role = str(m.get("role") or "")

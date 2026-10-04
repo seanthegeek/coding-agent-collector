@@ -38,6 +38,7 @@ Files, relative to the home directory:
   text of the `assistant` row; text blocks that are only
   `<environment_details>` are `system` rows.
 """
+
 from __future__ import annotations
 
 import json
@@ -51,7 +52,9 @@ from ..timeutil import to_utc
 from .base import Options, compact_json, text_of
 from .opencode import OpenCodeParser, tool_summary
 
-TASK_RX = re.compile(r"(?:^|/)User/globalStorage/kilocode\.kilo-code/tasks/([^/]+)/api_conversation_history\.json$")
+TASK_RX = re.compile(
+    r"(?:^|/)User/globalStorage/kilocode\.kilo-code/tasks/([^/]+)/api_conversation_history\.json$"
+)
 
 
 def iter_json_array(raw: str) -> tuple[list[object], str | None]:
@@ -151,12 +154,20 @@ class KiloCodeParser(OpenCodeParser):
         if item:
             row = base(0, task_ts)
             row.turn_type = "system"
-            row.text = compact(" ".join(p for p in (
-                "task:", str(item.get("task") or ""),
-                "mode=%s" % item["mode"] if item.get("mode") else "",
-                "status=%s" % item["status"] if item.get("status") else "",
-                "parent=%s" % item["parentTaskId"] if item.get("parentTaskId") else "",
-            ) if p), opts.max_text_length)
+            row.text = compact(
+                " ".join(
+                    p
+                    for p in (
+                        "task:",
+                        str(item.get("task") or ""),
+                        "mode=%s" % item["mode"] if item.get("mode") else "",
+                        "status=%s" % item["status"] if item.get("status") else "",
+                        "parent=%s" % item["parentTaskId"] if item.get("parentTaskId") else "",
+                    )
+                    if p
+                ),
+                opts.max_text_length,
+            )
             yield row
 
         with open(artifact.disk_path, "rb") as fh:
@@ -175,7 +186,9 @@ class KiloCodeParser(OpenCodeParser):
 
             if msg.get("type") == "reasoning":
                 if opts.include_thinking:
-                    text = text_of(msg.get("summary")) or str(msg.get("reasoning_content") or msg.get("text") or "")
+                    text = text_of(msg.get("summary")) or str(
+                        msg.get("reasoning_content") or msg.get("text") or ""
+                    )
                     if text:
                         yield mk("thinking", text)
                 continue
@@ -222,8 +235,17 @@ class KiloCodeParser(OpenCodeParser):
                 else:
                     out.append(mk("system", "%s: %s" % (btype or "block", compact_json(block))))
             if texts:
-                out.insert(text_at, mk("user" if role == "user" else "assistant" if role == "assistant" else "system",
-                                       "\n".join(texts)))
+                out.insert(
+                    text_at,
+                    mk(
+                        "user"
+                        if role == "user"
+                        else "assistant"
+                        if role == "assistant"
+                        else "system",
+                        "\n".join(texts),
+                    ),
+                )
             yield from out
         if error:
             row = base(len(items) + 1, "")

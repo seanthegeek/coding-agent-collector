@@ -30,6 +30,7 @@ the fields. Roots: the extension's
 No model name is recorded anywhere in Roo transcripts (`apiConfigName` is a
 profile name), so `model` is always empty. No git branch is recorded.
 """
+
 from __future__ import annotations
 
 import re
@@ -54,7 +55,9 @@ class RooCodeParser(LegacyTaskParser):
     PROJECT_KEY = "workspace"
 
     def wants(self, artifact: Artifact) -> bool:
-        return bool(self.task_match(artifact) or ITEM_RX.match(artifact.rel) or INDEX_RX.match(artifact.rel))
+        return bool(
+            self.task_match(artifact) or ITEM_RX.match(artifact.rel) or INDEX_RX.match(artifact.rel)
+        )
 
     def history_item(self, task_dir: Path, root: Path, task_id: str) -> dict | None:
         item = load_json(task_dir / ITEM_FILE)
@@ -76,8 +79,12 @@ class RooCodeParser(LegacyTaskParser):
             if isinstance(item, dict):
                 yield self.history_row(artifact, item, 1, opts)
             else:
-                yield error_row(self, artifact, [(0, "history_item.json is not a JSON object")],
-                                artifact.disk_path.parent.name)
+                yield error_row(
+                    self,
+                    artifact,
+                    [(0, "history_item.json is not a JSON object")],
+                    artifact.disk_path.parent.name,
+                )
         elif INDEX_RX.match(artifact.rel):
             yield from self._parse_index(artifact, opts)
 

@@ -49,6 +49,7 @@ whose sha256 equals the legacy hash directory name or the `projectHash`,
 else the `projectHash` itself. Tool checkpoints (`checkpoints/*.json`,
 `checkpoint-<tag>.json`) and the activity log under `logs/` are not parsed.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -64,7 +65,9 @@ from ..model import Row, compact
 from ..timeutil import to_utc
 from .base import Options, Parser, compact_json, iter_jsonl
 
-SESSION_RX = re.compile(r"^(?P<base>(?:\.cache/)?\.gemini)/tmp/(?P<slug>[^/]+)/chats/(?:.*/)?[^/]+\.jsonl?$")
+SESSION_RX = re.compile(
+    r"^(?P<base>(?:\.cache/)?\.gemini)/tmp/(?P<slug>[^/]+)/chats/(?:.*/)?[^/]+\.jsonl?$"
+)
 LOGS_RX = re.compile(r"^(?P<base>(?:\.cache/)?\.gemini)/tmp/(?P<slug>[^/]+)/logs\.json$")
 HEX64_RX = re.compile(r"^[0-9a-f]{64}$")
 
@@ -73,6 +76,7 @@ FAILED_STATUSES = ("error", "cancelled")
 
 
 # ---- content helpers ----------------------------------------------------------
+
 
 def _parts(content) -> list:
     if content is None:
@@ -149,6 +153,7 @@ def tool_text(call: dict) -> str:
 
 # ---- project path -------------------------------------------------------------
 
+
 def _read_small(path: Path) -> str | None:
     try:
         if os.path.islink(str(path)) or not path.is_file():
@@ -185,6 +190,7 @@ def resolve_project(base: Path, slug: str, project_hash: str = "") -> str:
 
 # ---- parser -------------------------------------------------------------------
 
+
 class GeminiCliParser(Parser):
     agent = "gemini-cli"
     name = "gemini-cli"
@@ -204,7 +210,16 @@ class GeminiCliParser(Parser):
     def _base_dir(self, artifact: Artifact, m) -> Path:
         return Path(artifact.home.disk_path) / m.group("base")
 
-    def _system(self, artifact: Artifact, line: int, ts: str, sid: str, project: str, text: str, opts: Options) -> Row:
+    def _system(
+        self,
+        artifact: Artifact,
+        line: int,
+        ts: str,
+        sid: str,
+        project: str,
+        text: str,
+        opts: Options,
+    ) -> Row:
         row = self.base_row(artifact)
         row.source_line = line
         row.timestamp_utc = ts
@@ -222,16 +237,20 @@ class GeminiCliParser(Parser):
             with open(artifact.disk_path, "rb") as fh:
                 data = json.loads(fh.read().decode("utf-8", errors="replace"))
         except ValueError as e:
-            yield self._system(artifact, 0, "", "", project, "parser: unparseable logs.json: %s" % e, opts)
+            yield self._system(
+                artifact, 0, "", "", project, "parser: unparseable logs.json: %s" % e, opts
+            )
             return
         if not isinstance(data, list):
-            yield self._system(artifact, 0, "", "", project, "parser: logs.json is not a JSON array", opts)
+            yield self._system(
+                artifact, 0, "", "", project, "parser: logs.json is not a JSON array", opts
+            )
             return
         for i, rec in enumerate(data):
             if not isinstance(rec, dict):
                 continue
             row = self.base_row(artifact)
-            row.source_line = i + 1          # array index, 1-based
+            row.source_line = i + 1  # array index, 1-based
             row.timestamp_utc = to_utc(rec.get("timestamp"))
             row.session_id = str(rec.get("sessionId") or "")
             row.project_path = project
@@ -252,7 +271,7 @@ class GeminiCliParser(Parser):
         meta: dict = {}
         # id -> [record, line, session_id]
         messages: OrderedDict[str, list] = OrderedDict()
-        starts: list[tuple[int, str, str, str]] = []   # (line, ts, session_id, text)
+        starts: list[tuple[int, str, str, str]] = []  # (line, ts, session_id, text)
         events: list[tuple[int, str, str, str]] = []
         session_id = ""
         latest_ts = ""
@@ -278,7 +297,14 @@ class GeminiCliParser(Parser):
                 keys = list(messages)
                 cut = keys.index(target) if target in messages else 0
                 dropped = drop(keys[cut:])
-                events.append((n, latest_ts, session_id, "rewind to %s: %d message(s) dropped" % (target, dropped)))
+                events.append(
+                    (
+                        n,
+                        latest_ts,
+                        session_id,
+                        "rewind to %s: %d message(s) dropped" % (target, dropped),
+                    )
+                )
             elif isinstance(rec.get("$patch"), dict):
                 p = rec["$patch"]
                 if isinstance(p.get("id"), str):
@@ -289,8 +315,12 @@ class GeminiCliParser(Parser):
                 rem = [i for i in (p.get("removeIds") or []) if isinstance(i, str)]
                 if rem:
                     dropped = drop(rem)
-                    events.append((n, latest_ts, session_id, "patch removed %d message(s)" % dropped))
-                order = [i for i in (p.get("orderIds") or []) if isinstance(i, str) and i in messages]
+                    events.append(
+                        (n, latest_ts, session_id, "patch removed %d message(s)" % dropped)
+                    )
+                order = [
+                    i for i in (p.get("orderIds") or []) if isinstance(i, str) and i in messages
+                ]
                 if order:
                     for i in order:
                         messages.move_to_end(i)
@@ -317,11 +347,14 @@ class GeminiCliParser(Parser):
                 session_id = rec["sessionId"] or session_id
                 ts = to_utc(rec.get("startTime"))
                 latest_ts = max(latest_ts, ts)
-                text = "session start: kind=%s projectHash=%s" % (rec.get("kind") or "main", rec.get("projectHash") or "")
+                text = "session start: kind=%s projectHash=%s" % (
+                    rec.get("kind") or "main",
+                    rec.get("projectHash") or "",
+                )
                 if rec.get("directories"):
                     text += " directories=%s" % compact_json(rec["directories"])
                 starts.append((n, ts, session_id, text))
-                for msg in rec.get("messages") or []:     # legacy ConversationRecord
+                for msg in rec.get("messages") or []:  # legacy ConversationRecord
                     if isinstance(msg, dict) and isinstance(msg.get("id"), str):
                         latest_ts = max(latest_ts, to_utc(msg.get("timestamp")))
                         put(msg, n)
@@ -336,8 +369,15 @@ class GeminiCliParser(Parser):
         for line, ts, sid, text in events:
             yield self._system(artifact, line, ts, sid, project, text, opts)
         if errors:
-            yield self._system(artifact, errors[0][0], "", session_id, project,
-                               "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0]), opts)
+            yield self._system(
+                artifact,
+                errors[0][0],
+                "",
+                session_id,
+                project,
+                "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0]),
+                opts,
+            )
 
     @staticmethod
     def _apply_patch(messages: OrderedDict[str, list], patch: dict) -> None:
@@ -347,7 +387,11 @@ class GeminiCliParser(Parser):
         msg = dict(entry[0])
         if "content" in patch and patch["content"] is not None:
             msg["content"] = patch["content"]
-        if isinstance(patch.get("toolCalls"), list) and msg.get("type") == "gemini" and isinstance(msg.get("toolCalls"), list):
+        if (
+            isinstance(patch.get("toolCalls"), list)
+            and msg.get("type") == "gemini"
+            and isinstance(msg.get("toolCalls"), list)
+        ):
             calls = [dict(c) if isinstance(c, dict) else c for c in msg["toolCalls"]]
             for tp in patch["toolCalls"]:
                 if not isinstance(tp, dict) or "result" not in tp:
@@ -374,7 +418,9 @@ class GeminiCliParser(Parser):
             return [], [(1, "not a ConversationRecord")]
         return [(1, rec)], []
 
-    def _message_rows(self, artifact: Artifact, opts: Options, msg: dict, line: int, sid: str, project: str) -> list[Row]:
+    def _message_rows(
+        self, artifact: Artifact, opts: Options, msg: dict, line: int, sid: str, project: str
+    ) -> list[Row]:
         mtype = msg.get("type")
         ts = to_utc(msg.get("timestamp"))
         model = str(msg.get("model") or "") if mtype == "gemini" else ""
@@ -404,7 +450,13 @@ class GeminiCliParser(Parser):
                 if not isinstance(t, dict):
                     continue
                 subj, desc = t.get("subject") or "", t.get("description") or ""
-                out.append(row("thinking", "%s: %s" % (subj, desc) if subj else desc, to_utc(t.get("timestamp"))))
+                out.append(
+                    row(
+                        "thinking",
+                        "%s: %s" % (subj, desc) if subj else desc,
+                        to_utc(t.get("timestamp")),
+                    )
+                )
             thought = part_text(content, thoughts=True)
             if thought:
                 out.append(row("thinking", thought))

@@ -6,6 +6,7 @@ so the database, its `-wal` and its `-shm` are copied together into a scratch
 directory and opened there. The originals are never opened, let alone
 written, which matters because SQLite would otherwise checkpoint the WAL into
 the evidence copy."""
+
 from __future__ import annotations
 
 import shutil

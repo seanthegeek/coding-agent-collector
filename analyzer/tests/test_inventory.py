@@ -78,9 +78,23 @@ class InventoryTests(unittest.TestCase):
         path = work / "fleet-inventory.csv"
         self.assertTrue(path.is_file())
         rows = self.read_csv(path)
-        self.assertEqual(rows[0], [
-            "host", "collector", "mode", "at", "user", "agent", "files", "bytes",
-            "first", "last", "projects", "evidence"])
+        self.assertEqual(
+            rows[0],
+            [
+                "host",
+                "collector",
+                "mode",
+                "at",
+                "user",
+                "agent",
+                "files",
+                "bytes",
+                "first",
+                "last",
+                "projects",
+                "evidence",
+            ],
+        )
         self.assertEqual(rows[0], inventory.INVENTORY_COLUMNS)
         # srv03 (empty) + 4 ws01 agents + 1 WS02 agent; files sorted by name.
         self.assertEqual(len(rows), 1 + 1 + 4 + 1)
@@ -93,16 +107,32 @@ class InventoryTests(unittest.TestCase):
         rows = self.read_csv(target)
         self.assertEqual(len(rows), 5)
         alice = next(r for r in rows[1:] if r[4] == "alice" and r[5] == "claude-code")
-        self.assertEqual(alice, [
-            "ws01", "1.6.0", "live", "2026-10-04T16:31:54.000Z", "alice", "claude-code", "6", "318",
-            "2026-09-15T01:02:03.000Z", "2026-10-04T16:31:11.000Z", "2", ".claude,.claude.json*"])
+        self.assertEqual(
+            alice,
+            [
+                "ws01",
+                "1.6.0",
+                "live",
+                "2026-10-04T16:31:54.000Z",
+                "alice",
+                "claude-code",
+                "6",
+                "318",
+                "2026-09-15T01:02:03.000Z",
+                "2026-10-04T16:31:11.000Z",
+                "2",
+                ".claude,.claude.json*",
+            ],
+        )
         bob = next(r for r in rows[1:] if r[4] == "bob")
         self.assertEqual(bob[6:10], ["0", "0", "", ""])
         docker = next(r for r in rows[1:] if r[4] == "docker")
         self.assertEqual((docker[5], docker[11]), ("agent-zero", "*a0_usr"))
 
     def test_junk_lines_skipped_and_counted(self):
-        rc, _, err = self.run_cli(["inventory", "-o", str(self.tmp / "b.csv"), str(self.inputs / "ws02.txt")])
+        rc, _, err = self.run_cli(
+            ["inventory", "-o", str(self.tmp / "b.csv"), str(self.inputs / "ws02.txt")]
+        )
         self.assertEqual(rc, 0)
         self.assertIn("skipped 4 non-inventory lines in", err)
         rows = self.read_csv(self.tmp / "b.csv")
@@ -110,17 +140,21 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(rows[1][0], "WS02")
 
     def test_empty_host_row(self):
-        rc, _, _ = self.run_cli(["inventory", "-o", str(self.tmp / "c.csv"), str(self.inputs / "srv03.txt")])
+        rc, _, _ = self.run_cli(
+            ["inventory", "-o", str(self.tmp / "c.csv"), str(self.inputs / "srv03.txt")]
+        )
         self.assertEqual(rc, 0)
         rows = self.read_csv(self.tmp / "c.csv")
-        self.assertEqual(rows[1], ["srv03", "1.6.0", "image", "2026-10-04T18:00:00.000Z"] + [""] * 8)
+        self.assertEqual(
+            rows[1], ["srv03", "1.6.0", "image", "2026-10-04T18:00:00.000Z"] + [""] * 8
+        )
 
     def test_rollup(self):
         rc, out, _ = self.run_cli(["inventory", "-o", str(self.tmp / "r.csv"), str(self.inputs)])
         self.assertEqual(rc, 0)
         lines = out.splitlines()
         self.assertTrue(lines[0].startswith("rows:   6 from 3 hosts in "))
-        table = [ln.split() for ln in lines[lines.index("") + 1:]]
+        table = [ln.split() for ln in lines[lines.index("") + 1 :]]
         self.assertEqual(table[0], ["agent", "hosts", "users", "latest"])
         self.assertEqual(table[1], ["claude-code", "2", "3", "2026-10-04T16:31:11.000Z"])
         self.assertEqual(table[2], ["agent-zero", "1", "1", "2026-10-03T10:00:00.000Z"])
@@ -141,7 +175,9 @@ class InventoryTests(unittest.TestCase):
         rc, _, _ = self.run_cli(["inventory", "-o", str(self.tmp / "j.csv"), str(f)])
         self.assertEqual(rc, 1)
         self.assertEqual(self.read_csv(self.tmp / "j.csv"), [inventory.INVENTORY_COLUMNS])
-        rc, _, err = self.run_cli(["inventory", "-o", str(self.tmp / "m.csv"), str(self.tmp / "missing")])
+        rc, _, err = self.run_cli(
+            ["inventory", "-o", str(self.tmp / "m.csv"), str(self.tmp / "missing")]
+        )
         self.assertEqual(rc, 2)
         self.assertIn("does not exist", err)
 
@@ -151,8 +187,11 @@ class InventoryTests(unittest.TestCase):
         cap = self.tmp / "e2e"
         cap.mkdir()
         with open(cap / "image.txt", "w", encoding="utf-8") as fh:
-            r = subprocess.run(["sh", str(COLLECTOR), "-r", str(root), "--inventory", "-q"],
-                               stdout=fh, stderr=subprocess.PIPE)
+            r = subprocess.run(
+                ["sh", str(COLLECTOR), "-r", str(root), "--inventory", "-q"],
+                stdout=fh,
+                stderr=subprocess.PIPE,
+            )
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stderr, b"")
         rc, _, err = self.run_cli(["inventory", "-o", str(self.tmp / "e2e.csv"), str(cap)])

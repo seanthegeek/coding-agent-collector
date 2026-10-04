@@ -54,6 +54,7 @@ The request log has no session id or cwd: its request line becomes one
 timestamped by the response's `created`; the request row inherits the first
 response's time. History entries carry no timestamp.
 """
+
 from __future__ import annotations
 
 import json
@@ -109,7 +110,7 @@ def result_text(tool_result) -> tuple[str, bool]:
     if tool_result.get("status") == "error":
         return str(tool_result.get("error") or ""), True
     value = tool_result.get("value")
-    if isinstance(value, list):                       # older rows: bare content array
+    if isinstance(value, list):  # older rows: bare content array
         return text_of(value), False
     if isinstance(value, dict):
         text = text_of(value.get("content"))
@@ -140,7 +141,9 @@ class GooseParser(Parser):
 
     def wants(self, artifact: Artifact) -> bool:
         rel = artifact.rel
-        return bool(DB_RX.match(rel) or LEGACY_RX.match(rel) or LLM_RX.match(rel) or HISTORY_RX.match(rel))
+        return bool(
+            DB_RX.match(rel) or LEGACY_RX.match(rel) or LLM_RX.match(rel) or HISTORY_RX.match(rel)
+        )
 
     def parse(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         rel = artifact.rel
@@ -153,8 +156,15 @@ class GooseParser(Parser):
         else:
             yield from self._parse_history(artifact, opts)
 
-    def _row(self, artifact: Artifact, line: int, session_id: str = "", project_path: str = "",
-             model: str = "", ts: str = "") -> Row:
+    def _row(
+        self,
+        artifact: Artifact,
+        line: int,
+        session_id: str = "",
+        project_path: str = "",
+        model: str = "",
+        ts: str = "",
+    ) -> Row:
         row = self.base_row(artifact)
         row.source_line = line
         row.session_id = session_id
@@ -164,8 +174,16 @@ class GooseParser(Parser):
         return row
 
     # -- content blocks, shared by every store ------------------------------------------
-    def _block_rows(self, artifact: Artifact, base: Row, role: str, content, user_visible: bool,
-                    tool_names: dict[str, str], opts: Options) -> Iterator[Row]:
+    def _block_rows(
+        self,
+        artifact: Artifact,
+        base: Row,
+        role: str,
+        content,
+        user_visible: bool,
+        tool_names: dict[str, str],
+        opts: Options,
+    ) -> Iterator[Row]:
         if isinstance(content, str):
             content = [{"type": "text", "text": content}]
         if not isinstance(content, list):
@@ -185,7 +203,10 @@ class GooseParser(Parser):
                     text = "[hidden] " + text
             elif kind in ("image", "document"):
                 row.turn_type = text_type
-                text = "[%s] %s" % (kind, _join(str(b.get("name") or ""), str(b.get("mimeType") or "")))
+                text = "[%s] %s" % (
+                    kind,
+                    _join(str(b.get("name") or ""), str(b.get("mimeType") or "")),
+                )
             elif kind == "toolRequest":
                 row.turn_type = "tool_use"
                 row.tool_use_id = str(b.get("id") or "")
@@ -213,8 +234,11 @@ class GooseParser(Parser):
                 row.turn_type = "system"
                 row.tool_name = str(b.get("toolName") or "")
                 row.tool_use_id = str(b.get("id") or "")
-                text = _join("confirmation requested: " + row.tool_name, str(b.get("prompt") or ""),
-                             compact_json(b.get("arguments") or {}))
+                text = _join(
+                    "confirmation requested: " + row.tool_name,
+                    str(b.get("prompt") or ""),
+                    compact_json(b.get("arguments") or {}),
+                )
             elif kind == "systemNotification":
                 row.turn_type = "system"
                 text = "%s: %s" % (b.get("notificationType") or "notification", b.get("msg") or "")
@@ -245,44 +269,78 @@ class GooseParser(Parser):
                     return
                 sessions: dict[str, dict] = {}
                 if "sessions" in tables:
-                    for s in con.execute("select rowid as _rowid, * from sessions order by created_at, rowid"):
+                    for s in con.execute(
+                        "select rowid as _rowid, * from sessions order by created_at, rowid"
+                    ):
                         s = dict(s)
                         cfg = _json(s.get("model_config_json"), {})
-                        s["_model"] = _model(s.get("provider_name") or "",
-                                             (cfg.get("model_name") if isinstance(cfg, dict) else "") or "")
+                        s["_model"] = _model(
+                            s.get("provider_name") or "",
+                            (cfg.get("model_name") if isinstance(cfg, dict) else "") or "",
+                        )
                         sid = str(s.get("id") or "")
                         sessions[sid] = s
-                        row = self._row(artifact, s["_rowid"], sid, s.get("working_dir") or "", s["_model"],
-                                        to_utc(s.get("created_at")))
+                        row = self._row(
+                            artifact,
+                            s["_rowid"],
+                            sid,
+                            s.get("working_dir") or "",
+                            s["_model"],
+                            to_utc(s.get("created_at")),
+                        )
                         row.turn_type = "system"
-                        row.text = compact(_join(
-                            "session start", s.get("name") or "", s.get("description") or "",
-                            "type=%s" % s["session_type"] if s.get("session_type") else "",
-                            "parent=%s" % s["parent_session_id"] if s.get("parent_session_id") else "",
-                            "schedule=%s" % s["schedule_id"] if s.get("schedule_id") else "",
-                            "archived=%s" % s["archived_at"] if s.get("archived_at") else "",
-                        ), opts.max_text_length)
+                        row.text = compact(
+                            _join(
+                                "session start",
+                                s.get("name") or "",
+                                s.get("description") or "",
+                                "type=%s" % s["session_type"] if s.get("session_type") else "",
+                                "parent=%s" % s["parent_session_id"]
+                                if s.get("parent_session_id")
+                                else "",
+                                "schedule=%s" % s["schedule_id"] if s.get("schedule_id") else "",
+                                "archived=%s" % s["archived_at"] if s.get("archived_at") else "",
+                            ),
+                            opts.max_text_length,
+                        )
                         yield row
                 tool_names: dict[str, str] = {}
-                for m in con.execute("select * from messages order by session_id, created_timestamp, id"):
+                for m in con.execute(
+                    "select * from messages order by session_id, created_timestamp, id"
+                ):
                     m = dict(m)
                     sid = str(m.get("session_id") or "")
                     s = sessions.get(sid, {})
                     meta = _json(m.get("metadata_json"), {})
                     meta = meta if isinstance(meta, dict) else {}
                     inf = meta.get("inference") or {}
-                    model = _model(inf.get("provider") or "", inf.get("resolvedModel") or inf.get("requestedModel") or "") \
-                        or s.get("_model", "")
-                    base = self._row(artifact, m.get("id") or 0, sid, s.get("working_dir") or "", model,
-                                     epoch(m.get("created_timestamp")) or to_utc(m.get("timestamp")))
+                    model = _model(
+                        inf.get("provider") or "",
+                        inf.get("resolvedModel") or inf.get("requestedModel") or "",
+                    ) or s.get("_model", "")
+                    base = self._row(
+                        artifact,
+                        m.get("id") or 0,
+                        sid,
+                        s.get("working_dir") or "",
+                        model,
+                        epoch(m.get("created_timestamp")) or to_utc(m.get("timestamp")),
+                    )
                     content = _json(m.get("content_json"), None)
                     if content is None:
                         base.turn_type = "system"
                         base.text = "parser: message %s content_json did not parse" % m.get("id")
                         yield base
                         continue
-                    yield from self._block_rows(artifact, base, str(m.get("role") or ""), content,
-                                                meta.get("userVisible", True) is not False, tool_names, opts)
+                    yield from self._block_rows(
+                        artifact,
+                        base,
+                        str(m.get("role") or ""),
+                        content,
+                        meta.get("userVisible", True) is not False,
+                        tool_names,
+                        opts,
+                    )
         except sqlite3.DatabaseError as e:
             row = self._row(artifact, 0)
             row.turn_type = "system"
@@ -299,24 +357,43 @@ class GooseParser(Parser):
             if "role" not in rec and "content" not in rec:
                 session_id = str(rec.get("id") or session_id)
                 project_path = str(rec.get("working_dir") or "")
-                row = self._row(artifact, n, session_id, project_path, ts=to_utc(rec.get("created_at")))
+                row = self._row(
+                    artifact, n, session_id, project_path, ts=to_utc(rec.get("created_at"))
+                )
                 row.turn_type = "system"
-                row.text = compact(_join("session start (legacy)", str(rec.get("description") or ""),
-                                         "%s messages" % rec["message_count"] if "message_count" in rec else ""),
-                                   opts.max_text_length)
+                row.text = compact(
+                    _join(
+                        "session start (legacy)",
+                        str(rec.get("description") or ""),
+                        "%s messages" % rec["message_count"] if "message_count" in rec else "",
+                    ),
+                    opts.max_text_length,
+                )
                 yield row
                 continue
             meta = rec.get("metadata") if isinstance(rec.get("metadata"), dict) else {}
             base = self._row(artifact, n, session_id, project_path, ts=epoch(rec.get("created")))
-            yield from self._block_rows(artifact, base, str(rec.get("role") or ""), rec.get("content"),
-                                        meta.get("userVisible", True) is not False, tool_names, opts)
+            yield from self._block_rows(
+                artifact,
+                base,
+                str(rec.get("role") or ""),
+                rec.get("content"),
+                meta.get("userVisible", True) is not False,
+                tool_names,
+                opts,
+            )
         yield from self._errors(artifact, errors, session_id, project_path)
 
-    def _errors(self, artifact: Artifact, errors: list, session_id: str = "", project_path: str = "") -> Iterator[Row]:
+    def _errors(
+        self, artifact: Artifact, errors: list, session_id: str = "", project_path: str = ""
+    ) -> Iterator[Row]:
         if errors:
             row = self._row(artifact, errors[0][0], session_id, project_path)
             row.turn_type = "system"
-            row.text = "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0])
+            row.text = "parser: %d unparseable line(s), first at line %d" % (
+                len(errors),
+                errors[0][0],
+            )
             yield row
 
     # -- logs/llm_request.*.jsonl ---------------------------------------------------------
@@ -332,25 +409,53 @@ class GooseParser(Parser):
                 inp = rec.get("input") if isinstance(rec.get("input"), dict) else {}
                 model = str(cfg.get("model_name") or inp.get("model") or "")
                 msgs = inp.get("messages") if isinstance(inp.get("messages"), list) else []
-                last_user = next((text_of(m.get("content")) for m in reversed(msgs)
-                                  if isinstance(m, dict) and m.get("role") == "user"), "")
+                last_user = next(
+                    (
+                        text_of(m.get("content"))
+                        for m in reversed(msgs)
+                        if isinstance(m, dict) and m.get("role") == "user"
+                    ),
+                    "",
+                )
                 request = self._row(artifact, n, model=model)
                 request.turn_type = "system"
-                request.text = compact(_join("llm request", "%d messages" % len(msgs),
-                                             "last user: " + last_user if last_user else ""), opts.max_text_length)
+                request.text = compact(
+                    _join(
+                        "llm request",
+                        "%d messages" % len(msgs),
+                        "last user: " + last_user if last_user else "",
+                    ),
+                    opts.max_text_length,
+                )
                 continue
             data = rec.get("data")
             if isinstance(data, dict) and "content" in data:
                 base = self._row(artifact, n, model=model, ts=epoch(data.get("created")))
                 if request is not None and not request.timestamp_utc:
                     request.timestamp_utc = base.timestamp_utc
-                pending.extend(self._block_rows(artifact, base, str(data.get("role") or "assistant"),
-                                                data.get("content"), True, tool_names, opts))
+                pending.extend(
+                    self._block_rows(
+                        artifact,
+                        base,
+                        str(data.get("role") or "assistant"),
+                        data.get("content"),
+                        True,
+                        tool_names,
+                        opts,
+                    )
+                )
             elif rec.get("error"):
                 row = self._row(artifact, n, model=model)
                 row.turn_type = "system"
-                row.text = compact("llm error: " + (rec["error"] if isinstance(rec["error"], str)
-                                                     else compact_json(rec["error"])), opts.max_text_length)
+                row.text = compact(
+                    "llm error: "
+                    + (
+                        rec["error"]
+                        if isinstance(rec["error"], str)
+                        else compact_json(rec["error"])
+                    ),
+                    opts.max_text_length,
+                )
                 pending.append(row)
         if request is not None:
             yield request

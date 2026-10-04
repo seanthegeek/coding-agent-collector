@@ -39,6 +39,7 @@ no session id of their own. `logs/prompt.log` has no date or session id and
 is not parsed. A truncated session file yields the turns decoded before the
 cut plus one `system` row.
 """
+
 from __future__ import annotations
 
 import json
@@ -51,7 +52,9 @@ from ..timeutil import to_utc
 from .base import Options, Parser, compact_json, iter_jsonl, text_of
 
 SESSION_RX = re.compile(r"^(?:.*/)?\.continue/sessions/([^/]+)\.json$")
-DEV_DATA_RX = re.compile(r"^(?:.*/)?\.continue/dev_data/(?:[^/]+/)?(chatInteraction|toolUsage)\.jsonl$")
+DEV_DATA_RX = re.compile(
+    r"^(?:.*/)?\.continue/dev_data/(?:[^/]+/)?(chatInteraction|toolUsage)\.jsonl$"
+)
 INDEX_NAME = "sessions.json"
 HEADER_KEYS = ("sessionId", "title", "workspaceDirectory", "mode", "chatModelTitle")
 
@@ -59,8 +62,12 @@ HEADER_KEYS = ("sessionId", "title", "workspaceDirectory", "mode", "chatModelTit
 def message_text(content) -> str:
     """Flatten a ChatMessage content: image parts become `[image]`."""
     if isinstance(content, list):
-        content = [{"type": "text", "text": "[image]"} if isinstance(p, dict) and p.get("type") == "imageUrl" else p
-                   for p in content]
+        content = [
+            {"type": "text", "text": "[image]"}
+            if isinstance(p, dict) and p.get("type") == "imageUrl"
+            else p
+            for p in content
+        ]
     return text_of(content)
 
 
@@ -72,7 +79,13 @@ def output_text(output) -> str:
     for item in output:
         if isinstance(item, dict):
             c = item.get("content")
-            parts.append(c if isinstance(c, str) else compact_json(c) if c is not None else str(item.get("name") or ""))
+            parts.append(
+                c
+                if isinstance(c, str)
+                else compact_json(c)
+                if c is not None
+                else str(item.get("name") or "")
+            )
         else:
             parts.append(str(item))
     return "\n".join(p for p in parts if p)
@@ -121,7 +134,10 @@ def load_session(text: str) -> tuple[dict, str]:
             if isinstance(item, dict):
                 history.append(item)
     out["history"] = history
-    return out, "session file did not parse (%s); recovered %d history item(s)" % (first_error, len(history))
+    return out, "session file did not parse (%s); recovered %d history item(s)" % (
+        first_error,
+        len(history),
+    )
 
 
 class ContinueParser(Parser):
@@ -255,9 +271,13 @@ class ContinueParser(Parser):
                     yield self._fill(row, text, opts)
                 calls = msg.get("toolCalls")
                 states = item.get("toolCallStates")
-                states = [s for s in states if isinstance(s, dict)] if isinstance(states, list) else []
+                states = (
+                    [s for s in states if isinstance(s, dict)] if isinstance(states, list) else []
+                )
                 if not isinstance(calls, list) or not calls:
-                    calls = [s.get("toolCall") for s in states if isinstance(s.get("toolCall"), dict)]
+                    calls = [
+                        s.get("toolCall") for s in states if isinstance(s.get("toolCall"), dict)
+                    ]
                 for call in calls:
                     if not isinstance(call, dict):
                         continue
@@ -270,7 +290,15 @@ class ContinueParser(Parser):
                     row.turn_type = "tool_use"
                     row.tool_name = name
                     row.tool_use_id = call_id
-                    yield self._fill(row, args if isinstance(args, str) else compact_json(args) if args is not None else "", opts)
+                    yield self._fill(
+                        row,
+                        args
+                        if isinstance(args, str)
+                        else compact_json(args)
+                        if args is not None
+                        else "",
+                        opts,
+                    )
                 for st in states:
                     call_id = str(st.get("toolCallId") or "")
                     if not call_id or call_id in answered:
@@ -283,7 +311,9 @@ class ContinueParser(Parser):
                     row.turn_type = "tool_result"
                     row.tool_use_id = call_id
                     row.tool_name = names.get(call_id, "")
-                    yield self._fill(row, "[%s] %s" % (status, out) if status and status != "done" else out, opts)
+                    yield self._fill(
+                        row, "[%s] %s" % (status, out) if status and status != "done" else out, opts
+                    )
             elif role == "thinking":
                 if opts.include_thinking and text:
                     row = base(i, model)
@@ -299,7 +329,9 @@ class ContinueParser(Parser):
             elif text:
                 row = base(i)
                 row.turn_type = "system"
-                yield self._fill(row, "%s: %s" % (role or "unknown", text) if role != "system" else text, opts)
+                yield self._fill(
+                    row, "%s: %s" % (role or "unknown", text) if role != "system" else text, opts
+                )
 
         if problem:
             row = base(0)
@@ -351,15 +383,27 @@ class ContinueParser(Parser):
             args = rec.get("toolCallArgs")
             if not args and rec.get("functionParams") is not None:
                 args = compact_json(rec.get("functionParams"))
-            yield self._fill(row, args if isinstance(args, str) else compact_json(args) if args is not None else "", opts)
+            yield self._fill(
+                row,
+                args if isinstance(args, str) else compact_json(args) if args is not None else "",
+                opts,
+            )
             row = self.base_row(artifact)
             row.source_line = n
             row.timestamp_utc = ts
             row.turn_type = "tool_result"
             row.tool_name = name
             row.tool_use_id = call_id
-            yield self._fill(row, "accepted=%s succeeded=%s %s" % (
-                compact_json(rec.get("accepted")), compact_json(rec.get("succeeded")), output_text(rec.get("output"))), opts)
+            yield self._fill(
+                row,
+                "accepted=%s succeeded=%s %s"
+                % (
+                    compact_json(rec.get("accepted")),
+                    compact_json(rec.get("succeeded")),
+                    output_text(rec.get("output")),
+                ),
+                opts,
+            )
         yield from self._errors(artifact, errors)
 
     def _errors(self, artifact: Artifact, errors: list) -> Iterator[Row]:
@@ -367,7 +411,10 @@ class ContinueParser(Parser):
             row = self.base_row(artifact)
             row.turn_type = "system"
             row.source_line = errors[0][0]
-            row.text = "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0])
+            row.text = "parser: %d unparseable line(s), first at line %d" % (
+                len(errors),
+                errors[0][0],
+            )
             yield row
 
     @staticmethod
