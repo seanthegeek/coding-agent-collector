@@ -74,7 +74,7 @@ CLAUDE.md                      imports this file for Claude Code
 LICENSE                        Apache 2.0
 ruff.toml, pyrightconfig.json, .markdownlint-cli2.jsonc, .shellcheckrc
                                linter configuration; see "Quality gates"
-.githooks/pre-commit           the quality gates and the Dependabot alert check
+.githooks/pre-commit           the catalog drift check and the Dependabot alert check
 .github/                       CI workflow and Dependabot configuration
 ```
 
@@ -542,7 +542,7 @@ And from the October 2026 round:
 CI (`.github/workflows/ci.yml`) runs the catalog drift test, shellcheck, the
 sh smoke test under sh, dash, bash, busybox ash, zsh and posh, the PowerShell
 smoke test under PowerShell 7 on Linux and Windows PowerShell 5.1 on
-Windows, the analyzer tests on Python 3.10, 3.12 and 3.13, and a lint job
+Windows, the analyzer tests on Python 3.10, 3.11, 3.12, 3.13 and 3.14, and a lint job
 with the quality gates below. Run the same locally before committing a
 change to the collector:
 
@@ -612,10 +612,10 @@ collector itself.
 
 ### Quality gates
 
-Every gate runs in the CI `lint` job and in `.githooks/pre-commit` (enable
-once per clone with `git config core.hooksPath .githooks`). The versions are
-pinned in the workflow's `env` block and at the top of the hook; change both
-and this list together. Run the commands from the repository root.
+Every gate except the Dependabot check runs in the CI `lint` job, not in
+the pre-commit hook: the hook is reserved for fast operations (see below).
+The versions are pinned in the workflow's `env` block; change it and this
+list together. Run the commands from the repository root before pushing.
 
 | Gate | Version | Local command | Configuration |
 | --- | --- | --- | --- |
@@ -633,8 +633,8 @@ and this list together. Run the commands from the repository root.
   hook script, `lab/lab.sh` and `analyzer/tests/run.sh` are checked too.
   `posh` (apt package `posh`) runs the smoke test in CI and in the block
   above.
-- pyright is run with zstandard installed in CI and without it by the
-  hook; both must report 0 errors. The nine `import zstandard` lines carry
+- pyright must report 0 errors both with zstandard installed (as CI runs
+  it) and without it. The nine `import zstandard` lines carry
   `# pyright: ignore[reportMissingImports]` because the package is an
   optional, lazily imported dependency; a per-line ignore keeps the check
   for every other import.
@@ -646,13 +646,13 @@ and this list together. Run the commands from the repository root.
 - The tree was reformatted once with `ruff format` in a commit of its
   own, listed in `.git-blame-ignore-revs`; enable it locally with
   `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
-- The hook runs each gate only when a file of its kind is staged (Python
-  or `pyproject.toml`, Markdown, sh by shebang, `.ps1` or `.psd1`, or that
-  gate's configuration file), then checks the whole working tree as CI
-  does. A missing `uvx`, `npx`, `shfmt`, `shellcheck`, `checkbashisms`,
-  `pwsh` or PSScriptAnalyzer module fails the commit with an install hint
-  rather than skipping the gate.
-- The Dependabot check runs last on every commit and refuses it when the
+- The pre-commit hook (`.githooks/pre-commit`, enabled once per clone with
+  `git config core.hooksPath .githooks`) holds only fast operations: the
+  catalog drift check, and the Dependabot check, which stays in the hook
+  because CI cannot make it (the workflow token cannot read Dependabot
+  alerts). Linters and tests belong in CI, never in the hook; a slow hook
+  gets bypassed.
+- The Dependabot check runs on every commit and refuses it when the
   repository has open Dependabot alerts, printing each alert's severity,
   package and summary and the URL of the alerts page. When `gh` is missing,
   not authenticated, offline or denied access it prints a warning on stderr

@@ -8,8 +8,8 @@ Claude Code specific notes:
   a collector; dash is the strictest of the installed shells and catches most
   bash-isms. For the analyzer, run `analyzer/tests/run.sh`.
 - Before committing Python, Markdown, sh or PowerShell, run the matching
-  lint commands from "Quality gates" in AGENTS.md; the pre-commit hook
-  runs the same ones.
+  lint commands from "Quality gates" in AGENTS.md; CI runs them, the
+  pre-commit hook does not.
 - The collector logs every collected path to stderr unless `-q` is passed.
   Use `-q` when running it from a tool call so the output stays readable.
 - A live run against this workstation collects the author's own Claude Code,

@@ -1,34 +1,19 @@
 #!/bin/sh
-# Quality gates run before every commit. Enable once per clone with:
+# Fast checks before every commit. Enable once per clone with:
 #   git config core.hooksPath .githooks
 #
-# Each gate runs only when a file of its kind is staged, and then checks
-# the whole working tree as CI does. A missing linter fails the commit with
-# an install hint, because a skipped linter defeats the gate. The versions
-# match the lint job in .github/workflows/ci.yml and the list in AGENTS.md.
+# Only quick operations belong here: the catalog drift check, and one
+# Dependabot API query that CI cannot make (the workflow token cannot read
+# Dependabot alerts). The linters and tests run in CI; run them locally with
+# the commands in AGENTS.md "Quality gates".
 #
-# The Dependabot check runs last on every commit. When gh is missing, not
-# authenticated or offline it only warns, so offline work is not blocked;
-# SKIP_DEPENDABOT_CHECK=1 skips it.
-RUFF_VERSION=0.16.10
-PYRIGHT_VERSION=1.1.414
-MARKDOWNLINT_CLI2_VERSION=0.23.3
-PSSA_VERSION=1.25.0
+# The Dependabot check only warns when gh is missing, not authenticated or
+# offline, so offline work is not blocked; SKIP_DEPENDABOT_CHECK=1 skips it.
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-fail() {
-  printf 'pre-commit: %s\n' "$1" >&2
-  exit 1
-}
-
 warn() {
   printf 'pre-commit: warning: %s\n' "$1" >&2
-}
-
-# need COMMAND HINT: fail with HINT when COMMAND is not on PATH.
-need() {
-  command -v "$1" >/dev/null 2>&1 || fail "$1 not found; $2"
 }
 
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
@@ -36,19 +21,6 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR)
 # staged_match PATTERN: true when a staged path matches the grep pattern.
 staged_match() {
   printf '%s\n' "$staged" | grep -q "$1"
-}
-
-# staged_sh: true when a staged file is POSIX sh, by shebang.
-staged_sh() {
-  printf '%s\n' "$staged" | {
-    while IFS= read -r _f; do
-      [ -f "$_f" ] || continue
-      if head -n 1 "$_f" | grep -q '^#!.*[/ ]sh\([[:space:]]\|$\)'; then
-        exit 0
-      fi
-    done
-    exit 1
-  }
 }
 
 # Catalog copy and drift check.
@@ -59,44 +31,6 @@ if staged_match 'collectors/collect-agent-artifacts.sh\|collectors/Collect-Agent
     exit 1
   fi
   collectors/tests/catalog-sync.sh >/dev/null || { echo "pre-commit: catalog tables differ between the collectors; run collectors/tests/catalog-sync.sh" >&2; exit 1; }
-fi
-
-# Python: ruff and pyright.
-if staged_match '\.py$\|pyproject\.toml$\|ruff\.toml$\|pyrightconfig\.json$'; then
-  need uvx "install uv: https://docs.astral.sh/uv/getting-started/installation/"
-  uvx "ruff@$RUFF_VERSION" check . || fail "ruff check failed"
-  uvx "ruff@$RUFF_VERSION" format --check . || fail "ruff format --check failed; run: uvx ruff@$RUFF_VERSION format ."
-  uvx --from "pyright==$PYRIGHT_VERSION" pyright || fail "pyright failed"
-fi
-
-# Markdown: markdownlint-cli2.
-if staged_match '\.md$\|\.markdownlint-cli2\.jsonc$'; then
-  need npx "install Node.js (npx ships with npm): https://nodejs.org/"
-  npx -y "markdownlint-cli2@$MARKDOWNLINT_CLI2_VERSION" "**/*.md" || fail "markdownlint-cli2 failed"
-fi
-
-# POSIX sh: shellcheck, checkbashisms, and a shfmt parse (never -w).
-if staged_sh || staged_match '\.shellcheckrc$'; then
-  need shfmt "install shfmt 3.14.1: https://github.com/mvdan/sh/releases/tag/v3.14.1"
-  need shellcheck "install shellcheck 0.11.0: https://github.com/koalaman/shellcheck/releases/tag/v0.11.0"
-  need checkbashisms "install checkbashisms from devscripts v2.26.13 (apt install devscripts, or scripts/checkbashisms.pl from salsa.debian.org/debian/devscripts)"
-  sh_files=$(shfmt -f .) || fail "shfmt -f failed"
-  # shellcheck disable=SC2086 # word splitting is wanted; no sh file name has spaces
-  shfmt -ln posix $sh_files >/dev/null || fail "shfmt could not parse a file as POSIX sh"
-  # shellcheck disable=SC2086
-  shellcheck -s sh $sh_files || fail "shellcheck failed"
-  # shellcheck disable=SC2086
-  checkbashisms -p $sh_files || fail "checkbashisms failed"
-fi
-
-# PowerShell: PSScriptAnalyzer.
-if staged_match '\.ps1$\|\.psd1$'; then
-  pssa_hint="install pwsh, then: pwsh -NoProfile -Command 'Install-Module PSScriptAnalyzer -Scope CurrentUser -RequiredVersion $PSSA_VERSION -Force'"
-  need pwsh "$pssa_hint"
-  pwsh -NoProfile -Command "if (-not (Get-Module -ListAvailable PSScriptAnalyzer | Where-Object Version -eq '$PSSA_VERSION')) { exit 1 }" ||
-    fail "PSScriptAnalyzer $PSSA_VERSION not installed; $pssa_hint"
-  pwsh -NoProfile -Command "Import-Module PSScriptAnalyzer -RequiredVersion $PSSA_VERSION; \$r = @('collectors/Collect-AgentArtifacts.ps1','collectors/tests/smoke.ps1') | ForEach-Object { Invoke-ScriptAnalyzer -Path \$_ -Settings collectors/PSScriptAnalyzerSettings.psd1 }; \$r | Format-Table -AutoSize; exit @(\$r).Count" ||
-    fail "PSScriptAnalyzer reported findings"
 fi
 
 # Dependabot alerts, last.

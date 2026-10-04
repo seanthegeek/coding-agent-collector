@@ -340,7 +340,7 @@ with `sh` available it also runs the collector's `--inventory` on the fake
 image and reads that.
 Tests that need `zstandard`, the collector script, `sh` and `tar`, or
 permission to create symlinks are skipped, with the reason, when it is
-missing. CI runs the suite on Python 3.10, 3.12 and 3.13 with `requirements.txt`
+missing. CI runs the suite on Python 3.10, 3.11, 3.12, 3.13 and 3.14 with `requirements.txt`
 installed.
 
 Lint and type checks, from the repository root, at the versions CI pins
