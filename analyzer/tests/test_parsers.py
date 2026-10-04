@@ -232,6 +232,7 @@ class TimelineTests(ParserBase):
             "cody",
             "twinny",
             "pearai",
+            "muse-code",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -277,6 +278,8 @@ class TimelineTests(ParserBase):
             "7d1c2b3a-1111-4000-8000-000000000001",
             "9b1c2d3e-0000-4000-8000-000000000001",
             "1791036000000",
+            "01a0f000-0000-7000-8000-000000000001",  # muse-code
+            "0f3c2b1a-5d6e-4f70-8a9b-0c1d2e3f4a5b",  # muse-code subagent
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -4164,3 +4167,208 @@ class PearAiTests(ParserBase):
         self.assertEqual(len(rows), 7)
         self.assertEqual(rows[-1].turn_type, "system")
         self.assertIn("parser:", rows[-1].text)
+
+
+from agent_analyzer.parsers.muse_code import MuseCodeParser, micros_to_utc, result_text
+from agent_analyzer.parsers.muse_code import args_summary as muse_args_summary
+from fixtures import (
+    MUSE_CHILD,
+    MUSE_CHILD_REL,
+    MUSE_DIR,
+    MUSE_HISTORY_REL,
+    MUSE_MODEL,
+    MUSE_REL,
+    MUSE_RUN,
+    MUSE_SESSION,
+    MUSE_T0,
+    _muse_env,
+    _muse_run,
+)
+
+
+class MuseCodeTests(ParserBase):
+    def append(self, rel, *records):
+        with open(self.home / rel, "a", encoding="utf-8") as fh:
+            for r in records:
+                fh.write(json.dumps(r) + "\n")
+
+    def test_rows(self):
+        rows = self.rows_for(MuseCodeParser(), MUSE_REL)
+        self.assertEqual(
+            [r.turn_type for r in rows],
+            ["system", "user", "tool_use", "tool_result", "system", "system", "assistant"],
+        )
+        for r in rows:
+            self.assertEqual(
+                (r.host, r.user, r.agent, r.session_id), ("h1", "alice", "muse-code", MUSE_SESSION)
+            )
+            self.assertEqual(
+                (r.project_path, r.git_branch, r.model), ("/srv/proj", "main", MUSE_MODEL)
+            )
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        name, user, use, result, req, dec, asst = rows
+        self.assertEqual(
+            (name.text, name.timestamp_utc),
+            ("session name: quiet-lyra", "2026-10-01T09:00:00.300Z"),
+        )
+        self.assertEqual(
+            (user.text, user.timestamp_utc), ("fix the failing test", "2026-10-01T09:00:01.000Z")
+        )
+        self.assertEqual(
+            (use.tool_name, use.tool_use_id, use.text), ("bash", "call_01", "npm test")
+        )
+        self.assertEqual(
+            (result.tool_name, result.tool_use_id, result.text),
+            ("bash", "call_01", "[exit 1] 1 failing"),
+        )
+        self.assertEqual(
+            (req.tool_name, req.tool_use_id, req.text),
+            ("network", "call_02", "approval requested: https registry.example.org:443"),
+        )
+        self.assertEqual(
+            (dec.tool_name, dec.tool_use_id, dec.text),
+            ("network", "call_02", "approval approved by llm_judge"),
+        )
+        self.assertEqual(asst.text, "The test fails because the fixture date is stale.")
+        self.assertEqual([r.source_line for r in rows], [4, 7, 12, 16, 17, 18, 20])
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(MuseCodeParser(), MUSE_REL, include_thinking=True)
+        thinking = [r for r in rows if r.turn_type == "thinking"]
+        # The delta repeats the committed summary; the encrypted reasoning
+        # record has empty text. One row.
+        self.assertEqual(
+            [(r.text, r.source_line, r.model) for r in thinking],
+            [("Running the tests first.", 9, MUSE_MODEL)],
+        )
+
+    def test_subagent_takes_parent_project(self):
+        rows = self.rows_for(MuseCodeParser(), MUSE_CHILD_REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "tool_use", "tool_result"])
+        self.assertEqual({r.session_id for r in rows}, {MUSE_CHILD})
+        self.assertEqual({(r.project_path, r.git_branch) for r in rows}, {("/srv/proj", "main")})
+        self.assertEqual(
+            rows[0].text, "subagent task: You are a reminder observer for the main agent."
+        )
+        self.assertEqual(
+            (rows[1].tool_name, rows[1].tool_use_id), ("submit_reminder_decision", "call_10")
+        )
+        self.assertEqual(
+            (rows[2].tool_name, rows[2].tool_use_id, rows[2].text),
+            ("submit_reminder_decision", "call_10", "reminder decision recorded"),
+        )
+
+    def test_subagent_without_parent(self):
+        (self.home / MUSE_REL).unlink()
+        rows = self.rows_for(MuseCodeParser(), MUSE_CHILD_REL)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual({(r.project_path, r.git_branch) for r in rows}, {("", "")})
+
+    def test_history(self):
+        rows = self.rows_for(MuseCodeParser(), MUSE_HISTORY_REL)
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual(
+            (r.turn_type, r.text, r.session_id, r.project_path, r.timestamp_utc, r.source_line),
+            ("user", "fix the failing test", MUSE_SESSION, "/srv/proj", "", 1),
+        )
+
+    def test_cut_log_and_other_run_events(self):
+        s, r, t = MUSE_SESSION, MUSE_RUN, MUSE_T0
+        self.append(
+            MUSE_REL,
+            _muse_run(
+                s,
+                24,
+                t + 30000000,
+                r,
+                {
+                    "kind": "inbox_item_queued",
+                    "source": {"source": "user_steer"},
+                    "payload": {"prompt": "also check the linter"},
+                },
+                40,
+            ),
+            _muse_run(
+                s,
+                25,
+                t + 31000000,
+                r,
+                {"kind": "reasoning_summary_delta", "message_id": "m9", "text": "First."},
+                41,
+            ),
+            _muse_run(
+                s,
+                26,
+                t + 31100000,
+                r,
+                {"kind": "reasoning_summary_delta", "message_id": "m9", "text": "Second."},
+                42,
+            ),
+            _muse_run(
+                s,
+                27,
+                t + 32000000,
+                r,
+                {"kind": "terminal", "terminal": "failed", "reason": "402 Payment Required"},
+                43,
+            ),
+            _muse_env(
+                s,
+                28,
+                t + 33000000,
+                "user_shell.command",
+                {"record": {"command_id": "sh1", "command_text": "ls"}},
+            ),
+            _muse_env(
+                s,
+                29,
+                t + 33100000,
+                "user_shell.result",
+                {"record": {"exit_code": 2, "visible_output": "no such file"}},
+            ),
+            _muse_env(s, 30, t + 34000000, "some.future.type", {"kind": "x"}),
+        )
+        rows = self.rows_for(MuseCodeParser(), MUSE_REL, include_thinking=True)[-5:]
+        self.assertEqual(
+            [(r.turn_type, r.text, r.source_line) for r in rows],
+            [
+                ("user", "also check the linter", 23),
+                ("thinking", "First. Second.", 25),
+                ("system", "run failed: 402 Payment Required", 26),
+                ("tool_use", "ls", 27),
+                ("tool_result", "[exit 2] no such file", 28),
+            ],
+        )
+        self.assertEqual({(r.tool_name, r.tool_use_id) for r in rows[3:]}, {("user_shell", "sh1")})
+
+    def test_helpers(self):
+        self.assertEqual(micros_to_utc(MUSE_T0), "2026-10-01T09:00:00.000Z")
+        self.assertEqual(micros_to_utc(None), "")
+        self.assertEqual(muse_args_summary('{"url": "https://example.org"}'), "https://example.org")
+        self.assertEqual(muse_args_summary({"cmd": "make"}), "make")
+        self.assertEqual(muse_args_summary("not json"), "not json")
+        self.assertEqual(result_text('{"output": "ok", "exit_code": 0}'), "ok")
+        self.assertEqual(result_text("tool failed: 403"), "tool failed: 403")
+
+    def test_not_wanted(self):
+        for rel in (
+            ".config/muse/settings.json",
+            MUSE_DIR + "approval-review/7a7a7a7a-0000-4000-8000-000000000001.jsonl",
+        ):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertEqual(art.agent, "muse-code")
+            self.assertFalse(MuseCodeParser().wants(art), rel)
+
+    def test_not_muse_file_gives_no_rows(self):
+        with open(self.home / MUSE_REL, "w", encoding="utf-8") as fh:
+            fh.write('{"type": "user", "content": "x"}\n')
+        self.assertEqual(self.rows_for(MuseCodeParser(), MUSE_REL), [])
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / MUSE_REL)
+        rows = self.rows_for(MuseCodeParser(), MUSE_REL)
+        self.assertEqual(len(rows), 8)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("parser:", rows[-1].text)
+        self.assertEqual((rows[-1].source_line, rows[-1].session_id), (23, MUSE_SESSION))

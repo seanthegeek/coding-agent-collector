@@ -8,8 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-04
+
 ### Added
 
+- Muse Code parser (`muse-code`): session logs under
+  `.local/share/muse/sessions/` and their subagent logs (user prompts,
+  assistant replies, tool calls and results, approval requests and
+  decisions, failed runs; reasoning summaries with `--include-thinking`),
+  and the `tui-history.jsonl` prompt history.
 - The catalog copy detects `muse-code` (Meta's Muse Code CLI).
 
 ### Changed
@@ -144,7 +151,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--summary-length` (default 400), `--include-thinking` and `--agent`;
   `detect --json` and `--files`; `catalog --agents`.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.5.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.6.0...HEAD
+[0.6.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.5.0...analyzer-v0.6.0
 [0.5.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.4.0...analyzer-v0.5.0
 [0.4.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.3.1...analyzer-v0.4.0
 [0.3.1]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.3.0...analyzer-v0.3.1

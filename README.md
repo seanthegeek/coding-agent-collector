@@ -44,9 +44,9 @@ CLI, Gemini CLI, Antigravity, Qwen Code, Amazon Q CLI (the `kiro` entry), VS
 Code chat (including Copilot Chat), Cline, Roo Code, Kilo Code, Continue,
 Aider, OpenCode, Crush, Goose, Zed, Tabby, OpenHands, ShellGPT, pi,
 little-coder, Letta, Hermes, Agent Zero, Open Interpreter, OpenClaw, nanobot,
-Sourcegraph Cody, Twinny and PearAI. Every other agent in the catalog
+Sourcegraph Cody, Twinny, PearAI and Muse Code. Every other agent in the catalog
 (Claude Desktop, ChatGPT Desktop, Copilot CLI and the Copilot editor token
-store, Cursor, Windsurf, Amp, Factory Droid, Augment, Muse Code, Ollama,
+store, Cursor, Windsurf, Amp, Factory Droid, Augment, Ollama,
 Local Deep Research) is detected and reported but not yet parsed. Parsing never happens
 on the host, so the analyzer is free to carry its own requirements. It needs
 Python 3.10 or later and the packages in `analyzer/requirements.txt`,
