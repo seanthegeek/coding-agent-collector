@@ -140,6 +140,8 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     build_kilo(home)
     build_cline(home)
     build_roo_code(home)
+    build_openclaw(home)
+    build_nanobot(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -1302,3 +1304,196 @@ def build_roo_code(home: Path) -> None:
     _json(mock / "tasks" / ROO_CLI_TASK / "history_item.json",
           roo_history_item(ROO_CLI_TASK, CLINE_T0 + 303000, "fix tests"))
     _json(mock / "secrets.json", {"roo_cline_config_api_config": "{\"apiKey\":\"sk-not-real\"}"})
+
+
+# -- OpenClaw (openclaw/openclaw at 3b16db7) ---------------------------------------
+OPENCLAW_SESSION = "7d0c2a8e-1111-4000-8000-000000000001"
+OPENCLAW_KEY = "agent:main:telegram:default:direct:123456789"
+OPENCLAW_RESET_SESSION = "7d0c2a8e-1111-4000-8000-000000000002"
+OPENCLAW_COLD_SESSION = "7d0c2a8e-1111-4000-8000-000000000003"
+OPENCLAW_LEGACY = "7d0c2a8e-1111-4000-8000-0000000000aa"
+OPENCLAW_DELETED = "7d0c2a8e-1111-4000-8000-0000000000dd"
+OPENCLAW_TOKEN = "sk-ant-oat01-FIXTURE-OPENCLAW-TOKEN-0f9e8d"
+OPENCLAW_AGENT = ".openclaw/agents/main"
+
+# Columns of src/state/openclaw-agent-schema.sql at 3b16db7 that the parser
+# reads (CHECK constraints and unrelated columns left out).
+OPENCLAW_SCHEMA = """
+CREATE TABLE session_windows (session_id TEXT NOT NULL PRIMARY KEY, session_key TEXT NOT NULL,
+  previous_session_id TEXT, reason TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+  started_at INTEGER, ended_at INTEGER, status TEXT, chat_type TEXT, channel TEXT, account_id TEXT,
+  model_provider TEXT, model TEXT, parent_session_key TEXT, spawned_by TEXT, display_name TEXT);
+CREATE TABLE transcript_events (session_id TEXT NOT NULL, seq INTEGER NOT NULL, event_json TEXT,
+  created_at INTEGER NOT NULL, event_zstd BLOB, event_utf8_bytes INTEGER, navigation_json TEXT,
+  PRIMARY KEY (session_id, seq));
+CREATE TABLE session_transcript_archives (session_id TEXT NOT NULL, generation TEXT NOT NULL,
+  session_key TEXT NOT NULL, reason TEXT NOT NULL, encoding TEXT NOT NULL, archive_blob BLOB NOT NULL,
+  archive_sha256 TEXT NOT NULL, archive_name TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL,
+  published_at INTEGER, PRIMARY KEY (session_id, generation));
+CREATE TABLE session_transcript_cold_archives (session_id TEXT NOT NULL PRIMARY KEY, generation TEXT NOT NULL,
+  archive_name TEXT NOT NULL UNIQUE, archive_sha256 TEXT NOT NULL, event_count INTEGER NOT NULL,
+  raw_bytes INTEGER NOT NULL, archive_bytes INTEGER NOT NULL, last_seq INTEGER NOT NULL,
+  archived_at INTEGER NOT NULL, storage TEXT NOT NULL, archive_blob BLOB);
+CREATE TABLE auth_profile_store (store_key TEXT NOT NULL PRIMARY KEY, store_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL);
+"""
+
+
+def openclaw_records(session_id=OPENCLAW_SESSION, cwd="/srv/proj"):
+    """The research document's sample entries (section 8), cwd moved to /srv/proj."""
+    return [
+        {"type": "session", "version": 4, "id": session_id, "timestamp": "2026-10-01T09:00:00.000Z", "cwd": cwd},
+        {"type": "message", "id": "a1b2c3d4", "parentId": None, "timestamp": "2026-10-01T09:00:01.000Z",
+         "message": {"role": "user", "content": [{"type": "text", "text": "check disk space on the server"}],
+                     "timestamp": 1790845201000}},
+        {"type": "message", "id": "b2c3d4e5", "parentId": "a1b2c3d4", "timestamp": "2026-10-01T09:00:04.000Z",
+         "message": {"role": "assistant", "content": [
+             {"type": "thinking", "thinking": "Use exec with df.", "thinkingSignature": "sig-opaque"},
+             {"type": "text", "text": "Checking."},
+             {"type": "toolCall", "id": "call_01", "name": "exec", "arguments": {"command": "df -h"}}],
+             "api": "anthropic-messages", "provider": "anthropic", "model": "claude-sonnet-4-5",
+             "usage": {"input": 900, "output": 40, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 940,
+                       "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}},
+             "stopReason": "toolUse", "timestamp": 1790845204000}},
+        {"type": "message", "id": "c3d4e5f6", "parentId": "b2c3d4e5", "timestamp": "2026-10-01T09:00:05.000Z",
+         "message": {"role": "toolResult", "toolCallId": "call_01", "toolName": "exec",
+                     "content": [{"type": "text", "text": "/dev/sda1  50G  20G  30G  40% /"}],
+                     "isError": False, "timestamp": 1790845205000}},
+        {"type": "model_change", "id": "d4e5f6a7", "parentId": "c3d4e5f6", "timestamp": "2026-10-01T09:01:00.000Z",
+         "provider": "openai", "modelId": "gpt-5"},
+    ]
+
+
+def openclaw_legacy_records(session_id=OPENCLAW_LEGACY):
+    return [
+        {"type": "session", "version": 3, "id": session_id, "timestamp": "2026-09-20T08:00:00.000Z", "cwd": "/srv/proj"},
+        {"type": "message", "id": "e1", "parentId": None, "timestamp": "2026-09-20T08:00:01.000Z",
+         "message": {"role": "user", "content": "<runtime>channel=telegram</runtime>",
+                     "runtimeContext": {"retained": True}, "timestamp": 1789891201000}},
+        {"type": "message", "id": "e2", "parentId": "e1", "timestamp": "2026-09-20T08:00:02.000Z",
+         "message": {"role": "bashExecution", "command": "uptime", "output": "up 3 days", "exitCode": 0,
+                     "cancelled": False, "truncated": False, "timestamp": 1789891202000}},
+        {"type": "compaction", "id": "e3", "parentId": "e2", "timestamp": "2026-09-20T08:05:00.000Z",
+         "summary": "checked uptime", "firstKeptEntryId": "e2", "tokensBefore": 5000},
+        {"type": "message", "id": "e4", "parentId": "e3",
+         "message": {"role": "assistant", "content": [{"type": "text", "text": "partial"}], "model": "gpt-5",
+                     "stopReason": "error", "errorMessage": "rate limited", "timestamp": 1789891510000}},
+    ]
+
+
+def _openclaw_zstd(raw: bytes):
+    """zstd-compressed bytes when zstandard is installed, else None."""
+    try:
+        import zstandard
+    except ImportError:
+        return None
+    return zstandard.ZstdCompressor(level=1, write_checksum=True).compress(raw)
+
+
+def _openclaw_jsonl(records) -> bytes:
+    return "".join(json.dumps(r) + "\n" for r in records).encode("utf-8")
+
+
+def build_openclaw(home: Path) -> None:
+    agent = home / OPENCLAW_AGENT
+    inserts = [
+        "INSERT INTO session_windows VALUES ('%s','%s',NULL,'initial',1790845200000,1790845260000,1790845200000,"
+        "NULL,'running','direct','telegram','default','anthropic','claude-sonnet-4-5',NULL,NULL,'Disk check')"
+        % (OPENCLAW_SESSION, OPENCLAW_KEY),
+        "INSERT INTO auth_profile_store VALUES ('anthropic:default','%s',1790845200000)"
+        % json.dumps({"type": "oauth", "access": OPENCLAW_TOKEN, "refresh": OPENCLAW_TOKEN + "-refresh"}),
+    ]
+    for seq, rec in enumerate(openclaw_records()):
+        raw = json.dumps(rec)
+        z = _openclaw_zstd(raw.encode("utf-8")) if rec.get("id") == "b2c3d4e5" else None
+        created = 1790845200000 + seq * 1000
+        if z is not None:
+            inserts.append("INSERT INTO transcript_events VALUES ('%s',%d,NULL,%d,X'%s',%d,'{\"version\":1}')"
+                           % (OPENCLAW_SESSION, seq, created, z.hex(), len(raw)))
+        else:
+            inserts.append("INSERT INTO transcript_events VALUES ('%s',%d,'%s',%d,NULL,NULL,NULL)"
+                           % (OPENCLAW_SESSION, seq, raw.replace("'", "''"), created))
+    reset = _openclaw_jsonl(openclaw_records(OPENCLAW_RESET_SESSION)[:2] + [
+        {"type": "reset", "id": "r1", "parentId": "a1b2c3d4", "timestamp": "2026-10-01T09:30:00.000Z", "reason": "reset"}])
+    inserts.append("INSERT INTO session_transcript_archives VALUES ('%s','g1','%s','reset','identity',X'%s','%s',"
+                   "'%s.jsonl.reset.2026-10-01T09-30-00.000Z',1790847000000,NULL)"
+                   % (OPENCLAW_RESET_SESSION, OPENCLAW_KEY, reset.hex(), "0" * 64, OPENCLAW_RESET_SESSION))
+    inserts.append("INSERT INTO session_transcript_archives VALUES ('%s','g2','%s','deleted','identity',X'00','%s',"
+                   "'%s.jsonl.deleted.2026-10-02T08-00-00.000Z',1790928000000,1790928000500)"
+                   % (OPENCLAW_DELETED, OPENCLAW_KEY, "1" * 64, OPENCLAW_DELETED))
+    cold = [{"kind": "header", "version": 1, "sessionId": OPENCLAW_COLD_SESSION, "generation": "g0"}]
+    for seq, rec in enumerate(openclaw_records(OPENCLAW_COLD_SESSION)[:2]):
+        cold.append({"kind": "event", "row": {"seq": seq, "event_json": json.dumps(rec), "created_at": 1790845200000}})
+        cold.append({"kind": "identity", "row": {"event_id": rec["id"], "seq": seq}})
+    cold_raw = _openclaw_jsonl(cold)
+    cold_blob = _openclaw_zstd(cold_raw) or cold_raw
+    inserts.append("INSERT INTO session_transcript_cold_archives VALUES ('%s','g0','%s.jsonl.zst','%s',2,%d,%d,1,"
+                   "1790850000000,'sqlite',X'%s')" % (OPENCLAW_COLD_SESSION, "c" * 64, "2" * 64, len(cold_raw),
+                                                    len(cold_blob), cold_blob.hex()))
+    _wal_db(agent / "agent/openclaw-agent.sqlite", OPENCLAW_SCHEMA, inserts)
+    sessions = agent / "sessions"
+    _jsonl(sessions / (OPENCLAW_LEGACY + ".jsonl"), openclaw_legacy_records())
+    (sessions / "sessions.json").write_text(json.dumps({
+        OPENCLAW_KEY: {"sessionId": OPENCLAW_LEGACY, "updatedAt": 1789891510000}}), encoding="utf-8")
+    deleted = _openclaw_jsonl(openclaw_records(OPENCLAW_DELETED)[:2])
+    name = OPENCLAW_DELETED + ".jsonl.deleted.2026-10-02T08-00-00.000Z"
+    z = _openclaw_zstd(deleted)
+    if z is not None:
+        (sessions / (name + ".zst")).write_bytes(z)
+    else:
+        (sessions / name).write_bytes(deleted)
+    # Duplicates and noise the parser must skip.
+    _jsonl(sessions / (OPENCLAW_LEGACY + ".trajectory.jsonl"), [{"type": "trace"}])
+    _jsonl(sessions / (OPENCLAW_LEGACY + ".checkpoint.0b5e1c2d-3f4a-4b5c-8d6e-7f8091a2b3c4.jsonl"),
+           openclaw_legacy_records())
+    (agent / "agent/auth-profiles.json").write_text(json.dumps({"anthropic:default": {"key": OPENCLAW_TOKEN}}),
+                                                     encoding="utf-8")
+    (home / ".openclaw/openclaw.json").write_text('{"agents": {}}', encoding="utf-8")
+
+
+# -- nanobot (HKUDS/nanobot at acdae3d) ------------------------------------------
+NANOBOT_KEY = "telegram:123456789"
+NANOBOT_WS = "0123456789abcdef0123456789abcdef"
+NANOBOT_REL = ".nanobot/sessions/%s/dGVsZWdyYW06MTIzNDU2Nzg5.jsonl" % NANOBOT_WS
+NANOBOT_LEGACY_REL = ".nanobot/sessions/cli_direct.jsonl"
+NANOBOT_HISTORY_REL = ".nanobot/workspace/memory/history.jsonl"
+
+
+def nanobot_records():
+    """The research document's sample file (section 8), plus a hidden-history
+    message and a provider_state line."""
+    return [
+        {"_type": "metadata", "key": NANOBOT_KEY, "created_at": "2026-10-01T10:15:00.000001",
+         "updated_at": "2026-10-01T10:15:09.500000", "metadata": {"last_channel": NANOBOT_KEY},
+         "last_archived": 0, "last_consolidated": 0},
+        {"_type": "provider_state", "state": {"opaque": "x"}},
+        {"role": "user", "content": "[earlier conversation summarised]", "_hidden_history": True,
+         "timestamp": "2026-10-01T10:15:00.500000"},
+        {"role": "user", "content": "what is using port 8080?", "timestamp": "2026-10-01T10:15:01.200000"},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "call_abc123", "type": "function", "function": {
+            "name": "exec", "arguments": "{\"command\": \"ss -ltnp | grep 8080\"}"}}],
+         "reasoning_content": "Check listening sockets.", "timestamp": "2026-10-01T10:15:04.000000"},
+        {"role": "tool", "tool_call_id": "call_abc123", "name": "exec",
+         "content": "LISTEN 0 128 *:8080 users:((\"python3\",pid=4242))", "timestamp": "2026-10-01T10:15:05.000000"},
+        {"role": "assistant", "content": "python3 (pid 4242) is listening on 8080.",
+         "timestamp": "2026-10-01T10:15:09.400000"},
+    ]
+
+
+def build_nanobot(home: Path) -> None:
+    _jsonl(home / NANOBOT_REL, nanobot_records())
+    (home / NANOBOT_REL).parent.joinpath(".workspace").write_text("/srv/proj\n", encoding="utf-8")
+    (home / NANOBOT_REL).parent.joinpath("dGVsZWdyYW06MTIzNDU2Nzg5.checkpoint.json").write_text("{}", encoding="utf-8")
+    _jsonl(home / NANOBOT_LEGACY_REL, [
+        {"_type": "metadata", "key": "cli:direct", "created_at": "2026-09-01T08:00:00",
+         "updated_at": "2026-09-01T08:00:05", "metadata": {"_nanobot_model_preset": "fast"}},
+        {"role": "user", "content": [{"type": "text", "text": "hello"}], "timestamp": "2026-09-01T08:00:01"},
+        {"role": "assistant", "content": "hi"},
+    ])
+    _jsonl(home / NANOBOT_HISTORY_REL, [
+        {"cursor": 1, "timestamp": "2026-09-30 22:10", "content": "User asked about disk usage.",
+         "session_key": NANOBOT_KEY},
+        {"cursor": 2, "timestamp": "2026-10-01 10:20", "content": "Found python3 on port 8080."},
+    ])
+    (home / ".nanobot/config.json").write_text('{"providers": {"openai": {"apiKey": "sk-not-real"}}}',
+                                               encoding="utf-8")
