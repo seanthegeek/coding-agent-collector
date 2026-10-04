@@ -162,11 +162,12 @@ class TimelineTests(ParserBase):
             rows = list(csv.DictReader(fh))
         ts = [r["timestamp_utc"] for r in rows if r["timestamp_utc"]]
         self.assertEqual(ts, sorted(ts))
-        self.assertEqual({r["agent"] for r in rows}, {"claude-code", "codex-cli", "antigravity"})
+        self.assertEqual({r["agent"] for r in rows}, {"claude-code", "codex-cli", "antigravity", "kiro"})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
         with open(out / "sessions.csv", encoding="utf-8", newline="") as fh:
             sessions = {r["session_id"]: r for r in csv.DictReader(fh)}
-        self.assertEqual(set(sessions), {CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000"})
+        self.assertEqual(set(sessions), {CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000",
+                                         KIRO_SESSION, KIRO_EXPORT_SESSION, KIRO_SHELL_SESSION})
         c = sessions[CLAUDE_SESSION]
         self.assertEqual(c["models"], "claude-fable-5-1")
         self.assertEqual(c["tool_calls"], "1")
@@ -301,3 +302,88 @@ class AntigravityTests(ParserBase):
         self.assertEqual(tool_args_summary('{"CommandLine":"ls","Cwd":"/x"}'), "ls")
         self.assertEqual(tool_args_summary('{"Other":1}'), '{"Other":1}')
         self.assertEqual(tool_args_summary("not json"), "not json")
+
+
+from agent_analyzer.parsers.kiro import KiroParser, salvage  # noqa: E402
+from fixtures import KIRO_EXPORT_SESSION, KIRO_SESSION, KIRO_SHELL_SESSION  # noqa: E402
+
+
+class KiroTests(ParserBase):
+    DB = ".local/share/amazon-q/data.sqlite3"
+    EXPORT = ".aws/amazonq/exports/issue-chat.json"
+
+    def test_rows(self):
+        rows = self.rows_for(KiroParser(), self.DB)
+        conv = [r for r in rows if r.session_id == KIRO_SESSION]
+        self.assertEqual([r.turn_type for r in conv], ["user", "assistant", "tool_use", "tool_result", "assistant"])
+        for r in conv:
+            self.assertEqual((r.host, r.user, r.agent), ("h1", "alice", "kiro"))
+            self.assertEqual((r.project_path, r.git_branch, r.model), ("/srv/proj", "", "claude-sonnet-4"))
+            self.assertEqual(r.source_line, 1)
+        user, asst, use, res, final = conv
+        self.assertEqual((user.text, user.timestamp_utc), ("list the files here", "2026-04-24T03:17:15.123Z"))
+        self.assertEqual((asst.text, asst.timestamp_utc), ("I will list the directory.", "2026-04-24T03:17:16.900Z"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("execute_bash", "tooluse_abc123", '{"command":"ls -la"}'))
+        # null user.timestamp falls back to the entry's request start
+        self.assertEqual((res.tool_name, res.tool_use_id, res.timestamp_utc),
+                         ("execute_bash", "tooluse_abc123", "2026-04-24T03:17:17.000Z"))
+        self.assertEqual(res.text, "total 8 README.md [Success]")
+        self.assertEqual(final.timestamp_utc, "2026-04-24T03:17:18.100Z")
+
+    def test_export_variants(self):
+        rows = self.rows_for(KiroParser(), self.EXPORT)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["user", "tool_use", "tool_result", "assistant", "tool_use", "user", "tool_result",
+                          "assistant", "system", "system", "system"])
+        self.assertTrue(all(r.session_id == KIRO_EXPORT_SESSION and r.project_path == "/srv/proj" for r in rows))
+        user, mcp, mcpres, _, _, stop, cancelled, _, compact_, summary, pending = rows
+        self.assertEqual((user.timestamp_utc, user.model), ("2026-04-24T14:00:00.000Z", "claude-3.7-sonnet"))  # legacy model
+        self.assertEqual((mcp.tool_name, mcp.text), ("github___create_issue", 'orig_name=create_issue {"title":"bug"}'))
+        self.assertEqual((mcpres.tool_name, mcpres.text), ("github___create_issue", '{"number":7} [Error]'))
+        self.assertEqual(stop.text, "stop, do not delete")
+        self.assertEqual((cancelled.tool_use_id, cancelled.text),
+                         ("tooluse_bash2", "cancelled Tool use was cancelled by the user [Error]"))
+        self.assertTrue(compact_.text.startswith("compact:"))
+        self.assertEqual(summary.text, "summary: User asked to open an issue and cancelled a delete.")
+        self.assertEqual(pending.text, "pending message (not sent): now push it")
+
+    def test_thinking_opt_in(self):
+        # the format records no reasoning, so the option changes nothing
+        for rel in (self.DB, self.EXPORT):
+            with_thinking = self.rows_for(KiroParser(), rel, include_thinking=True)
+            self.assertEqual(len(self.rows_for(KiroParser(), rel)), len(with_thinking))
+            self.assertFalse([r for r in with_thinking if r.turn_type == "thinking"])
+
+    def test_shell_history_and_bad_blob(self):
+        rows = self.rows_for(KiroParser(), self.DB)
+        shell = [r for r in rows if r.session_id == KIRO_SHELL_SESSION]
+        self.assertEqual(len(shell), 1)
+        self.assertEqual((shell[0].turn_type, shell[0].timestamp_utc, shell[0].project_path),
+                         ("system", "2026-04-24T03:00:00.000Z", "/srv/proj"))
+        self.assertTrue(shell[0].text.startswith("shell history: git status"))
+        bad = [r for r in rows if r.project_path == "/srv/broken"]
+        self.assertEqual(len(bad), 1)
+        self.assertEqual((bad[0].turn_type, bad[0].source_line), ("system", 2))
+        self.assertIn("unparseable", bad[0].text)
+        self.assertNotIn("REDACT-ME", " ".join(r.text for r in rows))
+
+    def test_not_wanted(self):
+        p = KiroParser()
+        for rel in (".kiro/settings/cli.json", ".kiro/sessions/s1.json"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertEqual(art.agent, "kiro")
+            self.assertFalse(p.wants(art), rel)
+
+    def test_truncated_export_is_reported_not_fatal(self):
+        rows = self.rows_for(KiroParser(), ".aws/amazonq/exports/issue-chat-cut.json")
+        self.assertEqual([r.turn_type for r in rows],
+                         ["user", "tool_use", "tool_result", "assistant", "tool_use", "system"])
+        self.assertEqual(rows[0].session_id, KIRO_EXPORT_SESSION)
+        self.assertIn("2 history entries recovered", rows[-1].text)
+
+    def test_salvage(self):
+        self.assertEqual(salvage('{"a": 1}'), ({"a": 1}, ""))
+        state, err = salvage('{"conversation_id": "c\\"1", "history": [{"x": 1}, {"y": ')
+        self.assertEqual(state, {"conversation_id": 'c"1', "history": [{"x": 1}]})
+        self.assertTrue(err)
+        self.assertEqual(salvage("garbage")[0], None)
