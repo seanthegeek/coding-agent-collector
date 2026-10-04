@@ -588,6 +588,7 @@ class OpenClawParser(Parser):
                     )
                     continue
                 raw = data.decode("utf-8", errors="replace")
+            err = None  # set only when the JSON does not parse
             try:
                 rec = json.loads(
                     raw
@@ -605,7 +606,7 @@ class OpenClawParser(Parser):
                     s,
                     line,
                     "event seq %s unreadable: %s"
-                    % (r.get("seq"), err if rec is None else "not a JSON object"),
+                    % (r.get("seq"), err if err is not None else "not a JSON object"),
                     opts,
                     to_utc(r.get("created_at")),
                 )

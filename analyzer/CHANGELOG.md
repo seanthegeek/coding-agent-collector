@@ -12,6 +12,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Minimum Python raised from 3.9 to 3.10.
 
+### Fixed
+
+- OpenClaw: a `transcript_events` row whose `event_json` is valid JSON
+  but not an object (such as `null`) no longer stops the parser with
+  `UnboundLocalError`; it becomes a `system` row, "event seq N
+  unreadable: not a JSON object", and the session's later events are
+  still read.
+
 ## [0.5.0] - 2026-10-04
 
 ### Added

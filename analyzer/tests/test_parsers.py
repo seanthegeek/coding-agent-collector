@@ -3630,6 +3630,24 @@ class OpenClawTests(ParserBase):
         )
         self.assertIn("event seq 9 unreadable", rows[-1].text)
 
+    def test_null_event_row_is_reported_not_fatal(self):
+        # A row whose event_json is valid JSON but not an object (here
+        # `null`) is reported as "not a JSON object"; it used to raise
+        # NameError because the parse-error message was never bound.
+        con = sqlite3.connect(str(self.home / self.DB))
+        con.execute(
+            "INSERT INTO transcript_events VALUES (?,?,?,?,NULL,NULL,NULL)",
+            (OPENCLAW_SESSION, 9, "null", 1790845300000),
+        )
+        con.commit()
+        con.close()
+        rows = [
+            r for r in self.rows_for(OpenClawParser(), self.DB) if r.session_id == OPENCLAW_SESSION
+        ]
+        self.assertEqual(len(rows), 7)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("event seq 9 unreadable: not a JSON object", rows[-1].text)
+
     @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
     def test_missing_zstandard_is_one_row_per_event(self):
         with mock.patch.object(openclaw_mod, "_zstd_module", return_value=None):
