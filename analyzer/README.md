@@ -76,6 +76,8 @@ agents and which have parsers.
 | `claude-code` | `.claude/projects/<slug>/<session>.jsonl`, subagent transcripts under the session directory, `.claude/history.jsonl` | Real install, Claude Code 2.x, October 2026 |
 | `codex-cli` | `.codex/sessions/**/rollout-*.jsonl`, `.codex/history.jsonl` | Real install, Codex CLI, October 2026 |
 | `antigravity` | `.gemini/antigravity-cli/conversations/*.db` (SQLite of protobuf steps, with WAL sidecars), `conversation_summaries.db`, `history.jsonl` | Protobuf descriptors extracted from the shipped `agy` binary plus a real install, October 2026; see `research/antigravity.md` |
+| `crush` | `<project>/.crush/crush.db` (SQLite with WAL sidecars; reached as a project artifact, or under a home when Crush ran in `~`), `.local/share/crush/projects.json`, `AppData/Local/crush/projects.json` | Source at ca6ae26, synthetic fixture |
+| `goose` | `.local/share/goose/sessions/sessions.db` (SQLite with WAL sidecars), legacy `sessions/*.jsonl`, `.local/state/goose/logs/llm_request.*.jsonl`, `history.txt`, and the `AppData/Roaming/Block/goose/data` equivalents | Source at 591edd4, synthetic fixture |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
@@ -87,7 +89,7 @@ filter on `source_file` to drop them.
 
 Agents detected but not yet parsed: everything else in the catalog. The
 record schemas for Gemini CLI, Qwen Code, Cline, Roo Code, Kilo Code,
-Continue, Copilot Chat, Aider, Goose, OpenCode, Crush, Zed and Amazon Q CLI
+Continue, Copilot Chat, Aider, OpenCode, Zed and Amazon Q CLI
 are documented under `research/` and are next in line. Windsurf and Cursor
 need format work first.
 

@@ -37,7 +37,8 @@ class LooseDetectTests(unittest.TestCase):
         self.assertEqual(col.kind, "loose")
         by_user = self.agents_by_user(col)
         self.assertEqual(set(by_user), {"alice", "bob", "carol"})
-        self.assertEqual(by_user["alice"], {"claude-code", "codex-cli", "gemini-cli", "antigravity", "vscode", "cline"})
+        self.assertEqual(by_user["alice"], {"claude-code", "codex-cli", "gemini-cli", "antigravity", "vscode", "cline",
+                                            "crush", "goose"})
         self.assertEqual(by_user["carol"], {"codex-cli"})
         homes = {h.user: h for h in col.homes}
         self.assertEqual(homes["alice"].original, "/home/alice")

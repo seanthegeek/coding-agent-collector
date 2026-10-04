@@ -14,9 +14,12 @@ from agent_analyzer.parsers.codex import CodexParser
 from agent_analyzer.timeutil import to_utc
 
 from agent_analyzer.parsers.antigravity import AntigravityParser, tool_args_summary, uri_to_path
+from agent_analyzer.parsers.crush import CrushParser, project_of
+from agent_analyzer.parsers.goose import GooseParser, unescape_history
 from agent_analyzer import protobuf, sqlite_util
 
 from fixtures import AGY_CONVERSATION, CLAUDE_SESSION, CODEX_SESSION, build_home, write_bad_line
+from fixtures import CRUSH_SESSION, GOOSE_LEGACY_REL, GOOSE_SESSION
 
 
 class TimeTests(unittest.TestCase):
@@ -162,11 +165,12 @@ class TimelineTests(ParserBase):
             rows = list(csv.DictReader(fh))
         ts = [r["timestamp_utc"] for r in rows if r["timestamp_utc"]]
         self.assertEqual(ts, sorted(ts))
-        self.assertEqual({r["agent"] for r in rows}, {"claude-code", "codex-cli", "antigravity"})
+        self.assertEqual({r["agent"] for r in rows}, {"claude-code", "codex-cli", "antigravity", "crush", "goose"})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
         with open(out / "sessions.csv", encoding="utf-8", newline="") as fh:
             sessions = {r["session_id"]: r for r in csv.DictReader(fh)}
-        self.assertEqual(set(sessions), {CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000"})
+        self.assertEqual(set(sessions), {CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000",
+                                         CRUSH_SESSION, GOOSE_SESSION, "20260301_090000"})
         c = sessions[CLAUDE_SESSION]
         self.assertEqual(c["models"], "claude-fable-5-1")
         self.assertEqual(c["tool_calls"], "1")
@@ -301,3 +305,142 @@ class AntigravityTests(ParserBase):
         self.assertEqual(tool_args_summary('{"CommandLine":"ls","Cwd":"/x"}'), "ls")
         self.assertEqual(tool_args_summary('{"Other":1}'), '{"Other":1}')
         self.assertEqual(tool_args_summary("not json"), "not json")
+
+
+class CrushTests(ParserBase):
+    REL = ".crush/crush.db"
+
+    def test_rows(self):
+        rows = self.rows_for(CrushParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result", "assistant", "system"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "crush", CRUSH_SESSION))
+            self.assertEqual((r.project_path, r.git_branch), ("/alice", ""))   # the directory holding .crush
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        start, user, use, result, asst, finish = rows
+        self.assertEqual(start.text, "session start | Fix bug | 3 messages | tokens in=10 out=5 | cost=0.01")
+        self.assertEqual((user.text, user.model, user.timestamp_utc),
+                         ("list files", "anthropic/claude-sonnet-4", "2025-10-09T08:53:21.000Z"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("bash", "call_x1", '{"command":"ls"}'))
+        self.assertEqual(use.timestamp_utc, "2025-10-09T08:53:23.000Z")          # finished_at, not created_at
+        self.assertEqual((result.tool_name, result.tool_use_id, result.text), ("bash", "call_x1", "a.txt"))
+        self.assertEqual(asst.text, "There is one file, a.txt.")
+        self.assertEqual((finish.text, finish.timestamp_utc), ("finish: max_tokens", "2025-10-09T08:53:25.000Z"))
+
+    def test_rows_live_only_in_the_wal(self):
+        art = next(a for a in self.col.artifacts if a.rel == self.REL)
+        import sqlite3
+        con = sqlite3.connect("file:%s?immutable=1" % art.disk_path.as_posix(), uri=True)
+        try:
+            self.assertEqual(con.execute("select count(*) from messages").fetchone()[0], 0)
+        finally:
+            con.close()
+        self.assertTrue(Path(str(art.disk_path) + "-wal").is_file())
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(CrushParser(), self.REL, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["one file only"])
+
+    def test_projects_registry(self):
+        rows = self.rows_for(CrushParser(), ".local/share/crush/projects.json")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0].turn_type, rows[0].project_path, rows[0].timestamp_utc),
+                         ("system", "/srv/proj", "2026-10-01T12:00:00.000Z"))
+        self.assertIn("data_dir=/srv/proj/.crush", rows[0].text)
+
+    def test_project_path_from_original(self):
+        self.assertEqual(project_of("/srv/proj/.crush/crush.db"), "/srv/proj")
+        self.assertEqual(project_of("C:\\Users\\a\\repo\\.crush\\crush.db"), "C:\\Users\\a\\repo")
+        self.assertEqual(project_of(".crush/crush.db"), "")
+
+    def test_config_and_sidecars_not_wanted(self):
+        p = CrushParser()
+        for a in self.col.artifacts:
+            if a.agent == "crush" and a.rel.endswith(("crush.json", "-wal", "-shm")):
+                self.assertFalse(p.wants(a), a.rel)
+
+    def test_bad_parts_is_reported_not_fatal(self):
+        import sqlite3
+        db = self.home / self.REL
+        con = sqlite3.connect(str(db))
+        con.execute("INSERT INTO messages(id,session_id,role,parts,model,provider,created_at,updated_at) "
+                    "VALUES ('m5','6f1c0001','assistant','[{\"type\":\"text\",\"data\":{\"text\":\"cut','m','p',1760000006,1760000006)")
+        con.commit()
+        con.close()
+        rows = self.rows_for(CrushParser(), self.REL)
+        self.assertEqual(len(rows), 7)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("m5 parts did not parse", rows[-1].text)
+        self.assertEqual(rows[1].text, "list files")
+
+    def test_not_sqlite_is_reported(self):
+        (self.home / self.REL).write_bytes(b"not a database")
+        rows = self.rows_for(CrushParser(), self.REL)
+        self.assertEqual([(r.turn_type, r.text) for r in rows], [("system", "parser: not a SQLite database")])
+
+
+class GooseTests(ParserBase):
+    REL = ".local/share/goose/sessions/sessions.db"
+
+    def test_rows(self):
+        rows = self.rows_for(GooseParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result", "assistant"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "goose", GOOSE_SESSION))
+            self.assertEqual((r.project_path, r.git_branch), ("/srv/proj", ""))
+            self.assertEqual(r.model, "anthropic/claude-sonnet-4-5")
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        start, user, use, result, asst = rows
+        self.assertEqual((start.text, start.timestamp_utc), ("session start | Fix flaky test | type=user", "2026-03-01T09:00:00.000Z"))
+        self.assertEqual((user.text, user.timestamp_utc), ("run the tests", "2026-03-01T09:00:00.000Z"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("developer__shell", "call_1", '{"command":"pytest -q"}'))
+        self.assertEqual((result.tool_name, result.tool_use_id, result.text), ("developer__shell", "call_1", "3 passed"))
+        self.assertEqual((asst.text, asst.timestamp_utc), ("All 3 tests pass.", "2026-03-01T09:00:05.000Z"))
+        self.assertEqual([r.source_line for r in rows], [1, 1, 2, 3, 4])
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(GooseParser(), self.REL, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["all green"])
+
+    def test_legacy_request_log_and_history(self):
+        rows = self.rows_for(GooseParser(), GOOSE_LEGACY_REL)
+        self.assertEqual([(r.turn_type, r.text) for r in rows],
+                         [("system", "session start (legacy) | old chat | 1 messages"), ("user", "hello")])
+        self.assertEqual({(r.session_id, r.project_path) for r in rows}, {("20260301_090000", "/srv/old")})
+        rows = self.rows_for(GooseParser(), ".local/state/goose/logs/llm_request.0.jsonl")
+        self.assertEqual([(r.turn_type, r.model, r.text) for r in rows],
+                         [("system", "gpt-4.1", "llm request | 1 messages | last user: hello"), ("assistant", "gpt-4.1", "hi")])
+        self.assertEqual({r.timestamp_utc for r in rows}, {"2026-03-01T09:00:01.000Z"})
+        rows = self.rows_for(GooseParser(), ".local/state/goose/history.txt")
+        self.assertEqual([(r.turn_type, r.text) for r in rows],
+                         [("user", "run the tests"), ("user", "line one line two \\ done")])
+        self.assertEqual(unescape_history("a\\nb\\\\c"), "a\nb\\c")
+
+    def test_millisecond_timestamps(self):
+        from agent_analyzer.parsers.goose import epoch
+        self.assertEqual(epoch(1772355600000), "2026-03-01T09:00:00.000Z")
+        self.assertEqual(epoch(17723556000), to_utc(17723556))   # Goose divides above 1e10, to_utc only above 1e11
+
+    def test_config_secrets_and_sidecars_not_wanted(self):
+        p = GooseParser()
+        for a in self.col.artifacts:
+            if a.agent == "goose" and a.rel.endswith((".yaml", "-wal", "-shm")):
+                self.assertFalse(p.wants(a), a.rel)
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / GOOSE_LEGACY_REL)
+        rows = self.rows_for(GooseParser(), GOOSE_LEGACY_REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "system"])
+        self.assertEqual(rows[-1].text, "parser: 1 unparseable line(s), first at line 3")
+        self.assertEqual(rows[-1].session_id, "20260301_090000")
+
+    def test_bad_content_json_is_reported_not_fatal(self):
+        import sqlite3
+        con = sqlite3.connect(str(self.home / self.REL))
+        con.execute("INSERT INTO messages(session_id,role,content_json,created_timestamp) "
+                    "VALUES ('20260301_1','assistant','[{\"type\":\"text\",\"te',1772355606)")
+        con.commit()
+        con.close()
+        rows = self.rows_for(GooseParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result", "assistant", "system"])
+        self.assertIn("content_json did not parse", rows[-1].text)

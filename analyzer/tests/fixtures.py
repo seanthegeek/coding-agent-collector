@@ -127,6 +127,8 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     (gs / "state.vscdb").write_text("sqlite", encoding="utf-8")
     (gs / "saoudrizwan.claude-dev/state").mkdir(parents=True, exist_ok=True)
     (gs / "saoudrizwan.claude-dev/state/taskHistory.json").write_text("[]", encoding="utf-8")
+    build_crush(home)
+    build_goose(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -240,3 +242,154 @@ def build_antigravity(base: Path) -> None:
     summ.close()
     _jsonl(base / "history.jsonl", [{"display": "clean the logs", "timestamp": AGY_T0 * 1000, "workspace": "/home/u/proj"}])
     (base / "antigravity-oauth-token").write_text("secret", encoding="utf-8")
+
+
+def _wal_db(path: Path, script: str, inserts) -> None:
+    """Build a WAL-mode SQLite file whose schema is checkpointed into the main
+    file and whose rows live only in the -wal sidecar, as on a host where the
+    agent is still running. The files are copied out while the writer is
+    still open, so closing it cannot checkpoint the copy."""
+    import shutil
+    import tempfile
+    tmp = Path(tempfile.mkdtemp(prefix="cac-fixture-"))
+    try:
+        src = tmp / path.name
+        con = sqlite3.connect(str(src))
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA wal_autocheckpoint=0")
+        con.executescript(script)
+        con.commit()
+        con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        for sql in inserts:
+            con.execute(sql)
+        con.commit()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        for suffix in ("", "-wal", "-shm"):
+            if Path(str(src) + suffix).exists():
+                shutil.copyfile(str(src) + suffix, str(path) + suffix)
+        con.close()
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+CRUSH_SESSION = "6f1c0001"
+
+# Columns of internal/db/migrations at crush ca6ae26 that the parser reads.
+CRUSH_SCHEMA = """
+CREATE TABLE sessions (id TEXT PRIMARY KEY, parent_session_id TEXT, title TEXT NOT NULL,
+  message_count INTEGER NOT NULL DEFAULT 0, prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  completion_tokens INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL DEFAULT 0.0,
+  updated_at INTEGER NOT NULL, created_at INTEGER NOT NULL, summary_message_id TEXT, todos TEXT, channel TEXT);
+CREATE TABLE messages (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, role TEXT NOT NULL, parts TEXT NOT NULL DEFAULT '[]',
+  model TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, finished_at INTEGER, provider TEXT,
+  is_summary_message INTEGER DEFAULT 0 NOT NULL, prism_model_id TEXT, prism_model_name TEXT);
+CREATE TABLE files (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, path TEXT NOT NULL, content TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+"""
+
+
+def crush_records():
+    """The INSERT statements of research/crush.md section 8, plus a final
+    assistant message with reasoning, text and an abnormal finish."""
+    return [
+        "INSERT INTO sessions(id,title,message_count,prompt_tokens,completion_tokens,cost,updated_at,created_at) "
+        "VALUES('6f1c0001','Fix bug',3,10,5,0.01,1760000005,1760000001)",
+        "INSERT INTO messages(id,session_id,role,parts,model,provider,created_at,updated_at,finished_at,is_summary_message) VALUES "
+        """('m1','6f1c0001','user','[{"type":"text","data":{"text":"list files"}},{"type":"finish","data":{"reason":"stop","time":0}}]','claude-sonnet-4','anthropic',1760000001,1760000001,NULL,0),"""
+        """('m2','6f1c0001','assistant','[{"type":"tool_call","data":{"id":"call_x1","name":"bash","input":"{\\"command\\":\\"ls\\"}","provider_executed":false,"finished":true}},{"type":"finish","data":{"reason":"tool_use","time":1760000003}}]','claude-sonnet-4','anthropic',1760000002,1760000003,1760000003,0),"""
+        """('m3','6f1c0001','tool','[{"type":"tool_result","data":{"tool_call_id":"call_x1","name":"bash","content":"a.txt","data":"","mime_type":"","metadata":"","is_error":false}},{"type":"finish","data":{"reason":"stop","time":0}}]','','',1760000003,1760000003,NULL,0)""",
+        "INSERT INTO messages(id,session_id,role,parts,model,provider,created_at,updated_at,finished_at,is_summary_message) VALUES "
+        """('m4','6f1c0001','assistant','[{"type":"reasoning","data":{"thinking":"one file only","signature":"sig","started_at":1760000004,"finished_at":1760000004}},{"type":"text","data":{"text":"There is one file, a.txt."}},{"type":"finish","data":{"reason":"max_tokens","time":1760000005}}]','claude-sonnet-4','anthropic',1760000004,1760000005,1760000005,0)""",
+    ]
+
+
+def build_crush(home: Path) -> None:
+    """Crush run in the home directory, so its per-project store is
+    ~/.crush/crush.db, plus the global project registry and config noise."""
+    _wal_db(home / ".crush/crush.db", CRUSH_SCHEMA, crush_records())
+    (home / ".crush/crush.json").write_text('{"providers":{"anthropic":{"api_key":"sk-test"}}}', encoding="utf-8")
+    reg = home / ".local/share/crush"
+    reg.mkdir(parents=True, exist_ok=True)
+    (reg / "projects.json").write_text(json.dumps({"projects": [
+        {"path": "/srv/proj", "data_dir": "/srv/proj/.crush", "last_accessed": "2026-10-01T12:00:00Z"}]}), encoding="utf-8")
+    (home / ".config/crush").mkdir(parents=True, exist_ok=True)
+    (home / ".config/crush/crush.json").write_text("{}", encoding="utf-8")
+
+
+GOOSE_SESSION = "20260301_1"
+
+# session_manager.rs at goose 591edd4, schema version 16 (research/goose.md section 3).
+GOOSE_SCHEMA = """
+CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+  user_set_name BOOLEAN DEFAULT FALSE, session_type TEXT NOT NULL DEFAULT 'user',
+  working_dir TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, extension_data TEXT DEFAULT '{}',
+  total_tokens INTEGER, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+  cache_write_tokens INTEGER, accumulated_total_tokens INTEGER, accumulated_input_tokens INTEGER,
+  accumulated_output_tokens INTEGER, accumulated_cache_read_tokens INTEGER,
+  accumulated_cache_write_tokens INTEGER, accumulated_cost REAL, schedule_id TEXT, recipe_json TEXT,
+  user_recipe_values_json TEXT, provider_name TEXT, model_config_json TEXT,
+  goose_mode TEXT NOT NULL DEFAULT 'auto', archived_at TIMESTAMP, project_id TEXT, parent_session_id TEXT);
+CREATE TABLE messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT, session_id TEXT NOT NULL REFERENCES sessions(id),
+  role TEXT NOT NULL, content_json TEXT NOT NULL, created_timestamp INTEGER NOT NULL,
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, tokens INTEGER, metadata_json TEXT);
+CREATE TABLE usage_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  created_timestamp INTEGER NOT NULL, model TEXT, input_tokens INTEGER, output_tokens INTEGER,
+  total_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost REAL,
+  cost_source TEXT, is_compaction INTEGER DEFAULT 0);
+"""
+
+
+def goose_records(cwd="/srv/proj"):
+    """The INSERT statements of research/goose.md section 8, with the
+    working directory moved to the shared project path."""
+    return [
+        "INSERT INTO schema_version(version) VALUES (16)",
+        "INSERT INTO sessions(id,name,session_type,working_dir,created_at,updated_at,extension_data,provider_name,model_config_json,goose_mode) "
+        "VALUES ('20260301_1','Fix flaky test','user','%s','2026-03-01 09:00:00','2026-03-01 09:01:05','{}','anthropic',"
+        """'{"model_name":"claude-sonnet-4-5","temperature":null,"max_tokens":null,"toolshim":false,"toolshim_model":null}','auto')""" % cwd,
+        "INSERT INTO messages(message_id,session_id,role,content_json,created_timestamp,metadata_json) VALUES "
+        """('msg_20260301_1_a1','20260301_1','user','[{"type":"text","text":"run the tests"}]',1772355600,'{"userVisible":true,"agentVisible":true}'),"""
+        """('msg_20260301_1_a2','20260301_1','assistant','[{"type":"toolRequest","id":"call_1","toolCall":{"status":"success","value":{"name":"developer__shell","arguments":{"command":"pytest -q"}}}}]',1772355601,"""
+        """ '{"userVisible":true,"agentVisible":true,"inference":{"provider":"anthropic","requestedModel":"claude-sonnet-4-5"}}'),"""
+        """('msg_20260301_1_a3','20260301_1','user','[{"type":"toolResponse","id":"call_1","toolResult":{"status":"success","value":{"content":[{"type":"text","text":"3 passed"}]}}}]',1772355603,'{"userVisible":true,"agentVisible":true}'),"""
+        """('msg_20260301_1_a4','20260301_1','assistant','[{"type":"thinking","thinking":"all green","signature":"sig"},{"type":"text","text":"All 3 tests pass."}]',1772355605,'{"userVisible":true,"agentVisible":true}')""",
+        "INSERT INTO usage_ledger(session_id,created_timestamp,model,input_tokens,output_tokens,total_tokens) "
+        "VALUES ('20260301_1',1772355605,'claude-sonnet-4-5',120,30,150)",
+    ]
+
+
+def goose_legacy_records():
+    return [
+        {"description": "old chat", "working_dir": "/srv/old", "created_at": "2026-03-01T09:00:00Z",
+         "updated_at": "2026-03-01T09:00:10Z", "extension_data": {}, "message_count": 1},
+        {"id": "m1", "role": "user", "created": 1772355600, "content": [{"type": "text", "text": "hello"}]},
+    ]
+
+
+def goose_llm_request_records():
+    return [
+        {"model_config": {"model_name": "gpt-4.1"},
+         "input": {"model": "gpt-4.1", "messages": [{"role": "user", "content": "hello"}]}},
+        {"data": {"role": "assistant", "created": 1772355601, "content": [{"type": "text", "text": "hi"}]},
+         "usage": {"input_tokens": 5, "output_tokens": 1}},
+    ]
+
+
+GOOSE_LEGACY_REL = ".local/share/goose/sessions/20260301_090000.jsonl"
+
+
+def build_goose(home: Path) -> None:
+    data = home / ".local/share/goose/sessions"
+    _wal_db(data / "sessions.db", GOOSE_SCHEMA, goose_records())
+    _jsonl(home / GOOSE_LEGACY_REL, goose_legacy_records())
+    state = home / ".local/state/goose"
+    _jsonl(state / "logs/llm_request.0.jsonl", goose_llm_request_records())
+    (state / "history.txt").write_text("#V2\nrun the tests\nline one\\nline two \\\\ done\n", encoding="utf-8")
+    (home / ".config/goose").mkdir(parents=True, exist_ok=True)
+    (home / ".config/goose/config.yaml").write_text("GOOSE_PROVIDER: anthropic\n", encoding="utf-8")
+    (home / ".config/goose/secrets.yaml").write_text("ANTHROPIC_API_KEY: sk-test\n", encoding="utf-8")
