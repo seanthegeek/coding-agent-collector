@@ -127,6 +127,7 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     (gs / "state.vscdb").write_text("sqlite", encoding="utf-8")
     (gs / "saoudrizwan.claude-dev/state").mkdir(parents=True, exist_ok=True)
     (gs / "saoudrizwan.claude-dev/state/taskHistory.json").write_text("[]", encoding="utf-8")
+    build_qwen(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -240,3 +241,76 @@ def build_antigravity(base: Path) -> None:
     summ.close()
     _jsonl(base / "history.jsonl", [{"display": "clean the logs", "timestamp": AGY_T0 * 1000, "workspace": "/home/u/proj"}])
     (base / "antigravity-oauth-token").write_text("secret", encoding="utf-8")
+
+
+QWEN_SESSION = "e5f6a7b8-4444-4000-8000-000000000011"
+QWEN_ARCHIVED = "0a0b0c0d-4444-4000-8000-000000000022"
+QWEN_TMP = "3f0a9c" + "0" * 58   # sha256(cwd) directory name
+
+
+def qwen_session_records(cwd="/srv/proj", branch="main"):
+    """Qwen Code ChatRecords, shapes from research/qwen-code.md section 8."""
+    common = dict(sessionId=QWEN_SESSION, cwd=cwd, version="0.24.7", gitBranch=branch)
+    return [
+        dict(common, uuid="q0", parentUuid=None, timestamp="2026-10-01T09:59:59.000Z", type="system",
+             subtype="session_model", provenance="system",
+             systemPayload={"modelId": "qwen3-coder-plus", "authType": "qwen-oauth"}),
+        dict(common, uuid="q1", parentUuid="q0", timestamp="2026-10-01T10:00:00.000Z", type="user",
+             provenance="real_user", promptId=QWEN_SESSION + "########1",
+             message={"role": "user", "parts": [{"text": "run the tests"}]},
+             systemPayload={"displayText": "run the tests", "hookContext": ""}),
+        dict(common, uuid="q2", parentUuid="q1", timestamp="2026-10-01T10:00:03.000Z", type="assistant",
+             provenance="assistant_output", model="qwen3-coder-plus",
+             message={"role": "model", "parts": [
+                 {"text": "Plan: run npm test.", "thought": True},
+                 {"text": "Running tests."},
+                 {"functionCall": {"id": "call_abc123", "name": "run_shell_command", "args": {"command": "npm test"}}},
+                 {"functionCall": {"id": "call_def456", "name": "read_file",
+                                   "args": {"absolute_path": "/srv/proj/.env"}}}]},
+             usageMetadata={"promptTokenCount": 200, "candidatesTokenCount": 30, "totalTokenCount": 230},
+             contextWindowSize=131072),
+        dict(common, uuid="q3", parentUuid="q2", timestamp="2026-10-01T10:00:09.000Z", type="tool_result",
+             provenance="tool_result",
+             message={"role": "user", "parts": [{"functionResponse": {
+                 "id": "call_abc123", "name": "run_shell_command", "response": {"output": "12 passing"}}}]},
+             toolCallResult={"callId": "call_abc123", "status": "success", "resultDisplay": "12 passing",
+                             "errorType": None}),
+        dict(common, uuid="q4", parentUuid="q3", timestamp="2026-10-01T10:00:10.000Z", type="tool_result",
+             provenance="tool_result",
+             message={"role": "user", "parts": [{"functionResponse": {
+                 "id": "call_def456", "name": "read_file", "response": {"error": "permission denied"}}}]},
+             toolCallResult={"callId": "call_def456", "status": "error", "errorType": "permission_denied"}),
+        dict(common, uuid="q5", parentUuid="q4", timestamp="2026-10-01T10:00:11.000Z", type="system",
+             subtype="slash_command", provenance="system",
+             systemPayload={"phase": "invocation", "rawCommand": "/compress"}),
+        dict(common, uuid="q6", parentUuid="q5", timestamp="2026-10-01T10:00:12.000Z", type="system",
+             subtype="custom_title", provenance="system",
+             systemPayload={"customTitle": "Run tests", "titleSource": "auto"}),
+    ]
+
+
+def qwen_logs_entries():
+    """Gemini-legacy LogEntry array; model_switch carries a JSON string."""
+    return [
+        {"sessionId": QWEN_SESSION, "messageId": 0, "timestamp": "2026-10-01T10:00:00.000Z",
+         "type": "user", "message": "run the tests"},
+        {"sessionId": QWEN_SESSION, "messageId": 1, "timestamp": "2026-10-01T10:00:05.000Z",
+         "type": "model_switch",
+         "message": json.dumps({"fromModel": "qwen3-coder-plus", "toModel": "qwen3-vl-plus",
+                                "reason": "vision_auto_switch"})},
+    ]
+
+
+def build_qwen(home: Path) -> None:
+    chats = home / ".qwen/projects/-srv-proj/chats"
+    _jsonl(chats / (QWEN_SESSION + ".jsonl"), qwen_session_records())
+    _jsonl(chats / "archive" / (QWEN_ARCHIVED + ".jsonl"),
+           [dict(r, sessionId=QWEN_ARCHIVED) for r in qwen_session_records()[1:2]])
+    _jsonl(chats / (QWEN_SESSION + ".ledger.jsonl"), [{"promptId": "p1", "text": "run the tests"}])
+    (chats / (QWEN_SESSION + ".runtime.json")).write_text('{"session_id": "x", "started_at": 1790848800}',
+                                                          encoding="utf-8")
+    tmp = home / ".qwen/tmp" / QWEN_TMP
+    tmp.mkdir(parents=True, exist_ok=True)
+    (tmp / "logs.json").write_text(json.dumps(qwen_logs_entries(), indent=2), encoding="utf-8")
+    (home / ".qwen/settings.json").write_text("{}", encoding="utf-8")
+    (home / ".qwen/oauth_creds.json").write_text('{"access_token": "secret"}', encoding="utf-8")
