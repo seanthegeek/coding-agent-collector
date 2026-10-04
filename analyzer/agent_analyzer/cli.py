@@ -217,7 +217,9 @@ def cmd_timeline(args: argparse.Namespace, col: Collection) -> int:
     for p in problems:
         print("problem:   %s" % p)
     parsed_agents = sorted({a for a, _ in counts})
-    unparsed = [r["agent"] for r in detect if not r["parser"]]
+    # Project-tagged files are routed to every parser, so they are never
+    # "detected only" in their own right.
+    unparsed = [r["agent"] for r in detect if not r["parser"] and r["agent"] != PROJECT_AGENT]
     print("agents:    parsed %s; detected only %s" % (
         ", ".join(parsed_agents) or "none", ", ".join(sorted(set(unparsed))) or "none"))
     print("rows:      %d in %s" % (len(rows), timeline))

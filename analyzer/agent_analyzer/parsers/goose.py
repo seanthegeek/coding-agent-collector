@@ -295,9 +295,7 @@ class GooseParser(Parser):
         session_id = artifact.disk_path.name[: -len(".jsonl")]
         project_path = ""
         tool_names: Dict[str, str] = {}
-        last = 0
         for n, rec in iter_jsonl(artifact.disk_path, errors):
-            last = n
             if "role" not in rec and "content" not in rec:
                 session_id = str(rec.get("id") or session_id)
                 project_path = str(rec.get("working_dir") or "")
