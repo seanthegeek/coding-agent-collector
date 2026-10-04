@@ -8,6 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- The catalog copy detects `muse-code` (Meta's Muse Code CLI).
+
 ### Changed
 
 - Minimum Python raised from 3.9 to 3.10.

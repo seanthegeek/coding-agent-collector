@@ -10,6 +10,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Meta's Muse Code CLI as catalog agent `muse-code`, with an evidence
+  document under `research/`: `~/.config/muse` and `~/.local/share/muse`
+  (the same paths on Windows), `~/.muse`, the launcher's dot files in
+  `~/.local/bin/.muse-*`, the Windows install directory
+  `AppData/Local/Programs/muse` and the per-session shell sandbox
+  `AppData/LocalLow/muse-shell-sandbox-*`. `auth.json` and `settings.json`
+  under `.config/muse` are flagged secret. The bundled plugin and skill
+  copies, marketplace clones, update staging directories, the Windows
+  `muse-bin-*.exe` binary and `.muse/worktrees` are excluded. Projects are
+  discovered from `trust.json` and session logs' `workspace_root`, and a
+  project's `.muse` directory is collected.
+
 ### Changed
 
 - PowerShell collector: the internal logging function is renamed from

@@ -250,6 +250,13 @@ amp|.amp
 amp|AppData/Local/amp/logs
 # Factory Droid
 factory-droid|.factory
+# Meta Muse Code (XDG ~/.config/muse and ~/.local/share/muse on every OS; launcher state in its install dir)
+muse-code|.config/muse
+muse-code|.local/share/muse
+muse-code|.muse
+muse-code|.local/bin/.muse-*
+muse-code|AppData/Local/Programs/muse
+muse-code|AppData/LocalLow/muse-shell-sandbox-*
 # Augment (auggie CLI; the VS Code extension state is under the vscode entries)
 augment|.augment
 # Kiro (CLI, legacy Amazon Q CLI, and the Kiro IDE which is a VS Code fork)
@@ -464,6 +471,7 @@ project|.amp
 project|.factory
 project|.factory-plugin
 project|.droid.yaml
+project|.muse
 project|.augment
 project|.augment-guidelines
 project|.augmentignore
@@ -690,6 +698,13 @@ AppData/Roaming/Block/goose/data/codex
 .factory/worktrees
 .factory/snapshots
 .factory/generated-images
+.local/share/muse/plugins/cache/builtin
+.local/share/muse/skills/bundled
+.local/share/muse/plugins/marketplaces
+.local/bin/.muse-update.*
+AppData/Local/Programs/muse/muse-bin-*.exe
+AppData/Local/Programs/muse/.muse-update.*.exe
+.muse/worktrees
 .augment/binaries
 .augment/vfs
 .augment/knowledgebase
@@ -1074,6 +1089,8 @@ AppData/Roaming/Zed/global_settings.json
 .factory/temp/env/*
 .factory/prem-auth/*/credentials.*
 .factory/mcp-oauth*
+.config/muse/auth.json
+.config/muse/settings.json
 .augment/session.json
 .augment/settings.json
 .augment/settings.local.json
@@ -2012,6 +2029,9 @@ discover_projects() {
         "$_h/.pi/agent/crashes.json" "$_h"/.pi/agent/experimental/sessions/*/meta.json
       [ -f "$_h/.pi/agent/trust.json" ] && ! inv_secret "$_h/.pi/agent/trust.json" &&
         grep -o '"/[^"]*": *[tf]' "$_h/.pi/agent/trust.json" 2>/dev/null | sed 's/^"//; s/": *[tf]$//'
+      [ -f "$_h/.config/muse/trust.json" ] && ! inv_secret "$_h/.config/muse/trust.json" &&
+        grep -o '"/[^"]*": *{' "$_h/.config/muse/trust.json" 2>/dev/null | sed 's/^"//; s/": *{$//'
+      json_vals workspace_root "$_h"/.local/share/muse/sessions/*/*/*/*/session.jsonl
       for _oi in "$_h/.openinterpreter/sessions" "$_h/.openinterpreter/archived_sessions"; do
         [ -d "$_oi" ] && find "$_oi" -name 'rollout-*.jsonl' -exec grep -ho '"cwd":"[^"]*"' {} + 2>/dev/null | sed 's/^"cwd":"//; s/"$//'
       done

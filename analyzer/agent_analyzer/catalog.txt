@@ -208,6 +208,13 @@ amp|.amp
 amp|AppData/Local/amp/logs
 # Factory Droid
 factory-droid|.factory
+# Meta Muse Code (XDG ~/.config/muse and ~/.local/share/muse on every OS; launcher state in its install dir)
+muse-code|.config/muse
+muse-code|.local/share/muse
+muse-code|.muse
+muse-code|.local/bin/.muse-*
+muse-code|AppData/Local/Programs/muse
+muse-code|AppData/LocalLow/muse-shell-sandbox-*
 # Augment (auggie CLI; the VS Code extension state is under the vscode entries)
 augment|.augment
 # Kiro (CLI, legacy Amazon Q CLI, and the Kiro IDE which is a VS Code fork)
@@ -419,6 +426,7 @@ project|.amp
 project|.factory
 project|.factory-plugin
 project|.droid.yaml
+project|.muse
 project|.augment
 project|.augment-guidelines
 project|.augmentignore
@@ -638,6 +646,13 @@ AppData/Roaming/Block/goose/data/codex
 .factory/worktrees
 .factory/snapshots
 .factory/generated-images
+.local/share/muse/plugins/cache/builtin
+.local/share/muse/skills/bundled
+.local/share/muse/plugins/marketplaces
+.local/bin/.muse-update.*
+AppData/Local/Programs/muse/muse-bin-*.exe
+AppData/Local/Programs/muse/.muse-update.*.exe
+.muse/worktrees
 .augment/binaries
 .augment/vfs
 .augment/knowledgebase
@@ -1018,6 +1033,8 @@ AppData/Roaming/Zed/global_settings.json
 .factory/temp/env/*
 .factory/prem-auth/*/credentials.*
 .factory/mcp-oauth*
+.config/muse/auth.json
+.config/muse/settings.json
 .augment/session.json
 .augment/settings.json
 .augment/settings.local.json

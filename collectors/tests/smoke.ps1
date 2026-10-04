@@ -515,6 +515,41 @@ Mk 'var/lib/docker/volumes/a0_usr/_data/tmp/playwright/junk' 'junk'
 Mk 'var/lib/docker/volumes/pgdata/_data/x' 'pg'
 Mk 'var/lib/docker/volumes/metadata.db' 'metadata'
 Mk 'Users/alice/.local/share/docker/volumes/tabby_data/_data/events/2026-10-01.json' '{"event":"completion"}'
+# --- 2026-10-04 Muse Code: Meta's coding agent CLI. Same case list as smoke.sh,
+# relative to alice's profile. The Windows binary is a file exclusion, the Linux
+# launcher state is a dot-file glob inside ~/.local/bin, and two discovery
+# sources point at projects.
+$CasesMuse = @'
+excl||.local/share/muse/plugins/cache/builtin
+excl||.local/share/muse/skills/bundled
+excl||.local/share/muse/plugins/marketplaces
+excl||.local/bin/.muse-update.Ab12Cd
+excl||.muse/worktrees
+exclf||AppData/Local/Programs/muse/muse-bin-1.4.2-R1.exe
+exclf||AppData/Local/Programs/muse/.muse-update.4242.exe
+secret||.config/muse/auth.json
+secret||.config/muse/settings.json
+agent|muse-code|.config/muse/trust.json
+agent|muse-code|.local/share/muse/session-index.db
+agent|muse-code|.local/share/muse/plugins/cache/local/p1/plugin.json
+agent|muse-code|.local/bin/.muse-version
+agent|muse-code|.local/bin/.muse-update-lock/pid
+agent|muse-code|.muse/projects/slug/tracking.json
+agent|muse-code|AppData/Local/Programs/muse/.muse-version
+agent|muse-code|AppData/Local/Programs/muse/.muse-launcher.ps1
+agent|muse-code|AppData/LocalLow/muse-shell-sandbox-01a0f000-0000-7000-8000-000000000001/tmp1.txt
+'@
+$CasesMuse = @($CasesMuse -split "`r?`n" | Where-Object { $_ -ne '' })
+foreach ($c in $CasesMuse) {
+  $f = @($c -split '\|', 3)
+  if ($f[0] -eq 'excl') { Mk "Users/alice/$($f[2])/f" 'x' } else { Mk "Users/alice/$($f[2])" 'x' }
+}
+Mk 'Users/alice/.local/bin/othertool' 'x'
+Mk 'Users/alice/.config/muse/trust.json' '{"schema_version":1,"projects":{"C:\\musetrust":{"decision":"trusted"}}}'
+Mk 'Users/alice/.local/share/muse/sessions/2026/10/04/01a0f000-0000-7000-8000-000000000001/session.jsonl' '{"schema_version":1,"stream":{"kind":"session","id":"01a0f000-0000-7000-8000-000000000001"},"payload_type":"runtime.session.metadata","payload":{"kind":"metadata","record":{"model_id":"m","workspace_root":"C:\\museproj"}}}'
+Mk 'museproj/.muse/hooks.json' '{}'
+Mk 'museproj/.muse/worktrees/w1/f' 'x'
+Mk 'musetrust/AGENTS.md' '# trusted'
 $clawLinkOk = $false
 try {
   New-Item -ItemType SymbolicLink -Path (P 'home/bob/.clawdbot') -Target '.openclaw' -ErrorAction Stop | Out-Null
@@ -686,6 +721,23 @@ Check 'unmatched volume contents not collected' { $null -eq (Row 'pgdata/_data/x
 Check 'volumes dir metadata.db not collected' { $null -eq (Row 'volumes/metadata.db') }
 $r = Row 'Users/alice/.local/share/docker/volumes/tabby_data/_data/events/2026-10-01.json'
 Check 'rootless volume collected as tabby' { $r -and $r.user -eq 'docker' -and $r.agent -eq 'tabby' -and $r.status -eq 'collected' }
+# 2026-10-04 Muse Code
+foreach ($c in $CasesMuse) {
+  $f = @($c -split '\|', 3); $r = Row "alice/$($f[2])"
+  switch ($f[0]) {
+    'excl' { Check "excluded: $($f[2])" { $r -and $r.agent -eq 'muse-code' -and $r.status -eq 'skipped_excluded' } }
+    'exclf' { Check "excluded: $($f[2])" { $r -and $r.agent -eq 'muse-code' -and $r.status -eq 'skipped_excluded' } }
+    'secret' { Check "secret: $($f[2])" { $r -and $r.agent -eq 'muse-code' -and $r.secret -eq $true -and $r.status -eq 'collected' } }
+    'agent' { Check "$($f[1]): $($f[2])" { $r -and $r.agent -eq $f[1] -and $r.status -eq 'collected' } }
+  }
+}
+$r = Row 'alice/AppData/Local/Programs/muse/muse-bin-1.4.2-R1.exe'
+Check 'muse windows binary excluded with its size' { $r -and $r.type -eq 'file' -and $r.size -eq 1 -and $r.status -eq 'skipped_excluded' }
+Check 'muse .local/bin glob leaves other tools alone' { $null -eq (Row 'alice/.local/bin/othertool') }
+Check 'muse trust.json projects key discovers project' { (StatusOf 'musetrust/AGENTS.md') -eq 'collected' -and (Row 'musetrust/AGENTS.md').user -eq 'alice' }
+$r = Row 'museproj/.muse/hooks.json'
+Check 'muse session.jsonl workspace_root discovers project' { $r -and $r.user -eq 'alice' -and $r.agent -eq 'project' -and $r.status -eq 'collected' }
+Check 'muse project .muse/worktrees excluded' { (StatusOf 'museproj/.muse/worktrees') -eq 'skipped_excluded' }
 Check 'Public profile skipped' { $null -eq (Row 'Public/Desktop/readme.txt') }
 Check 'Default profile skipped' { $null -eq (Row 'Default/NTUSER.DAT') }
 $entries = ArchiveEntries

@@ -550,6 +550,46 @@ printf 'pg\n' >"$DV/pgdata/_data/x"
 printf '{"event":"completion"}\n' >"$H/.local/share/docker/volumes/tabby_data/_data/events/2026-10-01.json"
 printf 'metadata\n' >"$DV/metadata.db"
 
+# --- 2026-10-04 Muse Code: Meta's coding agent CLI. Cases in the CASES14 form,
+# relative to alice's home; the same list is in smoke.ps1. The Windows binary is
+# a file exclusion, the Linux launcher state is a dot-file glob inside
+# ~/.local/bin, and two discovery sources point at projects.
+CASES_MUSE='
+excl||.local/share/muse/plugins/cache/builtin
+excl||.local/share/muse/skills/bundled
+excl||.local/share/muse/plugins/marketplaces
+excl||.local/bin/.muse-update.Ab12Cd
+excl||.muse/worktrees
+exclf||AppData/Local/Programs/muse/muse-bin-1.4.2-R1.exe
+exclf||AppData/Local/Programs/muse/.muse-update.4242.exe
+secret||.config/muse/auth.json
+secret||.config/muse/settings.json
+agent|muse-code|.config/muse/trust.json
+agent|muse-code|.local/share/muse/session-index.db
+agent|muse-code|.local/share/muse/plugins/cache/local/p1/plugin.json
+agent|muse-code|.local/bin/.muse-version
+agent|muse-code|.local/bin/.muse-update-lock/pid
+agent|muse-code|.muse/projects/slug/tracking.json
+agent|muse-code|AppData/Local/Programs/muse/.muse-version
+agent|muse-code|AppData/Local/Programs/muse/.muse-launcher.ps1
+agent|muse-code|AppData/LocalLow/muse-shell-sandbox-01a0f000-0000-7000-8000-000000000001/tmp1.txt
+'
+printf '%s\n' "$CASES_MUSE" | while IFS='|' read -r _k _a _r; do
+  [ -n "$_r" ] || continue
+  case "$_k" in
+    excl) mkdir -p "$H/$_r"; printf 'x\n' >"$H/$_r/f" ;;
+    *) mkdir -p "$H/$(dirname "$_r")"; printf 'x\n' >"$H/$_r" ;;
+  esac
+done
+printf 'x\n' >"$H/.local/bin/othertool"
+MUSE_S="$H/.local/share/muse/sessions/2026/10/04/01a0f000-0000-7000-8000-000000000001"
+mkdir -p "$MUSE_S" "$ROOT/srv/museproj/.muse/worktrees/w1" "$ROOT/srv/musetrust"
+printf '{"schema_version":1,"projects":{"/srv/musetrust":{"decision":"trusted"}}}\n' >"$H/.config/muse/trust.json"
+printf '{"schema_version":1,"stream":{"kind":"session","id":"01a0f000-0000-7000-8000-000000000001"},"payload_type":"runtime.session.metadata","payload":{"kind":"metadata","record":{"model_id":"m","workspace_root":"/srv/museproj"}}}\n' >"$MUSE_S/session.jsonl"
+printf '{}\n' >"$ROOT/srv/museproj/.muse/hooks.json"
+printf 'x\n' >"$ROOT/srv/museproj/.muse/worktrees/w1/f"
+printf '# trusted\n' >"$ROOT/srv/musetrust/AGENTS.md"
+
 run() { # run NAME ARGS...
   _n=$1; shift
   mkdir -p "$OUT/$_n"
@@ -694,6 +734,22 @@ check "summary counts skipped_unmatched_volume" "grep -q '\"skipped_unmatched_vo
 check "summary docker counts" "grep -q '\"docker\": {\"volumes_found\": 3, \"volumes_collected\": 2, \"unreadable\": 0' \"\$S\""
 check "summary no_docker option false" "grep -q '\"no_docker\": false' \"\$S\""
 check "stdout docker line" "grep -q '^docker:     3 volumes found, 2 collected, 0 unreadable\$' \"$OUT/default.stdout\""
+# 2026-10-04 Muse Code
+printf '%s\n' "$CASES_MUSE" >"$WORK/casesmuse"
+while IFS='|' read -r _k _a _r; do
+  [ -n "$_r" ] || continue
+  _row=$(row "$H/$_r")
+  case "$_k" in
+    excl|exclf) case "$_row" in *'"agent":"muse-code"'*'"status":"skipped_excluded"'*) ok "excluded: $_r" ;; *) bad "excluded: $_r" ;; esac ;;
+    secret) case "$_row" in *'"agent":"muse-code"'*'"secret":true,"status":"collected"'*) ok "secret: $_r" ;; *) bad "secret: $_r" ;; esac ;;
+    agent) case "$_row" in *"\"agent\":\"$_a\""*'"status":"collected"'*) ok "$_a: $_r" ;; *) bad "$_a: $_r" ;; esac ;;
+  esac
+done <"$WORK/casesmuse"
+check "muse windows binary excluded with its size" "row \"$H/AppData/Local/Programs/muse/muse-bin-1.4.2-R1.exe\" | grep -q '\"type\":\"file\",\"size\":2,.*\"status\":\"skipped_excluded\"'"
+check "muse .local/bin glob leaves other tools alone" "! grep -q '/.local/bin/othertool\"' \"\$M\""
+check "muse trust.json projects key discovers project" "row \"$ROOT/srv/musetrust/AGENTS.md\" | grep -q '\"user\":\"alice\".*\"status\":\"collected\"'"
+check "muse session.jsonl workspace_root discovers project" "row \"$ROOT/srv/museproj/.muse/hooks.json\" | grep -q '\"user\":\"alice\",\"home\":\"$ROOT/srv/museproj\",\"agent\":\"project\".*\"status\":\"collected\"'"
+check "muse project .muse/worktrees excluded" "[ \"\$(status_of \"$ROOT/srv/museproj/.muse/worktrees\")\" = skipped_excluded ]"
 check "no live snapshot directory" "! tar -tzf \"\$A\" | grep -q '^./live/'"
 check "summary has no no_live option" "! grep -q no_live \"\$S\""
 check "manifest and summary inside archive" "tar -tzf \"\$A\" | grep -q '^./manifest.jsonl' && tar -tzf \"\$A\" | grep -q '^./collection.json'"

@@ -192,6 +192,8 @@ root markers, Antigravity's history, trusted workspaces and project cache,
 Crush's project list, Goose legacy session files and the desktop app's recent
 directories, OpenCode's legacy project store, Cursor CLI chat and ACP session
 metadata, Copilot CLI session workspaces, Amp history, Factory Droid sessions,
+Muse Code's trusted projects (`.config/muse/trust.json`) and session logs
+(`workspace_root`),
 Kiro CLI sessions and workspace roots, VS Code family workspace storage
 including the remote server data directories, Hermes checkpoint project
 records, Letta session index and local-backend transcripts, pi session
@@ -223,6 +225,24 @@ ShellGPT keeps its chat history in the system temp directory (`/tmp` on
 Linux, `/var/folders/.../T` on macOS), which no home-relative catalog entry
 can reach, so on Linux and macOS it is not collected and must be copied by
 hand; the Windows locations under `AppData/Local/Temp` are collected.
+
+Muse Code keeps its launcher state beside the launcher. On Linux and macOS
+that is `~/.local/bin`, which other tools share, so only Muse's own dot files
+there (`.local/bin/.muse-*`: `.muse-version`, `.muse-release-info.json`,
+`.muse-update-checked-at` and the like) are catalog entries; the
+`muse-bin-<version>` binary next to them is not collected and leaves no
+manifest row. On Windows the install directory
+`AppData/Local/Programs/muse` is collected whole, and its
+`muse-bin-<version>.exe` and staged `.muse-update.<pid>.exe` binaries are
+excluded, so their `skipped_excluded` rows record the installed version and
+size. A launcher installed anywhere else (`MUSE_INSTALL_DIR`) is not
+collected. Two Muse Code locations are system-wide rather than per home and
+must be copied by hand: the enterprise policy (the registry key
+`HKLM\SOFTWARE\Policies\Muse` on Windows, and
+`.enterprise-defaults.json` and `enterprise-policy.json`, read as
+`/Library/Application Support/muse/` on macOS; the Linux location is not
+known), and on Windows the elevated shell-sandbox setup root under
+`%ProgramData%`.
 
 Remote development state is collected too: `~/.vscode-server`,
 `~/.cursor-server`, `~/.windsurf-server`, `~/.devin-server` and

@@ -291,6 +291,13 @@ amp|.amp
 amp|AppData/Local/amp/logs
 # Factory Droid
 factory-droid|.factory
+# Meta Muse Code (XDG ~/.config/muse and ~/.local/share/muse on every OS; launcher state in its install dir)
+muse-code|.config/muse
+muse-code|.local/share/muse
+muse-code|.muse
+muse-code|.local/bin/.muse-*
+muse-code|AppData/Local/Programs/muse
+muse-code|AppData/LocalLow/muse-shell-sandbox-*
 # Augment (auggie CLI; the VS Code extension state is under the vscode entries)
 augment|.augment
 # Kiro (CLI, legacy Amazon Q CLI, and the Kiro IDE which is a VS Code fork)
@@ -504,6 +511,7 @@ project|.amp
 project|.factory
 project|.factory-plugin
 project|.droid.yaml
+project|.muse
 project|.augment
 project|.augment-guidelines
 project|.augmentignore
@@ -725,6 +733,13 @@ AppData/Roaming/Block/goose/data/codex
 .factory/worktrees
 .factory/snapshots
 .factory/generated-images
+.local/share/muse/plugins/cache/builtin
+.local/share/muse/skills/bundled
+.local/share/muse/plugins/marketplaces
+.local/bin/.muse-update.*
+AppData/Local/Programs/muse/muse-bin-*.exe
+AppData/Local/Programs/muse/.muse-update.*.exe
+.muse/worktrees
 .augment/binaries
 .augment/vfs
 .augment/knowledgebase
@@ -1106,6 +1121,8 @@ AppData/Roaming/Zed/global_settings.json
 .factory/temp/env/*
 .factory/prem-auth/*/credentials.*
 .factory/mcp-oauth*
+.config/muse/auth.json
+.config/muse/settings.json
 .augment/session.json
 .augment/settings.json
 .augment/settings.local.json
@@ -2096,6 +2113,8 @@ function Find-Projects {
     $vals += Get-JsonValues 'project' @((Join-PathSafe $h '.letta/sessions.jsonl'))
     $vals += Get-JsonValues 'cwd' (@(Expand-Glob $h '.letta/lc-local-backend/conversations/*/messages.jsonl') + @(Expand-Glob $h '.pi/agent/sessions/*/*.jsonl') + @(Expand-Glob $h '.pi/agent/*.jsonl') + @((Join-PathSafe $h '.pi/agent/crashes.json')) + @(Expand-Glob $h '.pi/agent/experimental/sessions/*/meta.json'))
     $vals += Get-JsonKeys '(?:true|false)' @((Join-PathSafe $h '.pi/agent/trust.json'))
+    $vals += Get-JsonKeys '\{' @((Join-PathSafe $h '.config/muse/trust.json'))
+    $vals += Get-JsonValues 'workspace_root' @(Expand-Glob $h '.local/share/muse/sessions/*/*/*/*/session.jsonl')
     $vals += Get-JsonValues 'cwd' (@(Expand-Glob $h '.openinterpreter/sessions/*/*/*/rollout-*.jsonl') + @(Expand-Glob $h '.openinterpreter/archived_sessions/rollout-*.jsonl') + @(Expand-Glob $h '.openinterpreter/archived_sessions/*/*/*/rollout-*.jsonl'))
     $vals += Get-JsonValues 'path' @((Join-PathSafe $h '.openhands/workspaces.json'))
     $vals += Get-JsonValues 'working_dir' (@(Expand-Glob $h '.openhands/agent-canvas/dev_conversations/*/meta.json') + @(Expand-Glob $h '.openhands/agent-canvas/conversations/*/meta.json') + @(Expand-Glob $h '.openhands/conversations/*/base_state.json'))
