@@ -9,6 +9,7 @@ from .claude_code import ClaudeCodeParser
 from .codex import CodexParser
 from .kiro import KiroParser
 from .qwen_code import QwenCodeParser
+from .gemini_cli import GeminiCliParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -16,6 +17,7 @@ ALL: List[Parser] = [
     AntigravityParser(),
     QwenCodeParser(),
     KiroParser(),
+    GeminiCliParser(),
 ]
 
 

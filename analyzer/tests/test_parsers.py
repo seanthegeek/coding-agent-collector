@@ -16,6 +16,8 @@ from agent_analyzer.timeutil import to_utc
 from agent_analyzer.parsers.antigravity import AntigravityParser, tool_args_summary, uri_to_path
 from agent_analyzer import protobuf, sqlite_util
 
+from agent_analyzer.parsers.gemini_cli import GeminiCliParser, resolve_project
+from fixtures import GEMINI_HASH, GEMINI_LEGACY, GEMINI_REL, GEMINI_RESUMED, GEMINI_SESSION, GEMINI_SUBAGENT
 from fixtures import AGY_CONVERSATION, CLAUDE_SESSION, CODEX_SESSION, build_home, write_bad_line
 
 
@@ -167,6 +169,7 @@ class TimelineTests(ParserBase):
             "claude-code", "codex-cli", "antigravity",
             "qwen-code",
             "kiro",
+            "gemini-cli",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -176,6 +179,7 @@ class TimelineTests(ParserBase):
             CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000",
             "e5f6a7b8-4444-4000-8000-000000000011", "0a0b0c0d-4444-4000-8000-000000000022",
             KIRO_SESSION, KIRO_EXPORT_SESSION, KIRO_SHELL_SESSION,
+            GEMINI_SESSION, GEMINI_RESUMED, GEMINI_LEGACY, GEMINI_SUBAGENT,
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -468,3 +472,91 @@ class KiroTests(ParserBase):
         self.assertEqual(state, {"conversation_id": 'c"1', "history": [{"x": 1}]})
         self.assertTrue(err)
         self.assertEqual(salvage("garbage")[0], None)
+class GeminiCliTests(ParserBase):
+    REL = GEMINI_REL
+    LEGACY = ".gemini/tmp/%s/chats/session-2026-09-30T08-00-b2c3d4e5.json" % GEMINI_HASH
+
+    def test_rows(self):
+        rows = self.rows_for(GeminiCliParser(), self.REL)
+        types = [r.turn_type for r in rows]
+        self.assertEqual(types, ["system", "user", "assistant", "tool_use", "tool_result", "user", "assistant",
+                                 "tool_use", "tool_result", "system", "tool_use", "tool_result", "user",
+                                 "system", "system"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent), ("h1", "alice", "gemini-cli"))
+            self.assertEqual((r.project_path, r.git_branch), ("/srv/proj", ""))
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        start, u1, g1, ls, lsout, u3, g3, rf, rfout, info, sh, shout, u4, summ, rewind = rows
+        self.assertIn("session start: kind=main", start.text)
+        self.assertEqual((u1.text, u1.session_id), ("list files in src", GEMINI_SESSION))
+        self.assertEqual((g1.text, g1.model, g1.source_line), ("Listing now.", "gemini-2.5-pro", 4))  # re-appended record
+        self.assertEqual((ls.tool_name, ls.tool_use_id), ("list_directory", "list_directory-1759309207000"))
+        self.assertEqual(ls.text, 'ReadFolder: {"path":"/srv/proj/src"}')
+        self.assertEqual(ls.timestamp_utc, "2026-10-01T09:00:07.100Z")
+        self.assertEqual((lsout.tool_use_id, lsout.text), ("list_directory-1759309207000", "main.ts util.ts"))
+        self.assertNotIn("delete everything", " ".join(r.text for r in rows))    # rewound
+        self.assertEqual(g3.text, "Here is util.ts.")                             # $patch content
+        self.assertEqual(rfout.text, "export const x = 1")                        # $patch toolCalls result
+        self.assertEqual(info.text, "info: Request cancelled.")
+        self.assertEqual((sh.text, sh.model), ('Shell: {"command":"curl http://x"}', "gemini-2.5-flash"))
+        self.assertEqual(shout.text, "[cancelled]")
+        self.assertEqual(u4.session_id, GEMINI_RESUMED)                           # $set.sessionId on resume
+        self.assertEqual(rf.session_id, GEMINI_SESSION)
+        self.assertEqual((summ.text, summ.timestamp_utc, summ.source_line),
+                         ("summary: List src files", "2026-10-01T09:00:08.000Z", 5))
+        self.assertEqual((rewind.text, rewind.source_line), ("rewind to msg-u2: 2 message(s) dropped", 8))
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(GeminiCliParser(), self.REL, include_thinking=True)
+        think = [r for r in rows if r.turn_type == "thinking"]
+        self.assertEqual([(r.text, r.timestamp_utc) for r in think], [("Plan: Use the ls tool.", "2026-10-01T09:00:06.500Z")])
+
+    def test_legacy_json_and_hash_directory(self):
+        rows = self.rows_for(GeminiCliParser(), self.LEGACY)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "assistant"])
+        self.assertTrue(all(r.session_id == GEMINI_LEGACY for r in rows))
+        self.assertTrue(all(r.project_path == "/srv/proj" for r in rows))   # sha256 match in projects.json
+        self.assertEqual((rows[2].text, rows[2].model), ("Hi.", "gemini-2.0-flash"))
+        rows = self.rows_for(GeminiCliParser(), self.LEGACY, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["weighing it"])
+
+    def test_subagent_session(self):
+        rel = ".gemini/tmp/proj/chats/%s/%s.jsonl" % (GEMINI_SESSION, GEMINI_SUBAGENT)
+        rows = self.rows_for(GeminiCliParser(), rel)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user"])
+        self.assertIn("kind=subagent", rows[0].text)
+        self.assertEqual(rows[1].session_id, GEMINI_SUBAGENT)
+
+    def test_history(self):
+        rows = self.rows_for(GeminiCliParser(), ".gemini/tmp/proj/logs.json")
+        self.assertEqual([r.turn_type for r in rows], ["user", "user"])
+        self.assertEqual(rows[1].text, "delete everything in /srv/proj")        # kept although rewound
+        self.assertEqual((rows[0].session_id, rows[0].project_path), (GEMINI_SESSION, "/srv/proj"))
+        self.assertEqual(rows[0].timestamp_utc, "2026-10-01T09:00:05.000Z")
+
+    def test_project_fallbacks(self):
+        base = self.home / ".gemini"
+        self.assertEqual(resolve_project(base, "proj"), "/srv/proj")              # .project_root
+        (base / "tmp/proj/.project_root").unlink()
+        self.assertEqual(resolve_project(base, "proj"), "/srv/proj")              # projects.json slug
+        self.assertEqual(resolve_project(base, "other", GEMINI_HASH), "/srv/proj")
+        self.assertEqual(resolve_project(base, "other", "f" * 64), "f" * 64)       # unresolved hash
+
+    def test_noise_not_wanted(self):
+        p = GeminiCliParser()
+        for rel in (".gemini/oauth_creds.json", ".gemini/settings.json", ".gemini/projects.json",
+                    ".gemini/tmp/proj/.project_root", ".gemini/tmp/proj/shell_history",
+                    ".gemini/antigravity-cli/history.jsonl"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(p.wants(art), rel)
+
+    def test_truncated_last_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.REL)
+        rows = self.rows_for(GeminiCliParser(), self.REL)
+        self.assertEqual(len(rows), 16)
+        self.assertIn("1 unparseable line", rows[-1].text)
+        self.assertEqual(rows[-1].source_line, 16)
+        (self.home / self.LEGACY).write_text('{"sessionId": "x", "messages": [', encoding="utf-8")
+        rows = self.rows_for(GeminiCliParser(), self.LEGACY)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("unparseable", rows[0].text)
