@@ -30,6 +30,9 @@ layout:
 Either script can collect a mounted disk image of any of the three platforms,
 because every catalog entry is tried against every home directory.
 
+The two scripts share one version; [CHANGELOG.md](CHANGELOG.md) lists what
+changed in each, including manifest schema changes.
+
 ## Quick start
 
 The paths below are relative to this `collectors/` directory. Both scripts are

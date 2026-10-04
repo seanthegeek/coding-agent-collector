@@ -10,6 +10,9 @@ requirements.txt`): today only `zstandard`, for Zed threads. Without it the
 Zed parser reports each thread as one undecodable `system` row and
 everything else still runs.
 
+[CHANGELOG.md](CHANGELOG.md) lists what changed in each version, including
+changes to the `timeline.csv` and `sessions.csv` columns.
+
 ## Quick start
 
 ```sh

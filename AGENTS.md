@@ -38,6 +38,7 @@ collectors/
   collect-agent-artifacts.sh   the macOS/Linux/BSD collector, single POSIX sh file
   Collect-AgentArtifacts.ps1   the Windows collector, single PowerShell 5.1 file
   README.md                    collector user documentation, keep in sync with behaviour
+  CHANGELOG.md                 collector release history, one entry per VERSION
   tests/smoke.sh               end-to-end test of the sh collector (fake disk image)
   tests/smoke.ps1              end-to-end test of the PowerShell collector
   tests/catalog-sync.sh        fails if the catalog tables differ between the scripts
@@ -49,6 +50,7 @@ analyzer/
   agent_analyzer/catalog.txt   verbatim copy of collect-agent-artifacts.sh --list
   research/<agent>.md          how each agent records transcripts; one per agent
   README.md                    analyzer user documentation, CSV schema, parser table
+  CHANGELOG.md                 analyzer release history, one entry per VERSION
   tests/                       unittest suite with synthetic fixtures; tests/run.sh
   pyproject.toml               installable as analyze-agent-artifacts
   requirements.txt             third-party dependencies, none yet
@@ -495,6 +497,9 @@ collector itself.
 - Bump `VERSION` in the script for any change to output format or options.
   For the analyzer, bump `VERSION` in `agent_analyzer/__init__.py` and
   `pyproject.toml` together.
+- Every `VERSION` bump comes with an entry in the matching changelog,
+  `collectors/CHANGELOG.md` or `analyzer/CHANGELOG.md`, and any change to the
+  manifest or CSV interfaces is called out in that entry.
 
 ## Things to avoid
 
