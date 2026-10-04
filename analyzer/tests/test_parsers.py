@@ -162,11 +162,12 @@ class TimelineTests(ParserBase):
             rows = list(csv.DictReader(fh))
         ts = [r["timestamp_utc"] for r in rows if r["timestamp_utc"]]
         self.assertEqual(ts, sorted(ts))
-        self.assertEqual({r["agent"] for r in rows}, {"claude-code", "codex-cli", "antigravity"})
+        self.assertEqual({r["agent"] for r in rows}, {"claude-code", "codex-cli", "antigravity", "qwen-code"})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
         with open(out / "sessions.csv", encoding="utf-8", newline="") as fh:
             sessions = {r["session_id"]: r for r in csv.DictReader(fh)}
-        self.assertEqual(set(sessions), {CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000"})
+        self.assertEqual(set(sessions), {CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000",
+                                         "e5f6a7b8-4444-4000-8000-000000000011", "0a0b0c0d-4444-4000-8000-000000000022"})
         c = sessions[CLAUDE_SESSION]
         self.assertEqual(c["models"], "claude-fable-5-1")
         self.assertEqual(c["tool_calls"], "1")
@@ -301,3 +302,76 @@ class AntigravityTests(ParserBase):
         self.assertEqual(tool_args_summary('{"CommandLine":"ls","Cwd":"/x"}'), "ls")
         self.assertEqual(tool_args_summary('{"Other":1}'), '{"Other":1}')
         self.assertEqual(tool_args_summary("not json"), "not json")
+
+
+from agent_analyzer.parsers.qwen_code import QwenCodeParser, args_summary  # noqa: E402
+from fixtures import QWEN_ARCHIVED, QWEN_SESSION, QWEN_TMP  # noqa: E402
+
+
+class QwenCodeTests(ParserBase):
+    REL = ".qwen/projects/-srv-proj/chats/%s.jsonl" % QWEN_SESSION
+    LOGS = ".qwen/tmp/%s/logs.json" % QWEN_TMP
+
+    def test_rows(self):
+        rows = self.rows_for(QwenCodeParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "user", "assistant", "tool_use", "tool_use", "tool_result", "tool_result",
+                          "system", "system"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent), ("h1", "alice", "qwen-code"))
+            self.assertEqual((r.session_id, r.project_path, r.git_branch), (QWEN_SESSION, "/srv/proj", "main"))
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        model, user, asst, sh, read, shout, readout, slash, title = rows
+        self.assertEqual((model.text, model.model), ("session_model: qwen3-coder-plus auth=qwen-oauth", "qwen3-coder-plus"))
+        self.assertEqual((user.text, user.timestamp_utc), ("run the tests", "2026-10-01T10:00:00.000Z"))
+        self.assertEqual((asst.text, asst.model), ("Running tests.", "qwen3-coder-plus"))
+        self.assertEqual((sh.tool_name, sh.tool_use_id, sh.text, sh.model),
+                         ("run_shell_command", "call_abc123", "npm test", "qwen3-coder-plus"))
+        self.assertEqual((read.tool_name, read.text), ("read_file", "/srv/proj/.env"))
+        self.assertEqual((shout.tool_name, shout.tool_use_id, shout.text), ("run_shell_command", "call_abc123", "12 passing"))
+        self.assertEqual((readout.tool_use_id, readout.text), ("call_def456", "[error permission_denied] permission denied"))
+        self.assertEqual(slash.text, "slash_command: invocation /compress")
+        self.assertEqual(title.text, "custom_title: Run tests")
+        self.assertEqual([r.source_line for r in rows], [1, 2, 3, 3, 3, 4, 5, 6, 7])
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(QwenCodeParser(), self.REL, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["Plan: run npm test."])
+
+    def test_archive_and_logs(self):
+        rows = self.rows_for(QwenCodeParser(), ".qwen/projects/-srv-proj/chats/archive/%s.jsonl" % QWEN_ARCHIVED)
+        self.assertEqual([(r.turn_type, r.session_id) for r in rows], [("user", QWEN_ARCHIVED)])
+        rows = self.rows_for(QwenCodeParser(), self.LOGS)
+        self.assertEqual([r.turn_type for r in rows], ["user", "system"])
+        self.assertEqual((rows[0].text, rows[0].session_id, rows[0].project_path), ("run the tests", QWEN_SESSION, ""))
+        self.assertEqual(rows[1].text, "model_switch: qwen3-coder-plus -> qwen3-vl-plus (vision_auto_switch)")
+        self.assertEqual(rows[1].model, "qwen3-vl-plus")
+        self.assertEqual([r.source_line for r in rows], [1, 2])
+
+    def test_sidecars_config_and_credentials_not_wanted(self):
+        p = QwenCodeParser()
+        wanted = {a.rel for a in self.col.artifacts if a.agent == "qwen-code" and p.wants(a)}
+        self.assertEqual(wanted, {self.REL, self.LOGS,
+                                  ".qwen/projects/-srv-proj/chats/archive/%s.jsonl" % QWEN_ARCHIVED})
+
+    def test_truncated_last_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.REL)
+        rows = self.rows_for(QwenCodeParser(), self.REL)
+        self.assertEqual(len(rows), 10)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("1 unparseable line", rows[-1].text)
+        self.assertEqual((rows[-1].source_line, rows[-1].session_id), (8, QWEN_SESSION))
+
+    def test_truncated_logs_keep_earlier_entries(self):
+        path = self.home / self.LOGS
+        data = path.read_text(encoding="utf-8")
+        path.write_text(data[: data.index('"model_switch"')], encoding="utf-8")
+        rows = self.rows_for(QwenCodeParser(), self.LOGS)
+        self.assertEqual([r.turn_type for r in rows], ["user", "system"])
+        self.assertEqual(rows[0].text, "run the tests")
+        self.assertIn("1 unparseable entry", rows[1].text)
+
+    def test_args_summary(self):
+        self.assertEqual(args_summary({"command": "ls"}), "ls")
+        self.assertEqual(args_summary({"other": 1}), '{"other":1}')
+        self.assertEqual(args_summary(None), "")
