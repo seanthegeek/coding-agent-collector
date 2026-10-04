@@ -23,6 +23,9 @@ from .roo_code import RooCodeParser
 from .tabby import TabbyParser
 from .openhands import OpenHandsParser
 from .shellgpt import ShellGptParser
+from .pi import PiParser
+from .little_coder import LittleCoderParser
+from .letta import LettaParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -44,6 +47,9 @@ ALL: List[Parser] = [
     TabbyParser(),
     OpenHandsParser(),
     ShellGptParser(),
+    PiParser(),
+    LittleCoderParser(),
+    LettaParser(),
 ]
 
 

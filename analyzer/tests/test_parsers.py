@@ -178,6 +178,7 @@ class TimelineTests(ParserBase):
             "cline", "roo-code",
             "tabby",
             "openhands", "shellgpt",
+            "pi", "little-coder", "letta",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -191,6 +192,7 @@ class TimelineTests(ParserBase):
             CRUSH_SESSION, GOOSE_SESSION, "20260301_090000",
             ZED_THREAD, ZED_EXTERNAL, VSCODE_SESSION, VSCODE_LEGACY_SESSION,
             OPENHANDS_CONV, OPENHANDS_CLI_CONV, SHELLGPT_CHAT,
+            "0199a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a1b", "local-conv-1", "conv-9f",
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -1763,3 +1765,201 @@ class ShellGptTests(ParserBase):
         msgs, err = load_messages("not json")
         self.assertEqual(msgs, [])
         self.assertTrue(err)
+from agent_analyzer.parsers.pi import PiParser, args_summary as pi_args_summary  # noqa: E402
+from agent_analyzer.parsers.little_coder import LittleCoderParser  # noqa: E402
+from agent_analyzer.parsers.letta import LettaParser, decode_key  # noqa: E402
+from fixtures import (LC_FILE, LC_SESSION, LETTA_AGENT, LETTA_CONV, LETTA_LOCAL_CONV, LETTA_LOCAL_DIR,  # noqa: E402
+                      PI_DIR, PI_EXPERIMENTAL, PI_FILE, PI_FORK, PI_FORK_FILE, PI_SESSION, _jsonl)
+
+
+class PiTests(ParserBase):
+    REL = PI_DIR + PI_FILE
+    FORK = PI_DIR + PI_FORK_FILE
+    LC = PI_DIR + LC_FILE
+
+    def test_rows(self):
+        rows = self.rows_for(PiParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "system", "user", "tool_use", "tool_result",
+                                                       "tool_use", "tool_result", "system"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "pi", PI_SESSION))
+            self.assertEqual((r.project_path, r.git_branch), ("/srv/proj", ""))
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        start, mc, user, use, result, bash, bash_out, info = rows
+        self.assertEqual((start.text, start.timestamp_utc), ("session start: version=3 cwd=/srv/proj",
+                                                             "2026-10-01T09:00:00.000Z"))
+        self.assertEqual((mc.model, mc.text), ("claude-sonnet-4-5", "model_change: anthropic/claude-sonnet-4-5"))
+        self.assertEqual((user.text, user.timestamp_utc), ("fix the failing test", "2026-10-01T09:00:01.000Z"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.model, use.text),
+                         ("bash", "toolu_01", "claude-sonnet-4-5", "npm test"))
+        self.assertEqual((result.tool_name, result.tool_use_id, result.text), ("bash", "toolu_01", "1 failing"))
+        self.assertEqual((bash.tool_name, bash.tool_use_id, bash.text), ("bash", "5e6f7081", "git status"))
+        self.assertEqual((bash_out.tool_use_id, bash_out.text), ("5e6f7081", "M src/a.ts"))
+        self.assertEqual(info.text, "session_info: name=test fix")
+        self.assertEqual([r.source_line for r in rows], [1, 2, 3, 4, 5, 6, 6, 8])   # the label on line 7 is skipped
+        self.assertEqual(pi_args_summary({"edits": [{"oldText": "a", "newText": "b"}], "path": "src/a.ts"}),
+                         "src/a.ts")
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(PiParser(), self.REL, include_thinking=True)
+        thinking = [r for r in rows if r.turn_type == "thinking"]
+        self.assertEqual([(r.text, r.model) for r in thinking], [("run the tests first", "claude-sonnet-4-5")])
+
+    def test_fork_drops_entries_copied_from_parent(self):
+        rows = self.rows_for(PiParser(), self.FORK)
+        self.assertEqual([r.turn_type for r in rows], ["system", "system", "assistant"])
+        self.assertIn("parentSession=/home/alice/" + self.REL, rows[0].text)
+        self.assertTrue(rows[1].text.startswith("fork: 3 entries copied from the parent session"), rows[1].text)
+        self.assertEqual((rows[2].session_id, rows[2].text), (PI_FORK, "Trying another way."))
+
+    def test_fork_kept_whole_without_parent(self):
+        (self.home / self.REL).unlink()
+        rows = self.rows_for(PiParser(), self.FORK)
+        self.assertEqual([r.turn_type for r in rows], ["system", "system", "user", "tool_use", "assistant"])
+        self.assertEqual({r.session_id for r in rows}, {PI_FORK})
+
+    def test_little_coder_session_is_flagged(self):
+        rows = self.rows_for(PiParser(), self.LC)
+        self.assertEqual({r.agent for r in rows}, {"pi"})
+        last = rows[-1]
+        self.assertEqual((last.turn_type, last.session_id), ("system", LC_SESSION))
+        self.assertTrue(last.text.startswith("session driven by little-coder"), last.text)
+        for why in ("lc-skills", "llamacpp", "checkpoints"):
+            self.assertIn(why, last.text)
+        self.assertIn("custom_message lc-skills: ## Skill: edit Use the edit tool.", [r.text for r in rows])
+        plain = self.rows_for(PiParser(), self.REL)
+        self.assertFalse(any("little-coder" in r.text for r in plain))
+
+    def test_experimental_meta(self):
+        rows = self.rows_for(PiParser(), ".pi/agent/experimental/sessions/%s/meta.json" % PI_EXPERIMENTAL)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0].turn_type, rows[0].session_id, rows[0].project_path, rows[0].timestamp_utc),
+                         ("system", PI_EXPERIMENTAL, "/srv/proj", "2026-10-01T12:00:00.000Z"))
+
+    def test_config_not_wanted(self):
+        for rel in (".pi/agent/auth.json", ".pi/agent/settings.json"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(PiParser().wants(art), rel)
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.REL)
+        rows = self.rows_for(PiParser(), self.REL)
+        self.assertEqual(len(rows), 9)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("parser:", rows[-1].text)
+        self.assertEqual(rows[-1].source_line, 9)
+
+
+class LittleCoderTests(ParserBase):
+    HISTORY = ".pi/agent/little-coder-prompt-history.json"
+    CK = ".little-coder/checkpoints/%s/" % LC_FILE
+
+    def test_prompt_history(self):
+        rows = self.rows_for(LittleCoderParser(), self.HISTORY)
+        self.assertEqual([(r.turn_type, r.text, r.timestamp_utc, r.session_id, r.source_line) for r in rows],
+                         [("user", "fix the failing test", "", "", 1), ("user", "now run lint", "", "", 2)])
+        self.assertEqual({r.agent for r in rows}, {"little-coder"})
+
+    def test_checkpoints_one_row_per_set(self):
+        self.assertEqual(self.rows_for(LittleCoderParser(), self.CK + "_srv_proj_src_new.ts.absent"), [])
+        rows = self.rows_for(LittleCoderParser(), self.CK + "_srv_proj_src_a.ts")
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual((r.turn_type, r.session_id, r.project_path, r.timestamp_utc),
+                         ("system", LC_SESSION, "/srv/proj", "2026-10-01T11:00:06.000Z"))
+        self.assertIn("2 pre-edit file(s)", r.text)
+        self.assertIn("_srv_proj_src_new.ts (did not exist)", r.text)
+
+    def test_thinking_opt_in(self):
+        # little-coder's own files hold no reasoning; its transcripts are pi's.
+        rows = self.rows_for(LittleCoderParser(), self.HISTORY, include_thinking=True)
+        self.assertNotIn("thinking", [r.turn_type for r in rows])
+
+    def test_settings_and_sessions_not_wanted(self):
+        art = next(a for a in self.col.artifacts if a.rel == ".config/little-coder/settings.json")
+        self.assertFalse(LittleCoderParser().wants(art))
+        art = next(a for a in self.col.artifacts if a.rel == PI_DIR + LC_FILE)
+        self.assertEqual(art.agent, "pi")
+        self.assertFalse(LittleCoderParser().wants(art))
+
+    def test_truncated_history_keeps_earlier_prompts(self):
+        (self.home / self.HISTORY).write_text('["fix the failing test", "now run li', encoding="utf-8")
+        rows = self.rows_for(LittleCoderParser(), self.HISTORY)
+        self.assertEqual([r.turn_type for r in rows], ["user", "system"])
+        self.assertIn("parser:", rows[-1].text)
+
+
+class LettaTests(ParserBase):
+    TRANSCRIPT = ".letta/transcripts/%s/%s/transcript.jsonl" % (LETTA_AGENT, LETTA_CONV)
+    TWIN = ".letta/transcripts/%s/%s/transcript.jsonl" % (LETTA_AGENT, LETTA_LOCAL_CONV)
+    LOCAL = ".letta/lc-local-backend/conversations/%s/messages.jsonl" % LETTA_LOCAL_DIR
+
+    def test_local_backend_rows(self):
+        rows = self.rows_for(LettaParser(), self.LOCAL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result"])
+        for r in rows:
+            self.assertEqual((r.agent, r.session_id, r.project_path), ("letta", LETTA_LOCAL_CONV, "/srv/proj"))
+        _, user, use, result = rows
+        self.assertEqual((user.text, user.timestamp_utc), ("list the repo", "2026-10-01T12:00:01.000Z"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.model, use.text),
+                         ("Bash", "call_1", "claude-sonnet-4-5", "ls"))
+        self.assertEqual(use.source_line, 4)        # the replacement snapshot, not the pending copy on line 3
+        self.assertEqual((result.tool_use_id, result.text), ("call_1", "README.md"))
+        self.assertEqual(decode_key(LETTA_LOCAL_DIR), "conversation:" + LETTA_LOCAL_CONV)
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(LettaParser(), self.LOCAL, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["use ls"])
+        rows = self.rows_for(LettaParser(), self.TRANSCRIPT)
+        self.assertNotIn("thinking", [r.turn_type for r in rows])
+        rows = self.rows_for(LettaParser(), self.TRANSCRIPT, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["use ls"])
+
+    def test_reflection_transcript(self):
+        rows = self.rows_for(LettaParser(), self.TRANSCRIPT)
+        self.assertEqual([r.turn_type for r in rows], ["user", "tool_use", "tool_result", "assistant"])
+        for r in rows:
+            self.assertEqual((r.session_id, r.project_path, r.model, r.timestamp_utc),
+                             (LETTA_CONV, "/srv/proj", "", "2026-10-01T12:00:05.120Z"))
+        self.assertEqual((rows[1].tool_name, rows[1].text), ("Bash", '{"command":"ls"}'))
+        self.assertEqual((rows[2].tool_name, rows[2].tool_use_id, rows[2].text), ("Bash", "", "README.md"))
+
+    def test_transcript_defers_to_local_backend(self):
+        rows = self.rows_for(LettaParser(), self.TWIN)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0].turn_type, rows[0].session_id), ("system", LETTA_LOCAL_CONV))
+        self.assertIn("messages.jsonl", rows[0].text)
+
+    def test_sessions_history(self):
+        rows = self.rows_for(LettaParser(), ".letta/sessions.jsonl")
+        self.assertEqual([(r.turn_type, r.session_id, r.project_path) for r in rows],
+                         [("system", "s-0", "/srv/old"), ("system", "s-1", "/srv/proj"), ("system", "s-1", "/srv/proj")])
+        self.assertIn("exit_reason=user_exit messages=4 tool_calls=1", rows[2].text)
+        self.assertEqual(rows[1].model, "claude-sonnet-4-5")
+
+    def test_schema_1_bare_messages(self):
+        path = self.home / self.LOCAL
+        _jsonl(path, [
+            {"id": "letta-msg-1", "role": "user", "content": "hi", "timestamp": 1790856001000,
+             "metadata": {"created_at": "2026-10-01T12:00:01.000Z", "agent_id": LETTA_AGENT}},
+            {"id": "letta-msg-2", "role": "assistant", "content": [{"type": "text", "text": "hello"}],
+             "model": "claude-sonnet-4-5", "timestamp": 1790856002000},
+        ])
+        rows = self.rows_for(LettaParser(), self.LOCAL)
+        self.assertEqual([(r.turn_type, r.text, r.timestamp_utc, r.session_id) for r in rows], [
+            ("user", "hi", "2026-10-01T12:00:01.000Z", LETTA_LOCAL_CONV),
+            ("assistant", "hello", "2026-10-01T12:00:02.000Z", LETTA_LOCAL_CONV)])
+
+    def test_config_not_wanted(self):
+        for rel in (".letta/settings.json", ".letta/transcripts/%s/%s/state.json" % (LETTA_AGENT, LETTA_CONV),
+                    ".letta/lc-local-backend/conversations/%s/manifest.json" % LETTA_LOCAL_DIR):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(LettaParser().wants(art), rel)
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        for rel, n in ((self.TRANSCRIPT, 4), (self.LOCAL, 4)):
+            write_bad_line(self.home / rel)
+            rows = self.rows_for(LettaParser(), rel)
+            self.assertEqual(len(rows), n + 1, rel)
+            self.assertEqual(rows[-1].turn_type, "system")
+            self.assertIn("parser:", rows[-1].text)
