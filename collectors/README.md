@@ -10,14 +10,6 @@ Covered tools, with how each one's catalog entries were validated. The
 evidence for every agent, with citations, is one document per agent under
 [research/](research/README.md):
 
-| Tool | Validation |
-| --- | --- |
-| Claude Code, Antigravity CLI, Codex CLI, Copilot CLI, Ollama | Real install plus source |
-| Gemini CLI, Qwen Code, Aider, Continue, Goose, Zed, OpenCode, Crush, Cline, Roo Code, Kilo Code | Source code of the project |
-| Amp, Factory Droid, Augment | Shipped npm bundle strings plus official docs |
-| Kiro | Amazon Q CLI source, Kiro CLI binary strings, official docs |
-| Cursor, Windsurf, Claude Desktop, ChatGPT Desktop | Official docs, vendor forums, published DFIR write-ups |
-
 VS Code, VSCodium and their forks are collected through their `User`
 directories, which hold Copilot Chat sessions and extension state. The
 globalStorage of the Cline, Roo Code, Kilo Code and Continue extensions is
