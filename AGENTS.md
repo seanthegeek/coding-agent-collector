@@ -5,10 +5,15 @@ Guidance for AI coding agents and humans working in this repository.
 ## Purpose
 
 `coding-agent-collector` is a forensic collection tool for incident responders.
-It gathers the on-disk artifacts of AI coding agents (Claude Code, Gemini CLI,
-Antigravity, Codex CLI, Copilot CLI, Cursor, VS Code chat extensions, Windsurf,
-Aider, Ollama, and others) for every user on a host, plus shell histories and a
-live system snapshot, into one archive with a hashed manifest.
+It gathers the on-disk artifacts of AI agents that run on the host, coding
+agents first (Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot CLI,
+Cursor, VS Code chat extensions, Windsurf, Aider, Ollama, and others), for
+every user on a host, plus shell histories and a live system snapshot, into
+one archive with a hashed manifest. The criterion for the catalog is an agent
+that executes tools or shell commands on the host and leaves transcripts,
+configuration or credentials on disk; it need not be an editor or coding
+tool. When a non-coding agent is added, widen the wording in the top-level
+README in the same commit.
 
 It must work in three situations:
 
@@ -282,12 +287,23 @@ find. The validation for every current entry is recorded in the table in
 5. If the tool records project paths, add extraction to `discover_projects`
    and any per-project files to `PROJECT_CATALOG`.
 6. Add a fixture and assertions to `collectors/tests/smoke.sh` and
-   `collectors/tests/smoke.ps1` if the layout has anything unusual (symlinks,
-   SQLite sidecars, spaces in paths, drive-letter or `file:///` project
-   references).
+   `collectors/tests/smoke.ps1`. Both files build the fake image in labelled
+   blocks (one per catalog revision) followed by `check "name" "expr"`
+   lines; add the new tool's files under a new dated block in both, and add
+   at least one check for every new secret glob, exclusion and discovery
+   source, plus one for anything unusual in the layout (symlinks, SQLite
+   sidecars, spaces in paths, drive-letter or `file:///` project
+   references). Run the full shell matrix from "Validation and testing";
+   every shell in it, including Windows PowerShell 5.1 through the WSL
+   path, is available on the development host, so an untested shell is a
+   gap to close, not a note to leave.
 7. Write or update `collectors/research/<agent>.md` with the evidence
-   (the eight sections in the research process below), update the tool list
-   in `collectors/README.md`, and close the matching GitHub issue.
+   (the eight sections in the research process below, less section 7), add
+   a row to the index table in `collectors/research/README.md`, mention the
+   tool under "What gets collected" in `collectors/README.md` if it needs
+   a note there, and close the matching GitHub issue. If the tool keeps
+   transcripts worth parsing, also write `analyzer/research/<agent>.md` and
+   its index row.
 
 Every catalog entry has been validated against source, a shipped bundle, or
 official documentation. When a real-install check is wanted, run the tool in
@@ -354,12 +370,17 @@ about a thousand words:
 tarball or binary (`npm pack`, then grep or `strings`; minified bundles keep
 literal path strings), official docs, vendor forums and issue trackers, then
 published DFIR or reverse-engineering write-ups. The report must say which
-level each claim came from, and the validation table in `collectors/README.md`
-records it.
+level each claim came from, and the index table in
+`collectors/research/README.md` records it.
 
-**5. Integrate in one commit.** Save each report to the scratchpad as it
-arrives and do not touch the script until all are in, so the tables change
-once. Then split every group report into one document per catalog agent,
+**5. Integrate in one commit.** Research agents write only their research
+documents and never edit the scripts, the catalog copy or the tests; the
+`CATALOG`, `PROJECT_CATALOG`, `EXCLUDES` and `SECRET_GLOBS` tables are
+byte-identical here-strings in two scripts plus `catalog.txt`, so two
+agents editing them in parallel conflict on every line. One integration
+agent makes every table change after all reports are in, so the tables
+change once. New lines go under the vendor's comment block in the table, or
+a new comment block for a new vendor, never at the end. Then split every group report into one document per catalog agent,
 named exactly as the agent appears in `--list`, keeping the numbered section
 structure, the citations and the fixtures, but dropping section 7 once its
 proposals are in the tables, so no committed document reviews a catalog
@@ -372,13 +393,14 @@ are encoded and how a parser reads them) goes to
 agents share a lineage, each says so and links to the other rather than
 repeating it. Each directory has a README index that lists every document
 and holds the cross-agent observations. Grouped reports are never
-committed. Then: rewrite the four tables, extend `discover_projects` with every
-new grep-able source, add a fixture and checks to `collectors/tests/smoke.sh`
-for each
-new secret pattern, exclusion and discovery source, run the full shell
+committed. Then: rewrite the four tables in both scripts and regenerate
+`analyzer/agent_analyzer/catalog.txt` from `--list`, extend
+`discover_projects` in the sh collector and `Find-Projects` in the
+PowerShell collector with every new grep-able source, add a fixture and
+checks to `collectors/tests/smoke.sh` and `collectors/tests/smoke.ps1` for
+each new secret pattern, exclusion and discovery source, run the full shell
 matrix, run a live collection and read the `skipped_excluded` and
-`secret: true` rows, update the tool table in `collectors/README.md`, bump
-`VERSION`.
+`secret: true` rows, update the research index tables, bump `VERSION`.
 
 **6. Close the loop on GitHub.** Close each tool's issue with a comment that
 names the evidence source and commit, the key findings, and the catalog
