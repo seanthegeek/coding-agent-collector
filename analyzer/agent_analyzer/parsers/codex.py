@@ -1,9 +1,15 @@
-"""Codex CLI transcripts.
+"""Codex CLI transcripts, and the rollout format shared with its forks.
 
-Validated against a real install (Codex CLI, October 2026). Files:
+Validated against a real install (Codex CLI, October 2026). Files, under
+`~/.codex` for Codex (`RolloutParser.home_prefix` for a fork):
 
-* `~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl`, older
-  releases wrote `~/.codex/sessions/rollout-*.jsonl`. Each line is
+* `sessions/YYYY/MM/DD/rollout-<timestamp>-<uuid>.jsonl`, older releases
+  wrote `sessions/rollout-*.jsonl`; `archived_sessions/` holds archived
+  threads in the same layout (codex `rollout/src/lib.rs:87` at 3e23877).
+  Cold rollouts may be zstd-compressed to `.jsonl.zst`
+  (`rollout/src/compression.rs:29`); those need the `zstandard` package,
+  imported lazily, and without it each becomes one `system` row. A
+  truncated zstd frame yields the lines decoded before the cut. Each line is
   `{timestamp, ordinal, type, payload}` with `timestamp` ISO 8601 Z. Types:
   - `session_meta`: payload `id` (session id), `timestamp`, `cwd`,
     `originator`, `cli_version`, `model_provider`, optional `git`
@@ -21,21 +27,30 @@ Validated against a real install (Codex CLI, October 2026). Files:
     rows, the rest are skipped because the response_item records already
     carry the content.
   - `world_state`, `token_usage_record`: skipped.
-* `~/.codex/history.jsonl`: `{session_id, text, ts}` per prompt, `ts` epoch
-  seconds.
+  Until `session_meta` is read, the session id is the UUID at the end of
+  the file name, so a rollout cut before its first line is still attributed.
+* `history.jsonl`: `{session_id, text, ts}` per prompt, `ts` epoch seconds.
+* Forks only, when `ledger_name` is set: an import ledger
+  `{"records": [{source_path, content_sha256, imported_thread_id,
+  imported_at, source_modified_at?}]}` (times epoch seconds), one `system`
+  row per record. See `open_interpreter.py`.
 """
 from __future__ import annotations
 
+import json
 import re
-from typing import Iterator
+from typing import Iterator, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
 from ..timeutil import to_utc
 from .base import Options, Parser, compact_json, iter_jsonl, text_of
 
-ROLLOUT_RX = re.compile(r"^\.codex/sessions/(?:.*/)?rollout-[^/]*\.jsonl$")
+ROLLOUT_TMPL = r"^%s/(?:archived_)?sessions/(?:.*/)?rollout-[^/]*\.jsonl(?:\.zst)?$"
+ROLLOUT_RX = re.compile(ROLLOUT_TMPL % re.escape(".codex"))
 HISTORY_REL = ".codex/history.jsonl"
+UUID_TAIL_RX = re.compile(r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
+                          r"\.jsonl(?:\.zst)?$")
 
 CALL_TYPES = ("function_call", "custom_tool_call", "local_shell_call", "web_search_call")
 OUTPUT_TYPES = ("function_call_output", "custom_tool_call_output", "local_shell_call_output")
@@ -68,18 +83,139 @@ def call_name(payload: dict) -> str:
     return str(payload.get("name") or ptype or "")
 
 
-class CodexParser(Parser):
-    agent = "codex-cli"
-    name = "codex-cli"
+def _zstd_module():
+    """The `zstandard` module, or None when it is not installed."""
+    try:
+        import zstandard  # noqa: F401
+    except ImportError:
+        return None
+    return zstandard
+
+
+def _decode_line(n: int, raw: bytes, errors: list) -> Optional[dict]:
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        rec = json.loads(raw.decode("utf-8", errors="replace"))
+    except ValueError as e:
+        errors.append((n, str(e)))
+        return None
+    return rec if isinstance(rec, dict) else None
+
+
+class TruncatedFrame(Exception):
+    pass
+
+
+def iter_zst_chunks(fh, zstd) -> Iterator[bytes]:
+    """Decompressed bytes of every zstd frame in `fh`, streamed. Raises
+    `zstd.ZstdError` on corrupt input and `TruncatedFrame` when the file ends
+    inside a frame (the stream reader would end silently instead)."""
+    dctx = zstd.ZstdDecompressor()
+    dobj = dctx.decompressobj()
+    open_frame = False
+    while True:
+        data = fh.read(1 << 16)
+        if not data:
+            break
+        while data:
+            out = dobj.decompress(data)
+            open_frame = True
+            if out:
+                yield out
+            if getattr(dobj, "eof", False):
+                data = dobj.unused_data
+                dobj = dctx.decompressobj()
+                open_frame = False
+            else:
+                data = b""
+    if open_frame and hasattr(dobj, "eof"):
+        raise TruncatedFrame("file ends inside a zstd frame")
+
+
+def iter_zst_jsonl(path, errors: list, zstd) -> Iterator[Tuple[int, dict]]:
+    """`iter_jsonl` over a zstd-compressed file, streamed. A corrupt or
+    truncated frame becomes one entry in `errors`; the lines decoded before
+    it are still yielded, and a line cut by the damage is a bad line."""
+    n = 0
+    buf = b""
+    with open(path, "rb") as fh:
+        try:
+            for chunk in iter_zst_chunks(fh, zstd):
+                buf += chunk
+                lines = buf.split(b"\n")
+                buf = lines.pop()
+                for raw in lines:
+                    n += 1
+                    rec = _decode_line(n, raw, errors)
+                    if rec is not None:
+                        yield n, rec
+        except (zstd.ZstdError, TruncatedFrame) as e:
+            errors.append((n + 1, "zstd: %s" % e))
+    if buf.strip():
+        n += 1
+        rec = _decode_line(n, buf, errors)
+        if rec is not None:
+            yield n, rec
+
+
+class RolloutParser(Parser):
+    """Codex rollouts and prompt history under `home_prefix`. Codex forks
+    that keep the format subclass this with their own agent and home."""
+    home_prefix = ".codex"
+    ledger_name = ""   # import ledger file under home_prefix; empty when the agent has none
+
+    def __init__(self) -> None:
+        self.rollout_rx = re.compile(ROLLOUT_TMPL % re.escape(self.home_prefix))
+        self.history_rel = self.home_prefix + "/history.jsonl"
+        self.ledger_rel = self.home_prefix + "/" + self.ledger_name if self.ledger_name else ""
 
     def wants(self, artifact: Artifact) -> bool:
-        return artifact.rel == HISTORY_REL or bool(ROLLOUT_RX.match(artifact.rel))
+        rel = artifact.rel
+        return (rel == self.history_rel or bool(self.rollout_rx.match(rel))
+                or bool(self.ledger_rel and rel == self.ledger_rel))
 
     def parse(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
-        if artifact.rel == HISTORY_REL:
+        if artifact.rel == self.history_rel:
             yield from self._parse_history(artifact, opts)
+        elif self.ledger_rel and artifact.rel == self.ledger_rel:
+            yield from self._parse_ledger(artifact, opts)
         else:
             yield from self._parse_rollout(artifact, opts)
+
+    def _system(self, artifact: Artifact, text: str, session_id: str = "", line: int = 0) -> Row:
+        row = self.base_row(artifact)
+        row.turn_type = "system"
+        row.session_id = session_id
+        row.source_line = line
+        row.text = text
+        return row
+
+    def _parse_ledger(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
+        try:
+            with open(artifact.disk_path, "rb") as fh:
+                data = json.loads(fh.read().decode("utf-8", errors="replace"))
+        except (OSError, ValueError) as e:
+            yield self._system(artifact, "parser: unreadable import ledger: %s" % e)
+            return
+        records = data.get("records") if isinstance(data, dict) else None
+        if not isinstance(records, list):
+            yield self._system(artifact, "parser: import ledger has no records list")
+            return
+        for i, rec in enumerate(records, 1):
+            if not isinstance(rec, dict):
+                continue
+            # source_line is the record's position in `records`, not a file line.
+            row = self._system(artifact, "", str(rec.get("imported_thread_id") or ""), i)
+            row.timestamp_utc = to_utc(rec.get("imported_at"))
+            text = "imported session from %s sha256=%s" % (
+                rec.get("source_path") or "", rec.get("content_sha256") or "")
+            modified = to_utc(rec.get("source_modified_at"))
+            if modified:
+                text += " source_modified=%s" % modified
+            row.text = compact(text, opts.max_text_length)
+            yield row
 
     def _parse_history(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         errors: list = []
@@ -94,11 +230,21 @@ class CodexParser(Parser):
 
     def _parse_rollout(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         errors: list = []
-        session_id = ""
+        m = UUID_TAIL_RX.search(artifact.rel)
+        session_id = m.group(1) if m else ""   # until session_meta says otherwise
+        if artifact.rel.endswith(".zst"):
+            zstd = _zstd_module()
+            if zstd is None:
+                yield self._system(artifact, "parser: compressed rollout not read: zstandard package not installed",
+                                   session_id)
+                return
+            records = iter_zst_jsonl(artifact.disk_path, errors, zstd)
+        else:
+            records = iter_jsonl(artifact.disk_path, errors)
         cwd = ""
         model = ""
         branch = ""
-        for n, rec in iter_jsonl(artifact.disk_path, errors):
+        for n, rec in records:
             rtype = rec.get("type")
             payload = rec.get("payload")
             if not isinstance(payload, dict):
@@ -169,14 +315,16 @@ class CodexParser(Parser):
                     yield self._fill(row, "task_complete turn=%s duration_ms=%s" % (
                         payload.get("turn_id") or "", payload.get("duration_ms") or ""), opts)
         if errors:
-            row = self.base_row(artifact)
-            row.session_id = session_id
-            row.turn_type = "system"
-            row.source_line = errors[0][0]
-            row.text = "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0])
-            yield row
+            yield self._system(artifact, "parser: %d unparseable line(s), first at line %d" % (
+                len(errors), errors[0][0]), session_id, errors[0][0])
 
     @staticmethod
     def _fill(row: Row, text: str, opts: Options) -> Row:
         row.text = compact(text, opts.max_text_length)
         return row
+
+
+class CodexParser(RolloutParser):
+    agent = "codex-cli"
+    name = "codex-cli"
+    home_prefix = ".codex"
