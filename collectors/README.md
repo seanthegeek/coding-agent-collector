@@ -168,12 +168,34 @@ Remote development state is collected too: `~/.vscode-server`,
 `~/.kiro-server` keep the same `User` layout as the desktop editor, on the
 WSL or SSH host rather than the workstation.
 
-In live mode the collector also writes a `live/` directory with the process
-list, agent processes, their environment and working directory from `/proc`
-on Linux, users, logins, mounts, network sockets and services. On Windows the
-snapshot uses CIM: processes with command lines and owners, logged-on users,
-TCP connections with owning process, services, and scheduled task actions.
-Process environment blocks are not captured on Windows.
+### Live system snapshot
+
+The files on disk say what the agents did; the snapshot says what was
+running when the collector ran. In live mode (not with `-r`, and skipped by
+`--no-live` / `-NoLive`) the collector writes a `live/` directory of plain
+text files, each the output of one command or query with a `# command`
+header line, and records every file in the manifest under the agent name
+`live`. It answers the questions a responder has before opening a transcript:
+is an agent or gateway still running, as which user, started when, from which
+directory, with which API keys and endpoints in its environment, listening
+on which port, and who was logged in.
+
+| File | macOS, Linux, BSD | Windows |
+| --- | --- | --- |
+| `live/system.txt` | `hostname`, `uname -a`, `date -u`, `uptime`, `id`, `mount`, `df -k`, `/etc/os-release`, `sw_vers` | hostname, UTC time, `Win32_OperatingSystem`, `Win32_ComputerSystem` |
+| `live/users.txt` | `getent passwd` or `/etc/passwd`; `dscl . -list /Users NFSHomeDirectory` on macOS | the `ProfileList` registry key and `Win32_UserAccount` |
+| `live/logins.txt` | `who`, `last -n 50` | `query user`, `Win32_LoggedOnUser` |
+| `live/processes.txt` | `ps` with pid, parent, user, start time, elapsed time and full command line | `Win32_Process` with command line, owner, session and creation time |
+| `live/agent-processes.txt` | the lines of the process list whose command line matches an agent name (the `AGENT_PROC_RE` list in the script), with the collector itself removed | the same filter over `Win32_Process` |
+| `live/environ/<pid>.txt` | for each agent process on Linux, its environment block from `/proc/<pid>/environ` and its working directory from `/proc/<pid>/cwd`; flagged `secret: true` because environments hold API keys, and omitted with `--no-secrets` | not captured |
+| `live/network.txt` | `ss -tunap`, else `netstat -anp` or `netstat -an`: listening sockets and connections with owning process where the platform allows | `Get-NetTCPConnection` with owning process, else `netstat -ano` |
+| `live/services.txt` | `launchctl list` on macOS, `systemctl list-units --type=service --all` on systemd hosts | `Win32_Service` with state, start mode, account and path |
+| `live/scheduled-tasks.txt` | not written (user units and launch agents are collected as files through the catalog) | scheduled task names, actions and run accounts |
+
+Each command runs once; its error output is written into the same file and
+a failure never stops the run, so a hardened host still yields the files it
+can. Nothing in the snapshot is parsed on the host, and the analyzer does
+not read it yet; it is for the responder to read alongside the timeline.
 
 ### Docker volumes
 
