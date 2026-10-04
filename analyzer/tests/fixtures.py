@@ -515,6 +515,16 @@ def codex_subagent_records(cwd="/srv/proj"):
             },
         ),
         _codex_line(
+            "00:03",
+            "response_item",
+            {
+                "type": "message",
+                "id": "sm2",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "also run the linter"}],
+            },
+        ),
+        _codex_line(
             "00:04",
             "response_item",
             {
@@ -601,6 +611,40 @@ def codex_legacy_records(cwd="/srv/proj"):
                 "type": "message",
                 "role": "user",
                 "content": [{"type": "input_text", "text": "draw a diagram"}],
+            },
+        ),
+        _codex_line(
+            "20:01",
+            "response_item",
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "# AGENTS.md instructions for /srv/proj\n\n<INSTRUCTIONS>\n"
+                        "Run the tests.\n</INSTRUCTIONS>",
+                    },
+                    {
+                        "type": "input_text",
+                        "text": "\n<environment_context>\n  <cwd>/srv/proj</cwd>\n"
+                        "</environment_context>\n",
+                    },
+                ],
+            },
+        ),
+        _codex_line(
+            "20:01",
+            "response_item",
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "what goes in <environment_context>...</environment_context>",
+                    }
+                ],
             },
         ),
         _codex_line(

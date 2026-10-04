@@ -378,7 +378,7 @@ emitting rows, so that an `item_completed` line can be checked against every
 | later `session_meta` | `system` `copied from ancestor: session start ... id= cwd=` when its id differs; none when it repeats the file's own |
 | `turn_context` | none; sets project and model |
 | `response_item` with `metadata.inherited_user_message` | none (copied from the parent thread) |
-| `response_item` `message` user | per `content_item_kinds` run: `user` for `user.*`, `unknown` or empty kinds; `system` `context: <kind>: ...` for any other kind; without a kinds list as long as `content`, `user`. In a subagent file the first prompt is `system` `subagent task: ...` |
+| `response_item` `message` user | per `content_item_kinds` run: `user` for `user.*`, `unknown` or empty kinds; `system` `context: <kind>: ...` for any other kind; without a kinds list as long as `content`, per block: `system` `context: <marker name>: ...` for a block that is wholly one of the harness wrappers below, else `user`. In a subagent file the first prompt is `system` `subagent task: ...`; later ones stay `user` (below) |
 | `response_item` `message` assistant / developer | `assistant` / `system` (`developer: ...`); empty text skipped |
 | `response_item` `function_call`, `custom_tool_call`, `local_shell_call`, `web_search_call`, `tool_search_call` | `tool_use` |
 | `response_item` `function_call_output`, `custom_tool_call_output`, `local_shell_call_output`, `tool_search_output` (tool names) | `tool_result` |
@@ -401,6 +401,30 @@ emitting rows, so that an `item_completed` line can be checked against every
 | `token_usage_record`, `world_state`, `inter_agent_communication_metadata`, `retained_context`, `security_risk_score` | skipped |
 | bad line or cut zstd frame | one `system` row at the end |
 | `history.jsonl` line | `user` |
+
+Rollouts without content kinds are classified per content block by the
+wrappers Codex itself recognises as injected user-role context
+([core/src/context/contextual_user_message.rs:22-37](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/core/src/context/contextual_user_message.rs#L22-L37)).
+As in Codex's own check, the block must begin with the open marker after
+leading whitespace and end with the close marker, ignoring ASCII case
+([context-fragments/src/fragment.rs:116-130](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/context-fragments/src/fragment.rs#L116-L130)), so a tag a person types inside a prompt leaves it `user`:
+
+| Marker name | Open … close | Source |
+| --- | --- | --- |
+| `agents_md_instructions` | `# AGENTS.md instructions` … `</INSTRUCTIONS>` | [core/src/context/user_instructions.rs:23-25](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/core/src/context/user_instructions.rs#L23-L25) |
+| `environment_context` | `<environment_context>` … `</environment_context>` | [protocol/src/protocol.rs:120-121](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/protocol/src/protocol.rs#L120-L121), [core/src/context/world_state/environment.rs:524-529](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/core/src/context/world_state/environment.rs#L524-L529) |
+| `agent_message_board_notification` | `<agent_message_board_notification>` … closing tag | [core/src/context/agent_message_board_notification.rs:19-25](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/core/src/context/agent_message_board_notification.rs#L19-L25) |
+| `skill` | `<skill>` … `</skill>` | [ext/skills/src/fragments.rs:89-91](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/ext/skills/src/fragments.rs#L89-L91) |
+| `user_shell_command` | `<user_shell_command>` … closing tag | [core/src/context/user_shell_command.rs:44](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/core/src/context/user_shell_command.rs#L44) |
+| `turn_aborted` | `<turn_aborted>` … closing tag | [core/src/context/turn_aborted.rs:34](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/core/src/context/turn_aborted.rs#L34) |
+| `subagent_notification` | `<subagent_notification>` … closing tag | [core/src/context/subagent_notification.rs:34-36](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/core/src/context/subagent_notification.rs#L34-L36) |
+| `recommended_plugins` | `<recommended_plugins>` … closing tag | [core/src/context/recommended_plugins_instructions.rs:43](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/core/src/context/recommended_plugins_instructions.rs#L43) |
+
+Later `role: "user"` messages in a subagent's rollout stay `user`: the
+parent's v1 `send_input` tool submits plain user input to the child
+([core/src/agent/control.rs:134-143](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/core/src/agent/control.rs#L134-L143)), and a person can also type into a subagent thread, because the TUI's
+`/subagents` picker makes it the active thread and composer input is sent
+to the active thread ([tui/src/multi_agents.rs:1-5](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/tui/src/multi_agents.rs#L1-L5), [tui/src/app/thread_routing.rs:475-497](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/tui/src/app/thread_routing.rs#L475-L497)). The rollout records both alike.
 
 A copied fork has no boundary beyond the ancestor's `session_meta` and the
 per-message `inherited_user_message` flag, so the other copied records stay

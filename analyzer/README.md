@@ -214,7 +214,8 @@ in RFC 4180, with CRLF line ends, and start with a header row.
 Rows are sorted by timestamp, then by source file and line. Rows without a
 timestamp sort last. Injected context (`isMeta` user records in Claude Code,
 `developer` messages in Codex, and Codex user-role blocks whose content kind
-names harness context rather than `user.*` input, labelled
+names harness context rather than `user.*` input, or in older rollouts
+that is wholly a harness wrapper such as `<environment_context>`, labelled
 `context: <kind>:`) is typed `system`, not
 `user`, so the `user` rows are what the person typed. A Codex subagent's
 first prompt, the task its parent sent, is a `system` row

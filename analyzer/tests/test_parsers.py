@@ -243,11 +243,12 @@ class CodexTests(ParserBase):
                 # The parent's copied prompt (inherited_user_message) is not repeated.
                 ("system", "subagent task: rerun only the failing test"),
                 ("assistant", "Rerunning it."),
+                # Later input may be the parent's send_input or a person: kept as user.
+                ("user", "also run the linter"),
                 ("system", "agent message /root/tester -> /root: it passes now"),
             ],
         )
         self.assertEqual({r.session_id for r in rows}, {CODEX_SUBAGENT})
-        self.assertNotIn("user", {r.turn_type for r in rows})
 
     def test_copied_fork_keeps_its_own_session(self):
         rel = self._write("rollout-2026-10-02T10-10-00-%s.jsonl" % CODEX_FORK, codex_fork_records())
@@ -275,6 +276,23 @@ class CodexTests(ParserBase):
             got,
             [
                 ("user", "", "", "draw a diagram"),  # no content kinds: still a prompt
+                # No kinds: the harness's own wrappers are recognised by marker.
+                (
+                    "system",
+                    "",
+                    "",
+                    "context: agents_md_instructions: # AGENTS.md instructions for /srv/proj "
+                    "<INSTRUCTIONS> Run the tests. </INSTRUCTIONS>",
+                ),
+                (
+                    "system",
+                    "",
+                    "",
+                    "context: environment_context: <environment_context> <cwd>/srv/proj</cwd> "
+                    "</environment_context>",
+                ),
+                # A tag typed mid-message stays the person's prompt.
+                ("user", "", "", "what goes in <environment_context>...</environment_context>"),
                 ("system", "", "", "image generation: a box diagram status=completed"),
                 ("tool_use", "tool_search", "ts_1", '{"query":"calendar"}'),
                 ("tool_result", "", "ts_1", "calendar_list"),
@@ -295,7 +313,7 @@ class CodexTests(ParserBase):
                 ("assistant", "", "", "Making it blue."),
             ],
         )
-        mcp = rows[5]
+        mcp = rows[8]
         self.assertEqual(mcp.timestamp_utc, "2026-10-02T10:20:06.000Z")  # started_at_ms
         self.assertEqual({r.model for r in rows[1:]}, {"gpt-5-codex"})
 

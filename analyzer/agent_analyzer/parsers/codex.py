@@ -45,12 +45,22 @@ at 3e23877 (see `research/codex-cli.md`). Files, under `~/.codex` for Codex
     other kind (`environments.environment_context`, AGENTS.md and skill
     instructions, subagent notifications, `shell.user_command`,
     `generic.turn_aborted`) is a `system` row `context: <kind>: <text>`.
-    Without a kinds list as long as `content` (older rollouts) the
-    whole message is a `user` row, as before. A line whose `metadata` has
-    `inherited_user_message` was copied from the parent thread, which
-    records it itself, and is skipped. In a subagent's file the first
-    prompt, a user message or an agent message, is the parent's task:
-    `system` `subagent task: <text>`. Other agent messages are `system`
+    Without a kinds list as long as `content` (older rollouts) a block
+    that is wholly one of the harness's own wrappers (`CONTEXT_MARKERS`:
+    open marker at its start, close marker at its end, as Codex's
+    `matches_marked_text` checks) is `context: <marker name>: <text>`, and
+    any other block a `user` row, so a tag typed mid-message stays `user`.
+    A line whose `metadata` has `inherited_user_message` was copied from
+    the parent thread, which records it itself, and is skipped. In a
+    subagent's file the first prompt, a user message or an agent message,
+    is the parent's task: `system` `subagent task: <text>`. Later user
+    messages in a subagent's file stay `user`: the parent's v1
+    `send_input` tool writes plain user input into the child
+    (`core/src/agent/control.rs:134-143`), but a person can also type into
+    a subagent thread, since the TUI's `/subagents` picker makes it the
+    active thread and composer input goes to the active thread
+    (`tui/src/multi_agents.rs:1-5`, `tui/src/app/thread_routing.rs:475-497`),
+    and the two are recorded alike. Other agent messages are `system`
     `agent message <author> -> <recipients>: <text>`. Reasoning with no
     text is skipped.
   - `event_msg`: payload `type` task_started and task_complete
@@ -106,6 +116,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterator
+from typing import cast
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -241,26 +252,64 @@ RESPONSE_CARRIED_ITEMS = (
 )
 # Content kinds of a user-role message block that the person supplied.
 USER_KINDS = ("", "unknown")
+# Wrappers the harness puts around the user-role context it injects, as
+# (name, start, end); Codex recognises the same blocks with
+# CONTEXTUAL_USER_FRAGMENT_MATCHERS (`core/src/context/contextual_user_message.rs`
+# at 3e23877; citations in research/codex-cli.md section 8). Used only for
+# rollouts without content kinds.
+CONTEXT_MARKERS = (
+    ("agents_md_instructions", "# AGENTS.md instructions", "</INSTRUCTIONS>"),
+    ("environment_context", "<environment_context>", "</environment_context>"),
+    (
+        "agent_message_board_notification",
+        "<agent_message_board_notification>",
+        "</agent_message_board_notification>",
+    ),
+    ("skill", "<skill>", "</skill>"),
+    ("user_shell_command", "<user_shell_command>", "</user_shell_command>"),
+    ("turn_aborted", "<turn_aborted>", "</turn_aborted>"),
+    ("subagent_notification", "<subagent_notification>", "</subagent_notification>"),
+    ("recommended_plugins", "<recommended_plugins>", "</recommended_plugins>"),
+)
+
+
+def context_marker(text: str) -> str:
+    """The name of the harness wrapper `text` is, or "". Like Codex's own
+    `matches_marked_text`, the block must start with the open marker after
+    leading whitespace and end with the close marker before trailing
+    whitespace, ignoring ASCII case; a tag typed mid-message does not count."""
+    body = text.strip().lower()
+    for name, start, end in CONTEXT_MARKERS:
+        if body.startswith(start.lower()) and body.endswith(end.lower()):
+            return name
+    return ""
 
 
 def user_parts(payload: dict) -> list[tuple[str, str]]:
     """(kind, text) runs of a `role: "user"` message. kind is "" for input the
     person supplied (`user.*`, or `unknown`, which Codex itself treats as
     possibly the user's) and the content kind for harness context. Without a
-    `content_item_kinds` list as long as `content`, the whole message is ""."""
+    `content_item_kinds` list as long as `content`, each block is classified
+    by `context_marker` instead, and kind is the marker name."""
     content = payload.get("content")
-    meta = payload.get("internal_chat_message_metadata_passthrough")
-    kinds = meta.get("content_item_kinds") if isinstance(meta, dict) else None
-    if not isinstance(content, list) or not isinstance(kinds, list) or len(kinds) != len(content):
+    if isinstance(content, str):
+        content = [{"type": "input_text", "text": content}]
+    if not isinstance(content, list):
         text = text_of(content)
         return [("", text)] if text else []
+    meta = payload.get("internal_chat_message_metadata_passthrough")
+    kinds = meta.get("content_item_kinds") if isinstance(meta, dict) else None
+    use_kinds = isinstance(kinds, list) and len(kinds) == len(content)
     parts: list[tuple[str, str]] = []
-    for block, kind in zip(content, kinds, strict=True):
-        kind = str(kind or "")
-        key = "" if kind.startswith("user.") or kind in USER_KINDS else kind
+    for i, block in enumerate(content):
         text = text_of([block])
         if not text:
             continue
+        if use_kinds:
+            kind = str(cast(list, kinds)[i] or "")
+            key = "" if kind.startswith("user.") or kind in USER_KINDS else kind
+        else:
+            key = context_marker(text)
         if parts and parts[-1][0] == key:
             parts[-1] = (key, parts[-1][1] + "\n" + text)
         else:

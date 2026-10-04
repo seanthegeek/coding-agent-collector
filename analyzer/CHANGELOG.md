@@ -28,9 +28,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Codex CLI: user-role messages the harness injects (environment context,
   AGENTS.md and skill instructions, subagent notifications, user shell
-  commands) were `user` rows; with content kinds recorded (current
-  releases) they are `system` rows `context: <kind>: ...`, so `user`
-  rows and `user_turns` count only what the person typed.
+  commands) were `user` rows; they are now `system` rows
+  `context: <kind>: ...`, by content kind where the rollout records one
+  (current releases) and otherwise by the harness's own wrapper around the
+  block (`<environment_context>`, `# AGENTS.md instructions`, `<skill>`
+  and others), so `user` rows and `user_turns` count only what the person
+  typed. A tag typed inside a prompt does not change its type.
 - Codex CLI: compaction summaries, messages between agents
   (`inter_agent_communication`, `agent_message`), image generation
   prompts, tool searches, realtime voice transcripts, aborted and
