@@ -95,6 +95,9 @@ agents and which have parsers.
 | `kilo-code` | `.local/share/kilo/kilo*.db` and `opencode-*.db` plus the same JSON trees under `.local/share/kilo` (OpenCode parser, Kilo paths), and pre-migration VS Code tasks `<globalStorage>/kilocode.kilo-code/tasks/<id>/api_conversation_history.json` | Source at 76bcfd4, synthetic fixture |
 | `cline` | `<editor>/User/globalStorage/saoudrizwan.claude-dev/` and `.cline/data/`: `tasks/<id>/ui_messages.json` (preferred), `api_conversation_history.json` (only when `ui_messages.json` is absent; inherits the task start time), `task_metadata.json`, `state/taskHistory.json`; SDK `.cline/data/sessions/<id>/<id>.json` and `*.messages.json`, `.cline/data/db/sessions.db` | Source at 39ff2359, synthetic fixture; see `research/cline.md` |
 | `roo-code` | `<editor>/User/globalStorage/rooveterinaryinc.roo-cline/` and `.vscode-mock/global-storage/`: the Cline task files plus `tasks/<id>/history_item.json` and `tasks/_index.json` | Source at b867ec91, synthetic fixture; see `research/roo-code.md` |
+| `pi` | `.pi/agent/sessions/<cwd>/<time>_<id>.jsonl` and legacy `.pi/agent/*.jsonl` (session tree; fork entries copied from a collected parent file are dropped; a session that looks driven by little-coder gets a `system` row saying so), `.pi/agent/experimental/sessions/<id>/meta.json` (the durable `session.sqlite` beside it is not parsed) | Source at 2003871, synthetic fixture; see `research/pi.md` |
+| `little-coder` | `.pi/agent/little-coder-prompt-history.json` (prompts without timestamps or sessions) and `.little-coder/checkpoints/<session file>/` (one `system` row per session's pre-edit copies); its transcripts are pi sessions, parsed as `pi` | Source at 89d4fa0, synthetic fixture; see `research/little-coder.md` |
+| `letta` | Letta Code `.letta/lc-local-backend/conversations/<key>/messages.jsonl` (pi session format), `.letta/transcripts/<agent>/<conversation>/transcript.jsonl` (project path from `sessions.jsonl` by time, a heuristic; skipped when the conversation's `messages.jsonl` is present), `.letta/sessions.jsonl` | Source at 77faf36, synthetic fixture; see `research/letta.md` |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
@@ -113,8 +116,8 @@ parser's agent, so `--agent aider` also includes a repository's
 Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
 `augment`, `ollama`, `pearai`, `cody`, `twinny`, `tabby`,
-`open-interpreter`, `openhands`, `pi`, `little-coder`, `letta`, `hermes`,
-`openclaw`, `nanobot`, `agent-zero`, `shellgpt` and `local-deep-research`,
+`open-interpreter`, `openhands`, `hermes`, `openclaw`, `nanobot`,
+`agent-zero`, `shellgpt` and `local-deep-research`,
 plus the `shared` and `shell-history` entries, which are not agents.
 Windsurf and Cursor need format work first.
 

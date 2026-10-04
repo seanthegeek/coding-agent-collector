@@ -140,6 +140,9 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     build_kilo(home)
     build_cline(home)
     build_roo_code(home)
+    build_pi(home)
+    build_little_coder(home)
+    build_letta(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -1302,3 +1305,164 @@ def build_roo_code(home: Path) -> None:
     _json(mock / "tasks" / ROO_CLI_TASK / "history_item.json",
           roo_history_item(ROO_CLI_TASK, CLINE_T0 + 303000, "fix tests"))
     _json(mock / "secrets.json", {"roo_cline_config_api_config": "{\"apiKey\":\"sk-not-real\"}"})
+
+
+# ---- pi, little-coder, letta (pi session format) --------------------------------
+
+PI_SESSION = "0199a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a1b"
+PI_FORK = "0199a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a2c"
+PI_DIR = ".pi/agent/sessions/--srv-proj--/"
+PI_FILE = "2026-10-01T09-00-00-000Z_%s.jsonl" % PI_SESSION
+PI_FORK_FILE = "2026-10-01T09-30-00-000Z_%s.jsonl" % PI_FORK
+LC_SESSION = "0b9e2f4c-1111-4000-8000-000000000001"
+LC_FILE = "2026-10-01T11-00-00-000Z_%s.jsonl" % LC_SESSION
+PI_EXPERIMENTAL = "exp-session-1"
+LETTA_LOCAL_CONV = "local-conv-1"
+LETTA_LOCAL_DIR = "Y29udmVyc2F0aW9uOmxvY2FsLWNvbnYtMQ"   # base64url("conversation:local-conv-1")
+LETTA_AGENT = "agent-1a2b"
+LETTA_CONV = "conv-9f"
+
+
+def pi_session_records(cwd="/srv/proj"):
+    return [
+        {"type": "session", "version": 3, "id": PI_SESSION, "timestamp": "2026-10-01T09:00:00.000Z", "cwd": cwd},
+        {"type": "model_change", "id": "1a2b3c4d", "parentId": None, "timestamp": "2026-10-01T09:00:00.100Z",
+         "provider": "anthropic", "modelId": "claude-sonnet-4-5"},
+        {"type": "message", "id": "2b3c4d5e", "parentId": "1a2b3c4d", "timestamp": "2026-10-01T09:00:01.000Z",
+         "message": {"role": "user", "content": "fix the failing test", "timestamp": 1790845201000}},
+        {"type": "message", "id": "3c4d5e6f", "parentId": "2b3c4d5e", "timestamp": "2026-10-01T09:00:04.000Z",
+         "message": {"role": "assistant", "content": [
+             {"type": "thinking", "thinking": "run the tests first"},
+             {"type": "toolCall", "id": "toolu_01", "name": "bash", "arguments": {"command": "npm test"}}],
+             "api": "anthropic-messages", "provider": "anthropic", "model": "claude-sonnet-4-5",
+             "usage": {"input": 900, "output": 40, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 940,
+                       "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}},
+             "stopReason": "toolUse", "timestamp": 1790845204000}},
+        {"type": "message", "id": "4d5e6f70", "parentId": "3c4d5e6f", "timestamp": "2026-10-01T09:00:07.000Z",
+         "message": {"role": "toolResult", "toolCallId": "toolu_01", "toolName": "bash",
+                     "content": [{"type": "text", "text": "1 failing"}], "isError": False,
+                     "timestamp": 1790845207000}},
+        {"type": "message", "id": "5e6f7081", "parentId": "4d5e6f70", "timestamp": "2026-10-01T09:00:09.000Z",
+         "message": {"role": "bashExecution", "command": "git status", "output": "M src/a.ts", "exitCode": 0,
+                     "cancelled": False, "truncated": False, "timestamp": 1790845209000}},
+        {"type": "label", "id": "70819203", "parentId": "5e6f7081", "timestamp": "2026-10-01T09:00:09.500Z",
+         "targetId": "2b3c4d5e", "label": "start"},
+        {"type": "session_info", "id": "6f708192", "parentId": "5e6f7081", "timestamp": "2026-10-01T09:00:10.000Z",
+         "name": "test fix"},
+    ]
+
+
+def pi_fork_records(parent_path):
+    parent = pi_session_records()
+    return [
+        {"type": "session", "version": 3, "id": PI_FORK, "timestamp": "2026-10-01T09:30:00.000Z",
+         "cwd": "/srv/proj", "parentSession": parent_path},
+    ] + parent[1:4] + [
+        {"type": "message", "id": "8192a3b4", "parentId": "3c4d5e6f", "timestamp": "2026-10-01T09:30:05.000Z",
+         "message": {"role": "assistant", "content": [{"type": "text", "text": "Trying another way."}],
+                     "provider": "anthropic", "model": "claude-sonnet-4-5", "stopReason": "stop",
+                     "timestamp": 1790847005000}},
+    ]
+
+
+def little_coder_session_records(cwd="/srv/proj"):
+    return [
+        {"type": "session", "version": 3, "id": LC_SESSION, "timestamp": "2026-10-01T11:00:00.000Z", "cwd": cwd},
+        {"type": "custom_message", "id": "a1", "parentId": None, "timestamp": "2026-10-01T11:00:01.000Z",
+         "customType": "lc-skills", "content": "## Skill: edit\nUse the edit tool.", "display": False},
+        {"type": "message", "id": "a2", "parentId": "a1", "timestamp": "2026-10-01T11:00:02.000Z",
+         "message": {"role": "user", "content": "fix the failing test", "timestamp": 1790852402000}},
+        {"type": "message", "id": "a3", "parentId": "a2", "timestamp": "2026-10-01T11:00:05.000Z",
+         "message": {"role": "assistant", "content": [
+             {"type": "thinking", "thinking": "run tests first"},
+             {"type": "toolCall", "id": "call_1", "name": "bash", "arguments": {"command": "npm test"}}],
+             "api": "openai-completions", "provider": "llamacpp", "model": "qwen3.6-35b-a3b",
+             "usage": {"input": 900, "output": 40, "cacheRead": 0, "cacheWrite": 0},
+             "stopReason": "toolUse", "timestamp": 1790852405000}},
+        {"type": "message", "id": "a4", "parentId": "a3", "timestamp": "2026-10-01T11:00:09.000Z",
+         "message": {"role": "toolResult", "toolCallId": "call_1", "toolName": "bash",
+                     "content": [{"type": "text", "text": "1 failing"}], "isError": False,
+                     "timestamp": 1790852409000}},
+    ]
+
+
+def build_pi(home: Path) -> None:
+    _jsonl(home / PI_DIR / PI_FILE, pi_session_records())
+    _jsonl(home / PI_DIR / PI_FORK_FILE, pi_fork_records("/home/alice/" + PI_DIR + PI_FILE))
+    _jsonl(home / PI_DIR / LC_FILE, little_coder_session_records())
+    _json(home / ".pi/agent/experimental/sessions" / PI_EXPERIMENTAL / "meta.json",
+          {"createdAt": 1790856000000, "cwd": "/srv/proj"})
+    _json(home / ".pi/agent/auth.json", {"anthropic": {"type": "api_key", "key": "sk-not-real"}})
+    _json(home / ".pi/agent/settings.json", {"defaultProvider": "anthropic"})
+
+
+def build_little_coder(home: Path) -> None:
+    _json(home / ".pi/agent/little-coder-prompt-history.json", ["fix the failing test", "now run lint"])
+    ck = home / ".little-coder/checkpoints" / LC_FILE
+    ck.mkdir(parents=True, exist_ok=True)
+    (ck / "_srv_proj_src_a.ts").write_text("old contents\n", encoding="utf-8")
+    (ck / "_srv_proj_src_new.ts.absent").write_text("", encoding="utf-8")
+    os.utime(ck / "_srv_proj_src_a.ts", (1790852406, 1790852406))
+    os.utime(ck / "_srv_proj_src_new.ts.absent", (1790852407, 1790852407))
+    (home / ".config/little-coder").mkdir(parents=True, exist_ok=True)
+    (home / ".config/little-coder/settings.json").write_text("{}", encoding="utf-8")
+
+
+def letta_transcript_records():
+    return [
+        {"kind": "user", "text": "list the repo", "captured_at": "2026-10-01T12:00:05.120Z", "source_line_id": "ui-1"},
+        {"kind": "reasoning", "text": "use ls", "captured_at": "2026-10-01T12:00:05.120Z"},
+        {"kind": "tool_call", "name": "Bash", "argsText": "{\"command\":\"ls\"}", "resultText": "README.md",
+         "resultOk": True, "captured_at": "2026-10-01T12:00:05.120Z", "source_line_id": "ui-2"},
+        {"kind": "assistant", "text": "One file: README.md", "captured_at": "2026-10-01T12:00:05.120Z",
+         "source_line_id": "ui-3", "source_message_id": "message-77"},
+    ]
+
+
+def letta_local_records(cwd="/srv/proj"):
+    asst = {"id": "letta-msg-2", "role": "assistant", "content": [
+        {"type": "thinking", "thinking": "use ls"},
+        {"type": "toolCall", "id": "call_1", "name": "Bash", "arguments": {"command": "ls"}}],
+        "api": "anthropic-messages", "provider": "anthropic", "model": "claude-sonnet-4-5",
+        "usage": {"input": 10, "output": 5, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 15,
+                  "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}},
+        "stopReason": "toolUse", "timestamp": 1790856002000,
+        "metadata": {"agent_id": LETTA_AGENT, "conversation_id": LETTA_LOCAL_CONV}}
+    partial = dict(asst, content=[{"type": "thinking", "thinking": "use"}], stopReason="pending")
+    return [
+        {"type": "session", "version": 3, "id": LETTA_LOCAL_CONV, "timestamp": "2026-10-01T12:00:00.000Z", "cwd": cwd},
+        {"type": "message", "id": "a1b2c3d4", "parentId": None, "timestamp": "2026-10-01T12:00:01.000Z",
+         "message": {"id": "letta-msg-1", "role": "user", "content": "list the repo", "timestamp": 1790856001000}},
+        {"type": "message", "id": "b2c3d4e4", "parentId": "a1b2c3d4", "timestamp": "2026-10-01T12:00:02.000Z",
+         "message": partial},
+        {"type": "message", "id": "b2c3d4e5", "parentId": "a1b2c3d4", "timestamp": "2026-10-01T12:00:02.000Z",
+         "message": asst},
+        {"type": "message", "id": "c3d4e5f6", "parentId": "b2c3d4e5", "timestamp": "2026-10-01T12:00:03.000Z",
+         "message": {"id": "letta-msg-3", "role": "toolResult", "toolCallId": "call_1", "toolName": "Bash",
+                     "content": [{"type": "text", "text": "README.md"}], "isError": False,
+                     "timestamp": 1790856003000}},
+    ]
+
+
+def letta_sessions_records(project="/srv/proj"):
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cached_input_tokens": 0,
+             "cache_write_tokens": 0, "reasoning_tokens": 0, "steps": 0}
+    start = {"agent_id": LETTA_AGENT, "session_id": "s-1", "timestamp": 1790856000000, "project": project,
+             "model": "claude-sonnet-4-5", "provider": "anthropic", "usage": usage,
+             "duration": {"api_ms": 0, "wall_ms": 0}, "cost": {"type": "hosted"}}
+    older = dict(start, session_id="s-0", timestamp=1790766000000, project="/srv/old")
+    end = dict(start, timestamp=1790856060000, duration={"api_ms": 900, "wall_ms": 60000},
+               message_count=4, tool_call_count=1, exit_reason="user_exit")
+    return [older, start, end]
+
+
+def build_letta(home: Path) -> None:
+    letta = home / ".letta"
+    _jsonl(letta / "transcripts" / LETTA_AGENT / LETTA_CONV / "transcript.jsonl", letta_transcript_records())
+    _jsonl(letta / "transcripts" / LETTA_AGENT / LETTA_LOCAL_CONV / "transcript.jsonl", letta_transcript_records())
+    _json(letta / "transcripts" / LETTA_AGENT / LETTA_CONV / "state.json", {"schema_version": "v3_assistant_steps"})
+    conv = letta / "lc-local-backend/conversations" / LETTA_LOCAL_DIR
+    _jsonl(conv / "messages.jsonl", letta_local_records())
+    _json(conv / "manifest.json", {"message_format": "pi-session-entry-jsonl", "schema_version": 2})
+    _jsonl(letta / "sessions.jsonl", letta_sessions_records())
+    _json(letta / "settings.json", {"env": {"LETTA_API_KEY": "sk-not-real"}})
