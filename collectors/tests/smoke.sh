@@ -556,11 +556,14 @@ run() { # run NAME ARGS...
   COLLECTOR_SH="$SHELL_UNDER_TEST" "$SHELL_UNDER_TEST" "$SCRIPT" -r "$ROOT" -o "$OUT/$_n" -q --max-file-size 1 "$@" >"$OUT/$_n.stdout" 2>"$OUT/$_n.stderr"
   _rc=$?
   M=$(ls "$OUT/$_n"/*.manifest.jsonl 2>/dev/null)
+  # shellcheck disable=SC2034 # A and S are read by the eval'd check strings
   A=$(ls "$OUT/$_n"/*.tar.gz 2>/dev/null)
+  # shellcheck disable=SC2034
   S=$(ls "$OUT/$_n"/*.collection.json 2>/dev/null)
-  return $_rc
+  return "$_rc"
 }
 row() { grep -F "\"path\":\"$1\"" "$M" | head -n1; }
+# shellcheck disable=SC2317,SC2329 # called from the eval'd check strings
 status_of() { row "$1" | sed 's/.*"status":"\([^"]*\)".*/\1/'; }
 
 printf '== shell: %s (%s)\n' "$SHELL_UNDER_TEST" "$(command -v "$SHELL_UNDER_TEST")"
@@ -764,6 +767,7 @@ inv() { # inv NAME ARGS... -> $OUT/NAME.stdout and $OUT/NAME.stderr
   _n=$1; shift
   COLLECTOR_SH="$SHELL_UNDER_TEST" "$SHELL_UNDER_TEST" "$SCRIPT" -r "$ROOT" --inventory "$@" >"$OUT/$_n.stdout" 2>"$OUT/$_n.stderr"
 }
+# shellcheck disable=SC2317,SC2329 # called from the eval'd check strings
 agent_line() { grep -F "\"user\":\"$2\",\"agent\":\"$3\"," "$OUT/$1.stdout" | head -n1; }
 INV_HOST_RE='^{"type":"host","host":"[^"]*","collector":"[0-9.]*","mode":"image","at":"[0-9-]*T[0-9:]*Z","users_scanned":[0-9]*,"users_unreadable":[0-9]*,"docker_volumes":[0-9]*}$'
 INV_AGENT_RE='^{"type":"agent","host":"[^"]*","user":"[^"]*","agent":"[^"]*","files":[0-9]*,"bytes":[0-9]*,"first":"[^"]*","last":"[^"]*","projects":[0-9]*,"evidence":"[^"]*"}$'
@@ -828,4 +832,4 @@ check "--list prints catalog" "\"$SHELL_UNDER_TEST\" \"$SCRIPT\" --list | grep -
 check "--list prints docker volume table" "\"$SHELL_UNDER_TEST\" \"$SCRIPT\" --list | grep -q '^agent-zero|\\*a0_usr$'"
 
 if [ "$fail" = 0 ]; then printf 'ALL PASSED (%s)\n' "$SHELL_UNDER_TEST"; rm -rf "$WORK"; else printf 'FAILURES (%s); work dir kept: %s\n' "$SHELL_UNDER_TEST" "$WORK"; fi
-exit $fail
+exit "$fail"

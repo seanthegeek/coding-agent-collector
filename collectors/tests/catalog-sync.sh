@@ -53,4 +53,4 @@ if [ -f "$ANALYZER_COPY" ]; then
 fi
 
 [ "$fail" = 0 ] && echo "CATALOGS IN SYNC"
-exit $fail
+exit "$fail"

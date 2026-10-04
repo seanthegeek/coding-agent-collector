@@ -17,6 +17,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   built-in command name; output and behaviour are unchanged. Found by
   PSScriptAnalyzer 1.25.0 with `collectors/PSScriptAnalyzerSettings.psd1`.
 
+### Fixed
+
+- sh collector: failed to parse under posh and other pdksh-derived shells,
+  which stop a `$(...)` at the `)` of a case pattern. The two such `case`
+  statements use the `(pattern)` form, and the shared helper and worker
+  programs are read from here-documents without `$(cat <<...)`; the
+  programs are byte-identical. The smoke test now passes under posh.
+
 ## [1.6.0] - 2026-10-04
 
 ### Added

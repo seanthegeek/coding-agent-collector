@@ -1356,7 +1356,17 @@ nanobot|*nanobot*
 # prepended to the programs run by find -exec sh -c (which cannot inherit
 # shell functions portably).
 # ---------------------------------------------------------------------------
-COMMON=$(cat <<'EOF_COMMON'
+# heredoc_var: reads stdin into $_hv without its final newline, which is what
+# VAR=$(cat <<'EOF' ...) gives. Used instead of that form because pdksh-derived
+# shells (posh) scan a heredoc inside $(...) for parentheses and stop at the
+# first case pattern's `)`.
+heredoc_var() {
+  _hv=
+  while IFS= read -r _hv_l; do _hv="$_hv$_hv_l
+"; done
+  _hv=${_hv%?}
+}
+heredoc_var <<'EOF_COMMON'
 ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 log_line() {
   printf '%s %s\n' "$(ts)" "$*" >>"$LOG"
@@ -1404,13 +1414,12 @@ emit_row() {
     "$(json_str "${19}")" "$(json_str "${20}")" >>"$1"
 }
 EOF_COMMON
-)
+COMMON=$_hv
 eval "$COMMON"
 
 # Program run by find -exec for every regular file / symlink to collect.
 # args: stage root user home agent manifest files...
-STAGE_PROG="$COMMON
-$(cat <<'EOF_STAGE'
+heredoc_var <<'EOF_STAGE'
 stage=$1; root=$2; user=$3; home=$4; agent=$5; manifest=$6; shift 6
 lastdir=
 for f in "$@"; do
@@ -1447,12 +1456,12 @@ for f in "$@"; do
   emit_row "$manifest" "$user" "$home" "$agent" "$f" "$apath" "$type" "$size" "$mtime" "$atime" "$ctime" "$btime" "$uid" "$gid" "$mode" "$sha" "$secret" "$status" "$target" "$err"
 done
 EOF_STAGE
-)"
+STAGE_PROG="$COMMON
+$_hv"
 
 # Program run by find -exec for every pruned (excluded) path.
 # args: root user home agent manifest paths...
-SKIP_PROG="$COMMON
-$(cat <<'EOF_SKIP'
+heredoc_var <<'EOF_SKIP'
 root=$1; user=$2; home=$3; agent=$4; manifest=$5; shift 5
 for f in "$@"; do
   rel=${f#"$root"}
@@ -1467,13 +1476,13 @@ for f in "$@"; do
   emit_row "$manifest" "$user" "$home" "$agent" "$f" "" "$type" "$size" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "" false skipped_excluded "" ""
 done
 EOF_SKIP
-)"
+SKIP_PROG="$COMMON
+$_hv"
 
 # Program run by find -exec in --inventory mode for every regular file under a
 # matched path: prints F|agent|size|mtime and copies, hashes and writes nothing.
 # args: agent files...
-INV_PROG="$COMMON
-$(cat <<'EOF_INV'
+heredoc_var <<'EOF_INV'
 agent=$1; shift
 for f in "$@"; do
   st=$(stat_file "$f")
@@ -1481,7 +1490,8 @@ for f in "$@"; do
   printf 'F|%s|%s|%s\n' "$agent" "$(num "${1:-}")" "$(num "${2:-}")"
 done
 EOF_INV
-)"
+INV_PROG="$COMMON
+$_hv"
 
 # ---------------------------------------------------------------------------
 usage() {
@@ -1611,6 +1621,7 @@ fi
 
 export HASH_TOOL STAT_MODE MAX_SIZE SECRET_GLOBS NO_SECRETS LOG QUIET
 
+# shellcheck disable=SC2317,SC2329 # invoked from the traps below
 cleanup() {
   if [ "$KEEP" != 1 ] && [ -n "$STAGE" ] && [ -d "$STAGE" ]; then
     rm -rf "$STAGE"
@@ -1702,7 +1713,7 @@ collect_path() {
 # their paths but are not walked.
 collect_tree() {
   _ct_matches=$(printf '%s\n' "$3" | while IFS='|' read -r _ct_agent _ct_pat; do
-    case "$_ct_agent" in ''|'#'*) continue ;; esac
+    case "$_ct_agent" in (''|'#'*) continue ;; esac
     expand_glob "$2" "$_ct_pat" | while IFS= read -r _ct_m; do
       printf '%s|%s|%s\n' "$_ct_agent" "$_ct_pat" "$_ct_m"
     done
@@ -1763,6 +1774,7 @@ fi
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Per-user collection (--inventory walks the homes after project discovery)
+# shellcheck disable=SC2030 # _h is per-iteration; inv_secret reads it below
 [ "$INVENTORY" = 1 ] || printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
   [ -n "$_h" ] || continue
   log_line "User $_u ($_h)"
@@ -1902,6 +1914,7 @@ fi
 # and nanobot configs, Tabby's config.toml) are not read in that mode.
 inv_secret() {
   [ "$INVENTORY" = 1 ] || return 1
+  # shellcheck disable=SC2031 # _h is the calling loop's current home
   _is_r=${1#"$_h"/}
   _is_ifs=$IFS
   IFS='
@@ -1917,6 +1930,7 @@ inv_secret() {
 }
 # Evaluated at the top of each discovery helper after its key is shifted off:
 # drops the files inv_secret rejects from "$@".
+# shellcheck disable=SC2016 # expanded where it is eval'd, not here
 INV_DROP_SECRETS='if [ "$INVENTORY" = 1 ]; then _ids_n=$#; for _ids_f do inv_secret "$_ids_f" || set -- "$@" "$_ids_f"; done; shift "$_ids_n"; fi'
 # json_vals KEY FILE... -> values of "KEY":"..." across the given files
 json_vals() {
@@ -1971,7 +1985,8 @@ discover_projects() {
     [ -n "$_h" ] || continue
     {
       json_vals project "$_h/.claude/history.jsonl"
-      [ -f "$_h/.claude.json" ] && ! inv_secret "$_h/.claude.json" && grep -o '"/[^"]*": *{' "$_h/.claude.json" 2>/dev/null | sed 's/^"//; s/": *{$//'
+      [ -f "$_h/.claude.json" ] && ! inv_secret "$_h/.claude.json" &&
+        grep -o '"/[^"]*": *{' "$_h/.claude.json" 2>/dev/null | sed 's/^"//; s/": *{$//'
       [ -d "$_h/.codex/sessions" ] && find "$_h/.codex/sessions" -name '*.jsonl' -exec grep -ho '"cwd":"[^"]*"' {} + 2>/dev/null | sed 's/^"cwd":"//; s/"$//'
       json_vals cwd "$_h"/.qwen/projects/*/chats/*.jsonl "$_h"/.cline/data/sessions/*/*.json "$_h"/.cursor/chats/*/*/meta.json
       json_vals workspace_root "$_h"/.cline/data/sessions/*/*.json
@@ -1979,8 +1994,10 @@ discover_projects() {
       json_vals working_dir "$_h"/.local/share/goose/sessions/*.jsonl
       json_vals worktree "$_h"/.local/share/opencode/storage/project/*.json
       json_vals path "$_h/.local/share/crush/projects.json"
-      [ -f "$_h/.gemini/projects.json" ] && ! inv_secret "$_h/.gemini/projects.json" && grep -o '"/[^"]*": *"' "$_h/.gemini/projects.json" 2>/dev/null | sed 's/^"//; s/": *"$//'
-      [ -f "$_h/.gemini/trustedFolders.json" ] && ! inv_secret "$_h/.gemini/trustedFolders.json" && grep -o '"/[^"]*": *"' "$_h/.gemini/trustedFolders.json" 2>/dev/null | sed 's/^"//; s/": *"$//'
+      [ -f "$_h/.gemini/projects.json" ] && ! inv_secret "$_h/.gemini/projects.json" &&
+        grep -o '"/[^"]*": *"' "$_h/.gemini/projects.json" 2>/dev/null | sed 's/^"//; s/": *"$//'
+      [ -f "$_h/.gemini/trustedFolders.json" ] && ! inv_secret "$_h/.gemini/trustedFolders.json" &&
+        grep -o '"/[^"]*": *"' "$_h/.gemini/trustedFolders.json" 2>/dev/null | sed 's/^"//; s/": *"$//'
       cat "$_h"/.gemini/tmp/*/.project_root "$_h"/.gemini/history/*/.project_root 2>/dev/null
       json_vals workspace "$_h/.gemini/antigravity-cli/history.jsonl"
       abs_strings "$_h/.gemini/antigravity-cli/settings.json" "$_h/.gemini/antigravity-cli/cache/projects.json" "$_h"/.gemini/config/projects/*.json
@@ -1993,7 +2010,8 @@ discover_projects() {
       json_vals project "$_h/.letta/sessions.jsonl"
       json_vals cwd "$_h"/.letta/lc-local-backend/conversations/*/messages.jsonl "$_h"/.pi/agent/sessions/*/*.jsonl "$_h"/.pi/agent/*.jsonl \
         "$_h/.pi/agent/crashes.json" "$_h"/.pi/agent/experimental/sessions/*/meta.json
-      [ -f "$_h/.pi/agent/trust.json" ] && ! inv_secret "$_h/.pi/agent/trust.json" && grep -o '"/[^"]*": *[tf]' "$_h/.pi/agent/trust.json" 2>/dev/null | sed 's/^"//; s/": *[tf]$//'
+      [ -f "$_h/.pi/agent/trust.json" ] && ! inv_secret "$_h/.pi/agent/trust.json" &&
+        grep -o '"/[^"]*": *[tf]' "$_h/.pi/agent/trust.json" 2>/dev/null | sed 's/^"//; s/": *[tf]$//'
       for _oi in "$_h/.openinterpreter/sessions" "$_h/.openinterpreter/archived_sessions"; do
         [ -d "$_oi" ] && find "$_oi" -name 'rollout-*.jsonl' -exec grep -ho '"cwd":"[^"]*"' {} + 2>/dev/null | sed 's/^"cwd":"//; s/"$//'
       done
@@ -2031,7 +2049,7 @@ if [ "$NO_PROJECTS" != 1 ]; then
     _p=${_line#*:}
     [ -d "$_p" ] || continue
     case "
-$USER_LIST" in *":$_p
+$USER_LIST" in (*":$_p
 "*|*":$_p") continue ;; esac
     printf '%s\n' "$_line"
   done)

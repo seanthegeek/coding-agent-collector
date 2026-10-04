@@ -1,0 +1,21 @@
+# shellcheck configuration for every POSIX sh file in the repository
+# (found by shebang: shfmt -f . lists them). Run as: shellcheck -s sh FILE...
+# All optional checks are on; the ones below are off, each for a reason.
+enable=all
+
+# SC2250 (require-variable-braces): style only; "$var" is the house style
+# and braces everywhere would touch about a thousand lines for no defect.
+disable=SC2250
+
+# SC2312 (check-extra-masked-returns): the collector is best effort and
+# runs commands inside $(...) and pipelines whose failure on a minimal host
+# is expected and handled by testing the output, not the status.
+disable=SC2312
+
+# SC2310 (check-set-e-suppressed): calling a function in an if or || is
+# how these scripts test it; none relies on set -e inside such a call.
+disable=SC2310
+
+# SC2249 (add-default-case): one-line `case` statements are used as
+# pattern tests where no match is the normal path; a `*) ;;` adds nothing.
+disable=SC2249
