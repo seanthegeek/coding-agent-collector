@@ -56,6 +56,8 @@ analyzer/
   requirements.txt             third-party dependencies (zstandard, for Zed threads)
 lab/                           Docker sandbox for running CLI agents against a scratch
                                home and exporting it for the collector; see lab/README.md
+tools/check_research_links.py  verifies every citation link in the research documents
+                               resolves to its file and line range at the cited commit
 README.md                      project overview; points at the per-part READMEs
 AGENTS.md                      this file
 CLAUDE.md                      imports this file for Claude Code
@@ -409,6 +411,35 @@ names the evidence source and commit, the key findings, and the catalog
 changes. Comment on the v2 parser issue with any SQLite-only sources found.
 File new issues for anything out of scope that the research surfaced, such
 as sandboxed install paths or tokens stored inside chat databases.
+
+**Running a round with subagents.** The split in CLAUDE.md applies: the
+main session writes one brief and a per-tool assignment, one research
+subagent per tool runs in parallel, one integration subagent makes the
+table, test and index changes, and the main session reviews. Research is
+safe to delegate because each subagent writes only its own new document,
+but the brief must set the safety envelope, which differs from code work:
+
+- Fetching untrusted code is the job; executing it is not. Shallow clones,
+  `npm pack` tarballs and binaries for `strings` go in the scratchpad and
+  are only read. No `npm install`, no installers, no running the tool, no
+  install on the workstation. A real-install run in `lab/` is a separate
+  step that the user asks for explicitly.
+- A blocked clone or download is reported, not worked around from memory.
+  A research document written from memory is worse than none, because its
+  citations look like evidence.
+- A live collection against the workstation collects the author's own
+  credentials. A subagent that runs one writes it under the scratchpad,
+  deletes it afterwards, and never puts file contents or manifest rows
+  from it into its report; or the main session runs it.
+- Posting to GitHub (closing issues, commenting) is outward-facing, so the
+  subagent reports what to post and the main session posts it after review.
+
+The review gate for a research round is mechanical first: run
+`tools/check_research_links.py` (with `--repos` pointing at the scratchpad
+checkouts when they exist) and treat any link that does not resolve, and
+any claim with no link, as unverified. Then the integration subagent's
+test run is repeated by the main session: `collectors/tests/catalog-sync.sh`,
+the full shell matrix and the analyzer tests.
 
 Things the first run taught us, to check for explicitly next time:
 
