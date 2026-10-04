@@ -815,6 +815,53 @@ Documents/LocalDeepResearch/Library
 AppData/Local/Ollama/updates
 Library/Caches/ollama
 Library/Caches/com.electron.ollama
+.time_travel
+usr/.time_travel
+workdir/*/.venv
+workdir/*/node_modules
+usr/workdir/*/.venv
+usr/workdir/*/node_modules
+tmp/playwright
+tmp/memory/embeddings
+models
+index
+repositories
+journal_data
+library
+agent-canvas/workspaces
+agent-canvas/tmux
+hermes-agent/[!.]*
+hermes-agent/.[!e]*
+runtimes
+node
+installs
+tools
+sandboxes
+checkpoints/store/objects
+checkpoints/store/indexes
+checkpoints/legacy-*
+state-snapshots
+backups
+browser-profile
+browser-profiles
+browser_profiles
+chrome-debug
+bot-desktop/browser-profile
+plugins/*/node_modules
+plugins/*/.venv
+npm
+npm-runtime
+worktrees
+extensions/*/node_modules
+sandbox/skills-workspaces
+browser/*/user-data/*/Cache
+browser/*/user-data/*/Code Cache
+browser/*/user-data/*/GPUCache
+browser/*/user-data/*/Service Worker
+bin
+mod-cache
+tool_execution_dir
+chroma
 
 # credential files (flagged secret, skipped with --no-secrets)
 .claude/.credentials.json
@@ -1143,3 +1190,103 @@ Library/Application Support/local-deep-research/.secret_key
 AppData/Local/local-deep-research/local-deep-research/.secret_key
 .ollama/id_ed25519
 .env
+secrets.env
+settings.json
+projects/*/.a0proj/secrets.env
+plugins/_desktop/profiles/*/.ssh/*
+plugins/_desktop/profiles/*/.gnupg/*
+usr/.env
+usr/secrets.env
+usr/settings.json
+usr/projects/*/.a0proj/secrets.env
+usr/plugins/_desktop/profiles/*/.ssh/*
+usr/plugins/_desktop/profiles/*/.gnupg/*
+tmp/secrets.env
+tmp/settings.json
+config.toml
+id_ed25519
+.secret_key
+agent-canvas/secret-key.txt
+agent-canvas/api-key.txt
+secrets.json
+profiles/*
+provider-connections/*
+runtime-control/*
+agent_settings.json
+cloud/*
+mcp.json
+.jwt_secret
+.keys
+pg_uri
+credentials
+lc-local-backend/providers/auth.json
+channels/*/accounts.json
+channels/whatsapp/auth/*
+agents/*/memory/.git/config
+agents/*/memory/.git/letta-credential-helper.cmd
+.env.bak*
+.op.env
+npmrc
+auth.json
+auth.json.*
+auth/*
+.anthropic_oauth.json
+.copilot_jwt.json
+google_*.json
+google_chat_user_tokens/*
+slack_tokens.json
+honcho.json
+mem0.json
+webhook_subscriptions.json
+teams_pipeline_store.json
+mcp-tokens/*
+vault/*
+browser_auth/*
+pairing/*
+platforms/pairing/*
+whatsapp/session/*
+platforms/whatsapp/session/*
+matrix/store/*
+platforms/matrix/store/*
+cache/bws_cache*.json
+weixin/accounts/*
+runtime/photon-sidecar.json
+proxy/*
+home/*
+openclaw.json*
+clawdbot.json*
+moltbot.json*
+credentials/*
+service-env/*
+agents/*/agent/auth-profiles.json*
+agents/*/agent/models.json
+browser/*/user-data/*/Cookies*
+config.json
+whatsapp-auth/*
+matrix-store/*
+# docker volumes (agent|volume name glob)
+# Matched against each volume name; the first matching line wins. A matched
+# volume is collected whole as user "docker" with its _data directory as the
+# home, so EXCLUDES and SECRET_GLOBS apply relative to the volume root.
+# Agent Zero: a0_usr in the README docker run (Compose prefixes it as
+# <project>_a0_usr) and a0-launcher-<slug>-usr in the A0 Launcher named-volume
+# mode; both are mounted at /a0/usr
+agent-zero|*a0_usr
+agent-zero|a0-launcher-*-usr
+# Local Deep Research: ldr_data in docker-compose.yml, mounted at /data
+local-deep-research|*ldr_data
+# Ollama: ollama in docs/docker.mdx, ollama_data in the Local Deep Research
+# compose file; mounted at /root/.ollama
+ollama|ollama
+ollama|*ollama*
+# Inferred names: the documentation of these tools bind-mounts the home directory
+# instead of a named volume; a volume replacing it has the same layout (~/.tabby
+# at /data, ~/.hermes at /opt/data, ~/.openclaw at /home/node/.openclaw, ...)
+tabby|*tabby*
+local-deep-research|*local-deep-research*
+openhands|*openhands*
+letta|*letta*
+hermes|*hermes*
+openclaw|*openclaw*
+openclaw|*clawdbot*
+nanobot|*nanobot*

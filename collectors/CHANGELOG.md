@@ -10,6 +10,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-04
+
+### Added
+
+- Docker and Podman named volumes are collected (issue 28). Both
+  collectors enumerate `var/lib/docker/volumes`,
+  `var/lib/containers/storage/volumes` and `ProgramData/Docker/volumes`
+  under the root, and the rootless `.local/share/docker/volumes` and
+  `.local/share/containers/storage/volumes` under each home, from the
+  filesystem only. A volume whose name matches the new `DOCKER_VOLUMES`
+  table is collected whole with `user` `docker` and its `_data` directory
+  as `home`; exclusion and secret globs apply relative to `_data`.
+- New catalog table `DOCKER_VOLUMES` (Agent Zero, Local Deep Research,
+  Ollama from source; Tabby, OpenHands, Letta, Hermes, OpenClaw and nanobot
+  by inferred name), printed last by `--list` and `-List` under the new
+  heading `# docker volumes (agent|volume name glob)`. Consumers of the
+  `--list` output that do not know the heading should stop reading there.
+- Volume-relative forms of the Agent Zero, Tabby, Ollama, Local Deep
+  Research, OpenHands, Hermes, OpenClaw, nanobot and Letta exclusions and
+  secret globs, at the end of `EXCLUDES` and `SECRET_GLOBS`.
+- `--no-docker` / `-NoDocker` skips the enumeration.
+- Manifest: new status value `skipped_unmatched_volume`, one `dir` row
+  with its size for each volume that matches no `DOCKER_VOLUMES` line.
+- `collection.json`: `options.no_docker`, `counts.skipped_unmatched_volume`,
+  a `docker` object (`volumes_found`, `volumes_collected`, `unreadable`,
+  `docker_desktop`) and a `notes` list. An unreadable volume directory or a
+  volume that cannot be walked is noted there and in a `docker:` line of
+  the stdout summary; collection continues and the exit code is unchanged.
+  Docker Desktop data (whose Linux volumes are inside a VM disk) is only
+  noted.
+
 ## [1.4.0] - 2026-10-04
 
 ### Added
@@ -140,7 +171,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.4.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.5.0...HEAD
+[1.5.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.4.0...collector-v1.5.0
 [1.4.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.3.0...collector-v1.4.0
 [1.3.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.2.0...collector-v1.3.0
 [1.2.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.1.0...collector-v1.2.0

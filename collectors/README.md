@@ -58,7 +58,11 @@ sha256:     19c47a0e...
 collected:  5985 files, 110669230 bytes
 skipped:    7 excluded, 0 too large, 0 secret
 errors:     2
+docker:     4 volumes found, 1 collected, 0 unreadable
 ```
+
+The `docker:` line appears only when a Docker or Podman volume directory or
+Docker Desktop data was found; see [Docker volumes](#docker-volumes).
 
 ### Windows
 
@@ -73,8 +77,8 @@ powershell.exe -ExecutionPolicy Bypass -File Collect-AgentArtifacts.ps1 -Root E:
 `-ExecutionPolicy Bypass` is needed because fresh Windows installs default to
 `Restricted`; it affects only that process and does not change machine policy.
 The parameters mirror the sh options: `-OutputDir`, `-Root`, `-Users`,
-`-Project`, `-Full`, `-NoSecrets`, `-NoLive`, `-NoProjects`, `-MaxFileSizeMB`,
-`-KeepStaging`, `-List`, `-Quiet`, `-Version`.
+`-Project`, `-Full`, `-NoSecrets`, `-NoLive`, `-NoProjects`, `-NoDocker`,
+`-MaxFileSizeMB`, `-KeepStaging`, `-List`, `-Quiet`, `-Version`.
 
 On Windows 10 1803 and later, Windows 11, and Server 2019 and later the script
 writes a `tar.gz` through the built-in `tar.exe`, so the archive is identical in
@@ -93,6 +97,7 @@ and produce a `.zip`; the summary's `capabilities.archiver` says which.
 | `--no-secrets` | Skip credential files. By default they are collected and flagged `secret: true` in the manifest. |
 | `--no-live` | Skip the live system snapshot. |
 | `--no-projects` | Skip project-level artifact discovery. |
+| `--no-docker` | Skip Docker and Podman named volume enumeration (see [Docker volumes](#docker-volumes)). |
 | `--max-file-size MB` | Skip individual files larger than this. Default 256, `0` disables. |
 | `-k, --keep-staging` | Keep the staging directory next to the archive. |
 | `--list` | Print the artifact catalog, exclusions and secret patterns, then exit. |
@@ -170,6 +175,52 @@ snapshot uses CIM: processes with command lines and owners, logged-on users,
 TCP connections with owning process, services, and scheduled task actions.
 Process environment blocks are not captured on Windows.
 
+### Docker volumes
+
+Several agents are commonly deployed in containers with their state in a
+named volume rather than a home directory: Agent Zero's README runs it with
+`-v a0_usr:/a0/usr`, Local Deep Research's compose file keeps its data in
+`ldr_data`, and Ollama's Docker instructions use a volume named `ollama`.
+The collectors enumerate volumes themselves, from the filesystem and never
+through the `docker` binary, so the same code works live and on a disk
+image. The volume directories tried, relative to the root (`/` live, `-r`
+in image mode), are `var/lib/docker/volumes` (root Docker),
+`var/lib/containers/storage/volumes` (root Podman) and
+`ProgramData/Docker/volumes` (Windows containers), and under every
+selected home `.local/share/docker/volumes` (rootless Docker) and
+`.local/share/containers/storage/volumes` (rootless Podman). `-u` limits
+the rootless directories to the named users; the system directories are
+always tried. Symlinked volume directories are noted and not followed.
+
+Each volume is `<volumes dir>/<name>/_data`. Its name is matched against the
+`DOCKER_VOLUMES` table (`--list` prints it last, under
+`# docker volumes (agent|volume name glob)`), first match wins. A matched
+volume is collected whole: its rows have `user` `docker`, `home` the
+volume's `_data` path and `agent` from the table, and its files are
+archived under `fs/<original path>` like everything else. Exclusion and
+credential patterns apply relative to `_data`, so the tables carry
+volume-relative forms such as `tmp/playwright` and `secrets.env` beside the
+home-relative ones. A volume that matches nothing is not collected; it gets
+one `dir` row with status `skipped_unmatched_volume` and its size, so a
+database volume or an agent with an unexpected volume name is still visible.
+
+`/var/lib/docker` is readable only by root. Run as root to collect system
+volumes. When a volume directory exists but cannot be read, or a matched
+volume cannot be walked completely, the collection carries on with
+everything else, the stdout summary says so
+(`docker:     3 volumes found, 1 collected, 1 unreadable (run as root to collect)`)
+and `collection.json` gets a note naming the path. The exit code is still
+`0` when an archive was written. `--no-docker` skips the enumeration.
+
+Docker Desktop on Windows and macOS keeps Linux volumes inside its virtual
+machine disk (the WSL `docker_data.vhdx` on Windows, `Docker.raw` on macOS),
+which neither collector can reach. When Docker Desktop data is found
+(`%ProgramData%\DockerDesktop`, a profile's `AppData\Local\Docker`, or
+`~/Library/Containers/com.docker.docker`) the collectors only record a note
+and append `; Docker Desktop VM disk not collected` to the summary line.
+Collect those volumes from inside the VM, for example with
+`docker run --rm -v VOLUME:/v -v "$PWD":/out alpine tar -czf /out/VOLUME.tgz -C /v .`.
+
 ### Default exclusions
 
 Model weights, Electron and editor caches, extension and daemon binaries,
@@ -200,7 +251,8 @@ tables and are flagged whole. Process environments captured under
 out; they are then recorded with status `skipped_secret`.
 
 Exclusion and credential patterns are matched relative to the directory being
-collected, a home or a discovered project, and `*` in them crosses `/`. The
+collected, a home, a discovered project or a Docker volume's `_data`, and
+`*` in them crosses `/`. The
 same `.claude/worktrees` pattern therefore prunes both `~/.claude/worktrees`
 and a project's `.claude/worktrees`.
 
@@ -245,7 +297,9 @@ Each manifest row is one JSON object:
 ```
 
 `status` is one of `collected`, `symlink`, `skipped_excluded`, `skipped_size`,
-`skipped_secret` or `error_copy`. Timestamps are epoch seconds from `lstat` on
+`skipped_secret`, `error_copy` or `skipped_unmatched_volume` (a Docker or
+Podman volume that matched no `DOCKER_VOLUMES` line; one `dir` row with its
+size, `user` `docker` and `home` and `path` both the volume's `_data`). Timestamps are epoch seconds from `lstat` on
 the original file; `btime` is `0` where the platform cannot report it. Rows
 written by the Windows collector add `owner` (account name or SID) and
 `attributes` (NTFS attribute list), set `uid`, `gid` and `mode` to `0` and
@@ -253,6 +307,14 @@ written by the Windows collector add `owner` (account name or SID) and
 On a live Windows host the archive path is `fs/<drive letter>/<path>`, for
 example `fs/C/Users/alice/.claude/history.jsonl`; in image mode it is relative
 to the root as on other platforms.
+`collection.json` records the run: tool version, mode, root, options
+(`full`, `no_secrets`, `no_live`, `max_file_size_bytes`, `users_filter`,
+`no_docker`), users, homes, projects, `counts` per status (including
+`skipped_unmatched_volume`) and collected bytes, `docker` (`volumes_found`,
+`volumes_collected`, `unreadable`, `docker_desktop`), and `notes`, a list of
+messages about what could not be collected, such as an unreadable Docker
+volume directory.
+
 Symlinks are recreated in the archive and their target recorded, never
 followed. The copy of each file is hashed after staging, so the hash matches
 the bytes in the archive even if a running agent appended to the source
@@ -287,7 +349,7 @@ tests/smoke.sh dash
 tests/smoke.sh bash
 tests/smoke.sh ash      # busybox
 shellcheck -s sh collect-agent-artifacts.sh
-tests/catalog-sync.sh   # the four tables match between the sh and ps1 scripts
+tests/catalog-sync.sh   # the five tables match between the sh and ps1 scripts
 pwsh -File tests/smoke.ps1
 powershell.exe -ExecutionPolicy Bypass -File tests\smoke.ps1   # on Windows
 ```
@@ -299,7 +361,10 @@ manifest, hashes and archive contents. The sh test is POSIX sh too; its JSON
 validity and hash cross-check steps use `python3` when available. The
 PowerShell test uses a Windows profile tree with drive-letter and `file:///`
 project references and runs under both PowerShell 5.1 and 7. The catalog drift
-test extracts the four tables from both scripts and fails if they differ.
+test extracts the five tables from both scripts and fails if they differ.
+Both smoke tests also build root and rootless Docker volumes, one matched and
+one unmatched, and check `--no-docker`; the sh test adds an unreadable
+volume when it is not run as root.
 
 ## License
 

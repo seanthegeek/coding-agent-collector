@@ -38,7 +38,9 @@ it was started:
 | Native ("development") run | the git clone, anywhere; the docs example is `~/Desktop/agent-zero` ([`docs/setup/dev-setup.md:34-37`](https://github.com/agent0ai/agent-zero/blob/e3051fb584b1a36be2b0a0c90606f1c2c2d356ec/docs/setup/dev-setup.md#L34-L37)); native means not `--dockerized` ([`helpers/runtime.py:59-64`](https://github.com/agent0ai/agent-zero/blob/e3051fb584b1a36be2b0a0c90606f1c2c2d356ec/helpers/runtime.py#L59-L64)) |
 
 Named volumes live under the Docker data root (or inside the Docker Desktop
-VM), outside any home, and are not reachable by a home-relative catalog. Only
+VM), outside any home, and are not reachable by a home-relative catalog;
+since collector 1.5.0 the `DOCKER_VOLUMES` table collects `*a0_usr` and
+`a0-launcher-*-usr` volumes with usr-relative exclusions and secret globs. Only
 the native run has `usr/` and `tmp/` beside the source, a `.venv` or
 `.conda`, and a legacy root `.env`.
 

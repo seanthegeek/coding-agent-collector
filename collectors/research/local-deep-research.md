@@ -29,7 +29,7 @@ The downloaded-document library defaults to `~/Documents/LocalDeepResearch/Libra
 
 Pre-1.0 (v0.x) kept a single unencrypted `ldr.db` in the data directory ([MIGRATION_GUIDE_v1.md:70-80](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docs/MIGRATION_GUIDE_v1.md#L70-L80), [env_configuration.md:244-248](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docs/env_configuration.md#L244-L248)).
 
-The Docker deployment sets `LDR_DATA_DIR=/data` on a named volume ([docker-compose.yml:57](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docker-compose.yml#L57), [127-128](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docker-compose.yml#L127-L128)), which is outside any home directory.
+The Docker deployment sets `LDR_DATA_DIR=/data` on a named volume ([docker-compose.yml:57](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docker-compose.yml#L57), [127-128](https://github.com/LearningCircuit/local-deep-research/blob/3b965431351bb17c523fa38fdcfced4a3f891d49/docker-compose.yml#L127-L128)), which is outside any home directory. Since collector 1.5.0 the `DOCKER_VOLUMES` table collects `*ldr_data` volumes, with data-relative exclusions.
 
 ## 3. Credentials
 
