@@ -2,7 +2,7 @@
 
 ## 1. Source and evidence level
 
-sst/opencode, open source, commit [`907b3bc518fa48e90e8ec24dd327d13eee71c36c`](https://github.com/sst/opencode/commit/907b3bc518fa48e90e8ec24dd327d13eee71c36c). Every claim is from source. Platform mapping verified against the `xdg-basedir` 5.1.0 tarball (`scratchpad/crates/xdg/package/index.js`), the version pinned in [`packages/core/package.json:127`](https://github.com/sst/opencode/blob/907b3bc518fa48e90e8ec24dd327d13eee71c36c/packages/core/package.json#L127). Transcript schema is in `analyzer/research/opencode.md`; not repeated here.
+sst/opencode, open source, commit [`907b3bc518fa48e90e8ec24dd327d13eee71c36c`](https://github.com/sst/opencode/commit/907b3bc518fa48e90e8ec24dd327d13eee71c36c). Every claim is from source. Platform mapping verified against the `xdg-basedir` 5.1.0 tarball (`scratchpad/crates/xdg/package/index.js`), the version pinned in [`packages/core/package.json:127`](https://github.com/sst/opencode/blob/907b3bc518fa48e90e8ec24dd327d13eee71c36c/packages/core/package.json#L127). Transcript schema is in [`analyzer/research/opencode.md`](../../analyzer/research/opencode.md); not repeated here.
 
 ## 2. Per-user storage
 

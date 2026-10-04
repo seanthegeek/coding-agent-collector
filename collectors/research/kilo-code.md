@@ -7,7 +7,7 @@ Open source. Kilo-Org/kilocode at [`76bcfd40be616a72f4697b3041565f322245b462`](h
 (`packages/core`, `packages/opencode`); the VS Code extension
 `kilocode.kilo-code` ([`packages/kilo-vscode/package.json:2`](https://github.com/Kilo-Org/kilocode/blob/76bcfd40be616a72f4697b3041565f322245b462/packages/kilo-vscode/package.json#L2),[`11`](https://github.com/Kilo-Org/kilocode/blob/76bcfd40be616a72f4697b3041565f322245b462/packages/kilo-vscode/package.json#L11)) is a thin
 client of that server. All claims from source. Record schemas:
-`analyzer/research/kilo-code.md` and `opencode.md`.
+[`analyzer/research/kilo-code.md`](../../analyzer/research/kilo-code.md) and `opencode.md`.
 
 ## 2. Per-user storage
 

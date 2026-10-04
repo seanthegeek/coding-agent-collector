@@ -1,5 +1,8 @@
 # kiro: Kiro CLI (ex Amazon Q Developer CLI) and Kiro IDE
 
+How the transcripts are encoded and how the parser reads them is in
+[`analyzer/research/kiro.md`](../../analyzer/research/kiro.md).
+
 ## 1. Source and evidence level
 
 - L1 source: aws/amazon-q-developer-cli at [`15cc8f3cd18c4272925ce1c7053268eedff1ea0a`](https://github.com/aws/amazon-q-developer-cli/commit/15cc8f3cd18c4272925ce1c7053268eedff1ea0a) (2026-04-23), [`crates/chat-cli/src/util/paths.rs`](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/util/paths.rs), [`database/mod.rs`](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/database/mod.rs), [`database/sqlite_migrations/`](https://github.com/aws/amazon-q-developer-cli/tree/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/database/sqlite_migrations), [`cli/chat/conversation.rs`](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/cli/chat/conversation.rs). Cited as `Q paths.rs:N`.

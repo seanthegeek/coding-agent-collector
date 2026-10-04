@@ -5,6 +5,9 @@ forked Cline and still shares its task layout ([roo-code.md](roo-code.md)),
 Kilo has since moved to an OpenCode-derived store
 ([kilo-code.md](kilo-code.md)). Paths cited are relative to the clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/cline.md`](../../collectors/research/cline.md).
+
 ## 1. Source
 
 cline/cline at [`39ff2359f7e08231281539696e48a166ce49270c`](https://github.com/cline/cline/commit/39ff2359f7e08231281539696e48a166ce49270c), Apache-2.0. Open

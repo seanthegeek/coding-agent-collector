@@ -8,7 +8,7 @@ HKUDS/nanobot, commit [`acdae3d0ae2714b6dde672428e921dbf705c096f`](https://githu
 cites `docs/` in the same checkout. nanobot is a small personal-assistant
 agent with a CLI, a WebUI and a gateway that connects chat channels
 (Telegram, Discord, Feishu, WhatsApp, Matrix, QQ, WeChat and others under
-`nanobot/channels/`). Transcript schema is in `analyzer/research/nanobot.md`.
+`nanobot/channels/`). Transcript schema is in [`analyzer/research/nanobot.md`](../../analyzer/research/nanobot.md).
 
 ## 2. Per-user storage
 

@@ -4,6 +4,9 @@ Catalog agent: `aider`. Aider writes plain-text history files into the
 repository it runs in, so most of its evidence is project-level. Paths cited
 are relative to the clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/aider.md`](../../collectors/research/aider.md).
+
 ## 1. Source
 
 Aider-AI/aider at [`5dc9490bb35f9729ef2c95d00a19ccd30c26339c`](https://github.com/Aider-AI/aider/commit/5dc9490bb35f9729ef2c95d00a19ccd30c26339c), Apache-2.0

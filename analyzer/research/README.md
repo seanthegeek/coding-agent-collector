@@ -19,35 +19,35 @@ it.
 
 | Agent | Document | Store | Parser |
 | --- | --- | --- | --- |
-| `antigravity` | [antigravity.md](antigravity.md) | SQLite of protobuf blobs; schema from the `agy` binary's embedded descriptors | yes |
-| `gemini-cli` | [gemini-cli.md](gemini-cli.md) | JSONL with `$set`/`$patch`/`$rewindTo` operations | yes |
-| `qwen-code` | [qwen-code.md](qwen-code.md) | JSONL, Claude-Code-like records with `cwd` and `gitBranch` | yes |
-| `cline` | [cline.md](cline.md) | JSON arrays per task; SDK session files; SQLite indexes | yes |
-| `roo-code` | [roo-code.md](roo-code.md) | Cline task layout with Roo extensions | yes |
-| `kilo-code` | [kilo-code.md](kilo-code.md) | OpenCode-style SQLite (`kilo.db`) | yes |
-| `opencode` | [opencode.md](opencode.md) | SQLite (WAL) with JSON columns | yes |
-| `crush` | [crush.md](crush.md) | per-project SQLite (WAL), parts as a JSON array | yes |
-| `goose` | [goose.md](goose.md) | SQLite (WAL), `content_json` arrays | yes |
-| `zed` | [zed.md](zed.md) | SQLite with zstd-compressed JSON thread blobs | yes, needs `zstandard` |
-| `continue` | [continue.md](continue.md) | JSON per session, session-level timestamps only | yes |
-| `vscode` | [vscode.md](vscode.md) | VS Code chat sessions (Copilot Chat): JSONL mutation log, legacy JSON | yes |
-| `aider` | [aider.md](aider.md) | markdown and readline-style text in the repository | yes |
-| `kiro` | [kiro.md](kiro.md) | Amazon Q CLI SQLite, one JSON blob per working directory; Kiro CLI unverified | yes, Amazon Q CLI only |
-| `pi` | [pi.md](pi.md) | JSONL session tree, header line with `cwd` | yes |
-| `little-coder` | [little-coder.md](little-coder.md) | pi session JSONL; prompt history as a JSON array | yes |
-| `open-interpreter` | [open-interpreter.md](open-interpreter.md) | Codex rollout JSONL under `~/.openinterpreter` | yes, the Codex parser |
-| `openhands` | [openhands.md](openhands.md) | one JSON file per event per conversation, naive local timestamps | yes |
-| `letta` | [letta.md](letta.md) | JSONL transcripts per agent and conversation, sessions index | yes |
-| `hermes` | [hermes.md](hermes.md) | SQLite (WAL) `state.db`, JSONL fallback transcripts | yes |
-| `openclaw` | [openclaw.md](openclaw.md) | SQLite (WAL) per agent with JSON or zstd events, legacy JSONL | yes |
-| `nanobot` | [nanobot.md](nanobot.md) | JSONL per session key under `sessions/<workspace-id>/` | yes |
 | `agent-zero` | [agent-zero.md](agent-zero.md) | JSON per chat context, rewritten whole | yes |
-| `pearai` | [pearai.md](pearai.md) | Continue-fork session JSON, Roo-fork task files | yes |
+| `aider` | [aider.md](aider.md) | markdown and readline-style text in the repository | yes |
+| `antigravity` | [antigravity.md](antigravity.md) | SQLite of protobuf blobs; schema from the `agy` binary's embedded descriptors | yes |
+| `cline` | [cline.md](cline.md) | JSON arrays per task; SDK session files; SQLite indexes | yes |
 | `cody` | [cody.md](cody.md) | rows in the editor `state.vscdb`; JetBrains global-state JSON | yes |
-| `twinny` | [twinny.md](twinny.md) | rows in the editor `state.vscdb` | yes |
-| `tabby` | [tabby.md](tabby.md) | server SQLite (WAL) `ee/db.sqlite`, event JSON logs | yes |
-| `shellgpt` | [shellgpt.md](shellgpt.md) | one JSON message array per chat id in the temp dir | yes |
+| `continue` | [continue.md](continue.md) | JSON per session, session-level timestamps only | yes |
+| `crush` | [crush.md](crush.md) | per-project SQLite (WAL), parts as a JSON array | yes |
+| `gemini-cli` | [gemini-cli.md](gemini-cli.md) | JSONL with `$set`/`$patch`/`$rewindTo` operations | yes |
+| `goose` | [goose.md](goose.md) | SQLite (WAL), `content_json` arrays | yes |
+| `hermes` | [hermes.md](hermes.md) | SQLite (WAL) `state.db`, JSONL fallback transcripts | yes |
+| `kilo-code` | [kilo-code.md](kilo-code.md) | OpenCode-style SQLite (`kilo.db`) | yes |
+| `kiro` | [kiro.md](kiro.md) | Amazon Q CLI SQLite, one JSON blob per working directory; Kiro CLI unverified | yes, Amazon Q CLI only |
+| `letta` | [letta.md](letta.md) | JSONL transcripts per agent and conversation, sessions index | yes |
+| `little-coder` | [little-coder.md](little-coder.md) | pi session JSONL; prompt history as a JSON array | yes |
 | `muse-code` | [muse-code.md](muse-code.md) | event-sourced JSONL per session and subagent; closed source, from the binary's strings, vendor skills and a real install | yes |
+| `nanobot` | [nanobot.md](nanobot.md) | JSONL per session key under `sessions/<workspace-id>/` | yes |
+| `open-interpreter` | [open-interpreter.md](open-interpreter.md) | Codex rollout JSONL under `~/.openinterpreter` | yes, the Codex parser |
+| `openclaw` | [openclaw.md](openclaw.md) | SQLite (WAL) per agent with JSON or zstd events, legacy JSONL | yes |
+| `opencode` | [opencode.md](opencode.md) | SQLite (WAL) with JSON columns | yes |
+| `openhands` | [openhands.md](openhands.md) | one JSON file per event per conversation, naive local timestamps | yes |
+| `pearai` | [pearai.md](pearai.md) | Continue-fork session JSON, Roo-fork task files | yes |
+| `pi` | [pi.md](pi.md) | JSONL session tree, header line with `cwd` | yes |
+| `qwen-code` | [qwen-code.md](qwen-code.md) | JSONL, Claude-Code-like records with `cwd` and `gitBranch` | yes |
+| `roo-code` | [roo-code.md](roo-code.md) | Cline task layout with Roo extensions | yes |
+| `shellgpt` | [shellgpt.md](shellgpt.md) | one JSON message array per chat id in the temp dir | yes |
+| `tabby` | [tabby.md](tabby.md) | server SQLite (WAL) `ee/db.sqlite`, event JSON logs | yes |
+| `twinny` | [twinny.md](twinny.md) | rows in the editor `state.vscdb` | yes |
+| `vscode` | [vscode.md](vscode.md) | VS Code chat sessions (Copilot Chat): JSONL mutation log, legacy JSON | yes |
+| `zed` | [zed.md](zed.md) | SQLite with zstd-compressed JSON thread blobs | yes, needs `zstandard` |
 
 The Parser column says whether `agent_analyzer/parsers/` has a parser for
 the agent; the analyzer README's parser table lists the files each one

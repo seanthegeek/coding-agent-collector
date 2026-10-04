@@ -6,7 +6,7 @@ Open source. continuedev/continue at [`5522c6f44ca0ac3528b37244818fbfa39b5af470`
 (clone `scratchpad/repos/continue`). All claims from source. Covers the VS Code
 extension `continue.continue`, the JetBrains plugin (same core via
 `binary/`) and the `cn` CLI (`extensions/cli`). Record schemas:
-`analyzer/research/continue.md`.
+[`analyzer/research/continue.md`](../../analyzer/research/continue.md).
 
 ## 2. Per-user storage
 

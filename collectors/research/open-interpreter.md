@@ -1,5 +1,8 @@
 # Open Interpreter: on-disk paths
 
+How the transcripts are encoded and how the parser reads them is in
+[`analyzer/research/open-interpreter.md`](../../analyzer/research/open-interpreter.md).
+
 ## 1. Source and evidence level
 
 openinterpreter/openinterpreter (the old `open-interpreter` URL redirects

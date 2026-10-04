@@ -1,5 +1,8 @@
 # qwen-code: on-disk paths
 
+How the transcripts are encoded and how the parser reads them is in
+[`analyzer/research/qwen-code.md`](../../analyzer/research/qwen-code.md).
+
 ## 1. Source and evidence level
 
 QwenLM/qwen-code, commit [`2c591ecc08a6fa080342f9b1b9f7f43215178cbb`](https://github.com/QwenLM/qwen-code/commit/2c591ecc08a6fa080342f9b1b9f7f43215178cbb)

@@ -5,6 +5,9 @@ predecessor the Amazon Q Developer CLI, and the Kiro IDE. This document is
 about the CLI store. Paths cited are relative to the clone; `C=` means
 `crates/chat-cli/src`.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/kiro.md`](../../collectors/research/kiro.md).
+
 ## 1. Source and applicability
 
 aws/amazon-q-developer-cli at [`15cc8f3cd18c4272925ce1c7053268eedff1ea0a`](https://github.com/aws/amazon-q-developer-cli/commit/15cc8f3cd18c4272925ce1c7053268eedff1ea0a)

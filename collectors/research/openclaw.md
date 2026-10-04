@@ -9,7 +9,7 @@ Swift macOS app. Every claim is source-level unless it cites `docs/` or
 then Moltbot. It runs a persistent gateway that takes messages from chat
 channels (Telegram, WhatsApp, Slack, Signal, iMessage and others under
 `extensions/`), runs agents with shell, browser and file tools, and keeps
-per-agent sessions. Transcript schema is in `analyzer/research/openclaw.md`.
+per-agent sessions. Transcript schema is in [`analyzer/research/openclaw.md`](../../analyzer/research/openclaw.md).
 
 ## 2. Per-user storage
 

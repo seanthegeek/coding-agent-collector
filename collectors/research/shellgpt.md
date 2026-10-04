@@ -6,7 +6,7 @@ commands that the user can execute from a prompt, keeps named chat and REPL
 sessions, and can let the model run shell commands through a "function"
 plug-in. Its configuration lives under the home, but its chat history lives in
 the system temporary directory. Transcript schema is in
-`analyzer/research/shellgpt.md`.
+[`analyzer/research/shellgpt.md`](../../analyzer/research/shellgpt.md).
 
 ## 1. Source and evidence level
 

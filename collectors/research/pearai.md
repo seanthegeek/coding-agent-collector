@@ -9,7 +9,7 @@ autocomplete, memory), and `PearAI.pearai-roo-cline`, a fork of Roo Code
 directories. The single most important fact: **`~/.pearai` is both the
 editor's `dataFolderName` (extensions) and the Continue fork's global
 directory (chat sessions, config, API keys).** Transcript schema is in
-`analyzer/research/pearai.md`.
+[`analyzer/research/pearai.md`](../../analyzer/research/pearai.md).
 
 ## 1. Source and evidence level
 

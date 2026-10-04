@@ -1,5 +1,8 @@
 # gemini-cli: on-disk paths
 
+How the transcripts are encoded and how the parser reads them is in
+[`analyzer/research/gemini-cli.md`](../../analyzer/research/gemini-cli.md).
+
 ## 1. Source and evidence level
 
 google-gemini/gemini-cli, commit [`fb972b2f87fe7d5b06d37eac711490162d98de2c`](https://github.com/google-gemini/gemini-cli/commit/fb972b2f87fe7d5b06d37eac711490162d98de2c)

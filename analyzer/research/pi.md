@@ -4,7 +4,7 @@ Catalog agent: `pi`. pi writes one append-only JSONL file per session, a
 tree of entries linked by `id`/`parentId`. The same format is written
 by little-coder (pi itself, in pi's directory) and by Letta Code's local
 backend (its own writer, its own directory); section 8 says how to tell
-them apart. Paths are in `collectors/research/pi.md`.
+them apart. Paths are in [`collectors/research/pi.md`](../../collectors/research/pi.md).
 
 ## 1. Source
 

@@ -4,6 +4,9 @@ Catalog agent: `roo-code`. Roo Code forked Cline and keeps Cline's task
 layout, so the record shapes in [cline.md](cline.md) apply with the
 differences listed here. Paths cited are relative to the clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/roo-code.md`](../../collectors/research/roo-code.md).
+
 ## 1. Source
 
 RooCodeInc/Roo-Code at [`b867ec9145750d0ae1ff7f02d35406e9bf2a0b16`](https://github.com/RooCodeInc/Roo-Code/commit/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16),

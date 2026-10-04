@@ -1,5 +1,8 @@
 # antigravity: on-disk paths (CLI `agy` and the IDE)
 
+How the transcripts are encoded and how the parser reads them is in
+[`analyzer/research/antigravity.md`](../../analyzer/research/antigravity.md).
+
 ## 1. Source and evidence level
 
 Closed source. Three evidence levels, tagged per claim:

@@ -21,7 +21,7 @@ source; `All-Hands-AI/OpenHands` redirects to `OpenHands/OpenHands`.
   for legacy layouts that share `~/.openhands`.
 
 All claims are from source. Transcript schema is in
-`analyzer/research/openhands.md`.
+[`analyzer/research/openhands.md`](../../analyzer/research/openhands.md).
 
 ## 2. Per-user storage
 

@@ -8,6 +8,9 @@ Claude-Code-style record stream with `uuid`, `parentUuid`, `cwd` and
 `shell_history` and the `tmp/<sha256>` layout are still shared with
 [gemini-cli.md](gemini-cli.md). Paths cited are relative to the clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/qwen-code.md`](../../collectors/research/qwen-code.md).
+
 ## 1. Source
 
 QwenLM/qwen-code at [`2c591ecc08a6fa080342f9b1b9f7f43215178cbb`](https://github.com/QwenLM/qwen-code/commit/2c591ecc08a6fa080342f9b1b9f7f43215178cbb) (2026-10-03),

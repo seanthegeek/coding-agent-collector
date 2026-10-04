@@ -6,6 +6,9 @@ an OpenCode fork but no longer shares any storage code
 shares this schema ([kilo-code.md](kilo-code.md)). Paths cited are relative
 to the clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/opencode.md`](../../collectors/research/opencode.md).
+
 ## 1. Source
 
 sst/opencode at [`907b3bc518fa48e90e8ec24dd327d13eee71c36c`](https://github.com/sst/opencode/commit/907b3bc518fa48e90e8ec24dd327d13eee71c36c), MIT. Open

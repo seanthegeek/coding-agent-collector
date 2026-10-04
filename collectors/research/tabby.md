@@ -7,7 +7,7 @@ Source public: Apache-2.0 outside `ee/`, the Tabby Enterprise licence inside
 it ([LICENSE:3-7](https://github.com/TabbyML/tabby/blob/21b29048d7bcf6b94f9f482f2d0fd05efadfd19f/LICENSE#L3-L7); [ee/LICENSE:1-12](https://github.com/TabbyML/tabby/blob/21b29048d7bcf6b94f9f482f2d0fd05efadfd19f/ee/LICENSE#L1-L12)). Rust server, TypeScript
 `tabby-agent` and VS Code client, Kotlin IntelliJ plugin. All claims from
 source except the JetBrains settings directory, which is from JetBrains
-documentation. Record schema: `analyzer/research/tabby.md`.
+documentation. Record schema: [`analyzer/research/tabby.md`](../../analyzer/research/tabby.md).
 
 Tabby is a self-hosted server. On a developer workstation it runs as that
 user (state under their home); in Docker the images set `TABBY_ROOT=/data`

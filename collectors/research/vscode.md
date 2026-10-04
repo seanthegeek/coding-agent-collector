@@ -1,5 +1,8 @@
 # vscode: VS Code, Insiders, VSCodium and the fork family as hosts for AI extensions
 
+How the transcripts are encoded and how the parser reads them is in
+[`analyzer/research/vscode.md`](../../analyzer/research/vscode.md).
+
 ## 1. Source and evidence level
 
 - L1 source: microsoft/vscode at [`d7622a529314a4abcefd7ca9e3d7344bc9ccba9e`](https://github.com/microsoft/vscode/commit/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e) (`scratchpad/repos/vscode`); microsoft/vscode-copilot-chat at [`5863f5a7088958050792b5dccbe8b46c6e13eccc`](https://github.com/microsoft/vscode-copilot-chat/commit/5863f5a7088958050792b5dccbe8b46c6e13eccc) (`scratchpad/repos/vscode-copilot-chat`); posit-dev/positron `product.json` (raw.githubusercontent); VSCodium `prepare_vscode.sh`.

@@ -7,6 +7,9 @@ Roo-style task directories for import
 ([`packages/kilo-vscode/src/legacy-migration/task-store.ts:6-7`](https://github.com/Kilo-Org/kilocode/blob/76bcfd40be616a72f4697b3041565f322245b462/packages/kilo-vscode/src/legacy-migration/task-store.ts#L6-L7)). Paths cited
 are relative to the clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/kilo-code.md`](../../collectors/research/kilo-code.md).
+
 ## 1. Source
 
 Kilo-Org/kilocode at [`76bcfd40be616a72f4697b3041565f322245b462`](https://github.com/Kilo-Org/kilocode/commit/76bcfd40be616a72f4697b3041565f322245b462), MIT. Open

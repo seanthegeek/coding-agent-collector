@@ -4,6 +4,9 @@ Catalog agent: `gemini-cli`. Researched together with Qwen Code, which forked
 Gemini CLI; see [qwen-code.md](qwen-code.md) for how far the fork has drifted.
 Paths cited are relative to the repository clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/gemini-cli.md`](../../collectors/research/gemini-cli.md).
+
 ## 1. Source
 
 google-gemini/gemini-cli at [`fb972b2f87fe7d5b06d37eac711490162d98de2c`](https://github.com/google-gemini/gemini-cli/commit/fb972b2f87fe7d5b06d37eac711490162d98de2c)

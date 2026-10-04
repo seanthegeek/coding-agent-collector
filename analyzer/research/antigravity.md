@@ -5,6 +5,9 @@ confirmed against a real install on the author's WSL workstation, October
 2026. No public source exists. Extraction: `tools/proto_descriptors.py extract
 ~/.local/bin/agy descriptors.json`, then `show` on the names below.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/antigravity.md`](../../collectors/research/antigravity.md).
+
 ## 1. Binary and version
 
 `~/.local/bin/agy`, ELF x86-64, about 200 MB, Google Antigravity CLI, installed

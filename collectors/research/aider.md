@@ -2,7 +2,7 @@
 
 ## 1. Source and evidence level
 
-Aider-AI/aider, open source, commit [`5dc9490bb35f9729ef2c95d00a19ccd30c26339c`](https://github.com/Aider-AI/aider/commit/5dc9490bb35f9729ef2c95d00a19ccd30c26339c). All claims from source; the config-key example is from the shipped docs in the same tree. Transcript format is in `analyzer/research/aider.md`.
+Aider-AI/aider, open source, commit [`5dc9490bb35f9729ef2c95d00a19ccd30c26339c`](https://github.com/Aider-AI/aider/commit/5dc9490bb35f9729ef2c95d00a19ccd30c26339c). All claims from source; the config-key example is from the shipped docs in the same tree. Transcript format is in [`analyzer/research/aider.md`](../../analyzer/research/aider.md).
 
 ## 2. Per-user storage
 

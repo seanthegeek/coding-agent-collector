@@ -10,7 +10,7 @@ a fixed set of extensions for the **pi** coding agent
 pi's own CLI from its `node_modules` ([bin/little-coder.mjs:98-136](https://github.com/itayinbarr/little-coder/blob/89d4fa0af864230527ab75d12604ed0eb320e6df/bin/little-coder.mjs#L98-L136),
 [505-509](https://github.com/itayinbarr/little-coder/blob/89d4fa0af864230527ab75d12604ed0eb320e6df/bin/little-coder.mjs#L505-L509)). pi's storage was therefore read at earendil-works/pi tag
 `v0.83.0`, [`845d6ff1f6643aba440341cce877ce1c43ebbc39`](https://github.com/earendil-works/pi/commit/845d6ff1f6643aba440341cce877ce1c43ebbc39).
-Record schema: `analyzer/research/little-coder.md`.
+Record schema: [`analyzer/research/little-coder.md`](../../analyzer/research/little-coder.md).
 
 ## 2. Per-user storage
 

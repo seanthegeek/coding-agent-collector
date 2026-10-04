@@ -5,7 +5,7 @@
 Open source. cline/cline at [`39ff2359f7e08231281539696e48a166ce49270c`](https://github.com/cline/cline/commit/39ff2359f7e08231281539696e48a166ce49270c)
 (clone `scratchpad/repos/cline`). Everything below is from source; the JetBrains
 plugin is closed ([`README.md:131`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/README.md#L131)) and only its shared data dir is known.
-Transcript record schemas: `analyzer/research/cline.md`.
+Transcript record schemas: [`analyzer/research/cline.md`](../../analyzer/research/cline.md).
 
 ## 2. Per-user storage
 

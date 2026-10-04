@@ -9,7 +9,7 @@ the `vscode` entries already collect. The extension's own
 `globalStorage` folder holds only a local search index. The JetBrains
 plugin and CLI keep the same chat history as files under an `env-paths`
 directory named `Cody-nodejs`. Transcript schema is in
-`analyzer/research/cody.md`.
+[`analyzer/research/cody.md`](../../analyzer/research/cody.md).
 
 ## 1. Source and evidence level
 

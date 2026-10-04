@@ -5,6 +5,9 @@ Catalog agent: `crush`. Crush began as an OpenCode fork
 Go, sqlc and goose migrations, one database per project. Paths cited are
 relative to the clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/crush.md`](../../collectors/research/crush.md).
+
 ## 1. Source
 
 charmbracelet/crush at [`ca6ae26ce016b980407ce32f012a467ec10c1e2f`](https://github.com/charmbracelet/crush/commit/ca6ae26ce016b980407ce32f012a467ec10c1e2f),

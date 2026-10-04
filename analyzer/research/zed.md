@@ -4,6 +4,9 @@ Catalog agent: `zed`. Covers Zed's built-in agent panel threads. Researched
 together with Goose ([goose.md](goose.md)). Paths cited are relative to the
 clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/zed.md`](../../collectors/research/zed.md).
+
 ## 1. Source
 
 zed-industries/zed at [`a84689073d296dfd39987bc7dd478e43ef76d83a`](https://github.com/zed-industries/zed/commit/a84689073d296dfd39987bc7dd478e43ef76d83a); agent

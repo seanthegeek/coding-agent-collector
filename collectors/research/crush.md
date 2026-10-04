@@ -2,7 +2,7 @@
 
 ## 1. Source and evidence level
 
-charmbracelet/crush, open source, commit [`ca6ae26ce016b980407ce32f012a467ec10c1e2f`](https://github.com/charmbracelet/crush/commit/ca6ae26ce016b980407ce32f012a467ec10c1e2f). All claims from source. Transcript schema is in `analyzer/research/crush.md`.
+charmbracelet/crush, open source, commit [`ca6ae26ce016b980407ce32f012a467ec10c1e2f`](https://github.com/charmbracelet/crush/commit/ca6ae26ce016b980407ce32f012a467ec10c1e2f). All claims from source. Transcript schema is in [`analyzer/research/crush.md`](../../analyzer/research/crush.md).
 
 ## 2. Per-user storage
 

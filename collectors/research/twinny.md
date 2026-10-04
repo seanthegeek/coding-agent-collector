@@ -10,7 +10,7 @@ TypeScript. All claims from source. How VS Code stores an extension's
 extension, the `twinny-node` peer-to-peer GPU sharing CLI
 ([package.json:61-63](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/package.json#L61-L63)) and the `twinny-server` team
 gateway ([packages/twinny-server/package.json:28-30](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/packages/twinny-server/package.json#L28-L30)).
-Record schema: `analyzer/research/twinny.md`.
+Record schema: [`analyzer/research/twinny.md`](../../analyzer/research/twinny.md).
 
 ## 2. Per-user storage
 

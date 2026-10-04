@@ -12,7 +12,7 @@ pins, is cited. All claims from source; nothing was installed or run.
 Wrappers that reuse pi's storage: `little-coder` (same `~/.pi/agent`, see
 [little-coder.md](little-coder.md)) and Letta Code's local backend (pi
 session format in its own directory, see [letta.md](letta.md)). Record
-schema: `analyzer/research/pi.md`.
+schema: [`analyzer/research/pi.md`](../../analyzer/research/pi.md).
 
 ## 2. Per-user storage
 

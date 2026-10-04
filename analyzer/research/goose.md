@@ -3,6 +3,9 @@
 Catalog agent: `goose`. Researched together with Zed ([zed.md](zed.md)); the
 two share nothing but Rust and SQLite. Paths cited are relative to the clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/goose.md`](../../collectors/research/goose.md).
+
 ## 1. Source
 
 block/goose at [`591edd47cf2cfea4957d720c607cf2a4def8673d`](https://github.com/block/goose/commit/591edd47cf2cfea4957d720c607cf2a4def8673d), Apache-2.0. Open

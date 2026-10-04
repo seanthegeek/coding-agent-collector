@@ -2,7 +2,7 @@
 
 ## 1. Source and evidence level
 
-zed-industries/zed, open source, commit [`a84689073d296dfd39987bc7dd478e43ef76d83a`](https://github.com/zed-industries/zed/commit/a84689073d296dfd39987bc7dd478e43ef76d83a) (blobless partial clone). Platform mapping verified against the `dirs` 6.0.0 crate (`scratchpad/crates/dirs/dirs-6.0.0`, version from `Cargo.lock`). Flatpak sandbox paths are Flatpak documentation level. Transcript schema is in `analyzer/research/zed.md`.
+zed-industries/zed, open source, commit [`a84689073d296dfd39987bc7dd478e43ef76d83a`](https://github.com/zed-industries/zed/commit/a84689073d296dfd39987bc7dd478e43ef76d83a) (blobless partial clone). Platform mapping verified against the `dirs` 6.0.0 crate (`scratchpad/crates/dirs/dirs-6.0.0`, version from `Cargo.lock`). Flatpak sandbox paths are Flatpak documentation level. Transcript schema is in [`analyzer/research/zed.md`](../../analyzer/research/zed.md).
 
 ## 2. Per-user storage
 

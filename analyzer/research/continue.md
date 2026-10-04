@@ -4,6 +4,9 @@ Catalog agent: `continue`. Covers the IDE extensions and the `cn` CLI, which
 share [`core/util/history.ts`](https://github.com/continuedev/continue/blob/5522c6f44ca0ac3528b37244818fbfa39b5af470/core/util/history.ts) ([`extensions/cli/src/session.ts:12`](https://github.com/continuedev/continue/blob/5522c6f44ca0ac3528b37244818fbfa39b5af470/extensions/cli/src/session.ts#L12),[`50-51`](https://github.com/continuedev/continue/blob/5522c6f44ca0ac3528b37244818fbfa39b5af470/extensions/cli/src/session.ts#L50-L51)).
 Paths cited are relative to the clone.
 
+Paths, credentials and the rest of the per-user state are in
+[`collectors/research/continue.md`](../../collectors/research/continue.md).
+
 ## 1. Source
 
 continuedev/continue at [`5522c6f44ca0ac3528b37244818fbfa39b5af470`](https://github.com/continuedev/continue/commit/5522c6f44ca0ac3528b37244818fbfa39b5af470),

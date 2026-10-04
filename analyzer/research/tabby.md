@@ -2,7 +2,7 @@
 
 Catalog agent: `tabby`. A self-hosted completion and chat server; transcripts
 live on the server host, in its SQLite database and a daily event log.
-Editor clients keep none. Paths are in `collectors/research/tabby.md`.
+Editor clients keep none. Paths are in [`collectors/research/tabby.md`](../../collectors/research/tabby.md).
 
 ## 1. Source
 

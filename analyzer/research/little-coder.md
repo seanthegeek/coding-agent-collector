@@ -4,7 +4,7 @@ Catalog agent: `little-coder`. little-coder is a launcher and extension set
 for the pi coding agent, so its transcripts are pi session files written by
 pi itself. This document covers what little-coder adds and how to tell its
 sessions from plain pi sessions; the full pi record schema belongs to pi's
-own research. Paths are in `collectors/research/little-coder.md`.
+own research. Paths are in [`collectors/research/little-coder.md`](../../collectors/research/little-coder.md).
 
 ## 1. Source
 

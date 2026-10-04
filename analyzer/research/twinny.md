@@ -2,7 +2,7 @@
 
 Catalog agent: `twinny`. A VS Code extension; its chats live inside the
 editor's own SQLite state database, not in a file of its own. Paths are in
-`collectors/research/twinny.md`.
+[`collectors/research/twinny.md`](../../collectors/research/twinny.md).
 
 ## 1. Source
 

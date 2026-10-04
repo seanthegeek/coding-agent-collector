@@ -1,5 +1,8 @@
 # muse-code (Meta Muse Code CLI)
 
+How the transcripts are encoded and how the parser reads them is in
+[`analyzer/research/muse-code.md`](../../analyzer/research/muse-code.md).
+
 ## 1. Source and evidence level
 
 - Closed source, no public repository, so there are no commit links. Muse

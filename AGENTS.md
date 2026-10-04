@@ -300,7 +300,10 @@ and say in the module docstring if the shape has drifted since.
 6. Add a `<Agent>Tests(ParserBase)` class to `tests/test_parsers.py` with
    the same cases the existing classes have: rows, thinking opt-in, history,
    not-wanted, truncated line.
-7. Add the row to the parser table in `analyzer/README.md`, remove the agent
+7. Add the row to the parser table in `analyzer/README.md` in
+   alphabetical order of the agent name, ending its "Validated against"
+   cell with a Markdown link to the research document, written
+   ``see [`research/<agent>.md`](research/<agent>.md)``; remove the agent
    from the "detected but not yet parsed" list there, bump `VERSION` in
    `agent_analyzer/__init__.py` and `pyproject.toml`, and run
    `analyzer/tests/run.sh`.
@@ -451,9 +454,15 @@ credentials, exclusions, project files, discovery) goes to
 are encoded and how a parser reads them) goes to
 `analyzer/research/<agent>.md`. A document covers one agent only; where
 agents share a lineage, each says so and links to the other rather than
-repeating it. Each directory has a README index that lists every document
-and holds the cross-agent observations. Grouped reports are never
-committed. Then: rewrite the five tables in both scripts and regenerate
+repeating it. When an agent has both documents, each links to the other
+with a Markdown link in a short paragraph before its first section, the
+analyzer document to `../../collectors/research/<agent>.md` and the
+collector document to `../../analyzer/research/<agent>.md`. A path to
+another research document is always a link, never a bare code span. Each
+directory has a README index that lists every document, sorted
+alphabetically by agent name, and holds the cross-agent observations.
+Grouped reports are never committed. Then: rewrite the five tables in both
+scripts and regenerate
 `analyzer/agent_analyzer/catalog.txt` from `--list`, extend
 `discover_projects` in the sh collector and `Find-Projects` in the
 PowerShell collector with every new grep-able source, add a fixture and

@@ -2,7 +2,7 @@
 
 ## 1. Source and evidence level
 
-block/goose, open source, commit [`591edd47cf2cfea4957d720c607cf2a4def8673d`](https://github.com/block/goose/commit/591edd47cf2cfea4957d720c607cf2a4def8673d). Platform mapping verified against `etcetera` 0.11.0 (`scratchpad/crates/etcetera-0.11.0`, the version in [`Cargo.lock`](https://github.com/block/goose/blob/591edd47cf2cfea4957d720c607cf2a4def8673d/Cargo.lock)). Electron userData locations are Electron documentation level, not goose source. Transcript schema is in `analyzer/research/goose.md`.
+block/goose, open source, commit [`591edd47cf2cfea4957d720c607cf2a4def8673d`](https://github.com/block/goose/commit/591edd47cf2cfea4957d720c607cf2a4def8673d). Platform mapping verified against `etcetera` 0.11.0 (`scratchpad/crates/etcetera-0.11.0`, the version in [`Cargo.lock`](https://github.com/block/goose/blob/591edd47cf2cfea4957d720c607cf2a4def8673d/Cargo.lock)). Electron userData locations are Electron documentation level, not goose source. Transcript schema is in [`analyzer/research/goose.md`](../../analyzer/research/goose.md).
 
 ## 2. Per-user storage
 
