@@ -8,6 +8,49 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Claude Code: a tool result stored as a `<persisted-output>` stub now
+  carries the full output from the session's `tool-results/*.txt` file;
+  when the file is missing, the stub is kept with a
+  `[persisted output not found: ...]` note.
+- Claude Code: each subagent transcript opens with a `system` row
+  `subagent <agent id> of <session id>`.
+- Claude Code: `session title:` rows for `ai-title`, `custom-title` and
+  `agent-name` records, `cwd changed:` rows for `relocated` records (later
+  rows take the new `project_path`), `hook:` rows for hook system messages
+  and `edited file:` rows for `edited_text_file` attachments (the path
+  only, not the snippet).
+
+### Fixed
+
+- Claude Code: prompts typed while a turn was running and delivered as
+  `queued_command` attachments are now `user` rows; they were missing.
+  The `queue enqueue` row that repeated a delivered prompt is dropped.
+- Claude Code: a subagent's task, task notifications, slash commands and
+  their output, peer and coordinator messages, interruption markers and
+  compaction summaries were `user` rows; they are now `system` rows with
+  a label (`subagent task:`, `task notification:`, `slash command:`,
+  `command output:`, `peer message:`, `coordinator message:`,
+  `interrupted:`, `compaction summary:`).
+- Claude Code: local API errors (model `<synthetic>`) were `assistant`
+  rows; they are now `system` rows `api error: <status> <error>: <text>`.
+- Claude Code: empty thinking blocks (signature only) no longer produce
+  `[redacted]` thinking rows; only `redacted_thinking` blocks do.
+- Claude Code: `pr-link` rows, re-written on every metadata flush, appear
+  once per session and URL, and with the session's project and branch,
+  like the queue rows.
+- Claude Code: tool results that list tools (`tool_reference` blocks) show
+  the tool names instead of empty text.
+
+### Changed
+
+- Claude Code: the Bash `tool_use` text is the command the model sent,
+  with its `cd <dir> &&` prefix, instead of the normalised one.
+- Claude Code: other injected context (`isMeta` records) starts with
+  `context:`, and `system` records without `content` (`api_error`,
+  `memory_saved`, ...) show their fields as JSON after the subtype.
+
 ## [0.6.0] - 2026-10-04
 
 ### Added
