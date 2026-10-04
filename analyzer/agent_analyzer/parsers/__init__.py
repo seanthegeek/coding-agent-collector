@@ -7,10 +7,16 @@ from .base import Options, Parser
 from .antigravity import AntigravityParser
 from .claude_code import ClaudeCodeParser
 from .codex import CodexParser
+from .kiro import KiroParser
 from .qwen_code import QwenCodeParser
 
-ALL: List[Parser] = [ClaudeCodeParser(), CodexParser(), AntigravityParser()]
-ALL.append(QwenCodeParser())
+ALL: List[Parser] = [
+    ClaudeCodeParser(),
+    CodexParser(),
+    AntigravityParser(),
+    QwenCodeParser(),
+    KiroParser(),
+]
 
 
 def by_agent() -> Dict[str, List[Parser]]:

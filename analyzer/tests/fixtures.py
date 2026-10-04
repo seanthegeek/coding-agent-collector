@@ -128,6 +128,7 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     (gs / "saoudrizwan.claude-dev/state").mkdir(parents=True, exist_ok=True)
     (gs / "saoudrizwan.claude-dev/state/taskHistory.json").write_text("[]", encoding="utf-8")
     build_qwen(home)
+    build_kiro(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -314,3 +315,120 @@ def build_qwen(home: Path) -> None:
     (tmp / "logs.json").write_text(json.dumps(qwen_logs_entries(), indent=2), encoding="utf-8")
     (home / ".qwen/settings.json").write_text("{}", encoding="utf-8")
     (home / ".qwen/oauth_creds.json").write_text('{"access_token": "secret"}', encoding="utf-8")
+KIRO_SESSION = "3f2b8c1e-9d7a-4e6b-b1c2-0a9f8e7d6c5b"
+KIRO_EXPORT_SESSION = "7c1d2e3f-4a5b-4c6d-8e7f-901234567890"
+KIRO_SHELL_SESSION = "fig-shell-1"
+
+
+def _kiro_user(content, timestamp=None, cwd="/srv/proj"):
+    return {"additional_context": "",
+            "env_context": {"env_state": {"operating_system": "linux", "current_working_directory": cwd,
+                                          "environment_variables": []}},
+            "content": content, "timestamp": timestamp, "images": None}
+
+
+def _kiro_meta(n, start_ms, end_ms, kind="NotToolUse", tools=(), tags=()):
+    return {"request_id": "req-%03d" % n, "message_id": "msg-%03d" % n, "request_start_timestamp_ms": start_ms,
+            "stream_end_timestamp_ms": end_ms, "time_to_first_chunk": None, "time_between_chunks": [],
+            "user_prompt_length": 0, "response_size": 0, "chat_conversation_type": kind,
+            "tool_use_ids_and_names": [list(t) for t in tools], "model_id": "claude-sonnet-4",
+            "message_meta_tags": list(tags)}
+
+
+def kiro_conversation_records():
+    """The ConversationState from analyzer/research/kiro.md section 8, with
+    the project moved to /srv/proj. The research sample's user timestamp was
+    six hours off its own request metadata; it is corrected here so the
+    turns are in order."""
+    return {
+        "conversation_id": KIRO_SESSION, "next_message": None,
+        "history": [
+            {"user": _kiro_user({"Prompt": {"prompt": "list the files here"}}, "2026-04-23T20:17:15.123456789-07:00"),
+             "assistant": {"ToolUse": {"message_id": "msg-001", "content": "I will list the directory.",
+                                       "tool_uses": [{"id": "tooluse_abc123", "name": "execute_bash",
+                                                      "orig_name": "execute_bash", "args": {"command": "ls -la"},
+                                                      "orig_args": {"command": "ls -la"}}]}},
+             "request_metadata": _kiro_meta(1, 1777000635200, 1777000636900, "ToolUse",
+                                            [("tooluse_abc123", "execute_bash")])},
+            {"user": _kiro_user({"ToolUseResults": {"tool_use_results": [
+                {"tool_use_id": "tooluse_abc123", "content": [{"Text": "total 8\nREADME.md"}], "status": "Success"}]}}),
+             "assistant": {"Response": {"message_id": "msg-002", "content": "The directory contains README.md."}},
+             "request_metadata": _kiro_meta(2, 1777000637000, 1777000638100)},
+        ],
+        "valid_history_range": [0, 2], "transcript": ["> list the files here", "The directory contains README.md."],
+        "tools": {"native___": []}, "context_manager": None, "context_message_length": None, "latest_summary": None,
+        "model_info": {"model_id": "claude-sonnet-4", "model_name": "Claude Sonnet 4"}, "file_line_tracker": {},
+        "checkpoint_manager": None, "mcp_enabled": True,
+    }
+
+
+def kiro_export_records():
+    """A /save export exercising the less common variants: an MCP tool whose
+    name differs from orig_name, a Json result, a cancelled tool use, a
+    Compact tag, latest_summary, a pending next_message and the legacy
+    `model` field instead of model_info."""
+    return {
+        "conversation_id": KIRO_EXPORT_SESSION,
+        "next_message": _kiro_user({"Prompt": {"prompt": "now push it"}}, "2026-04-24T08:00:00-07:00"),
+        "history": [
+            {"user": _kiro_user({"Prompt": {"prompt": "open an issue"}}, "2026-04-24T07:00:00.000-07:00"),
+             "assistant": {"ToolUse": {"message_id": "msg-010", "content": "",
+                                       "tool_uses": [{"id": "tooluse_mcp1", "name": "github___create_issue",
+                                                      "orig_name": "create_issue", "args": {"title": "bug"},
+                                                      "orig_args": {"title": "bug"}}]}},
+             "request_metadata": dict(_kiro_meta(10, 1777039201000, 1777039202000, "ToolUse"), model_id=None)},
+            {"user": _kiro_user({"ToolUseResults": {"tool_use_results": [
+                {"tool_use_id": "tooluse_mcp1", "content": [{"Json": {"number": 7}}], "status": "Error"}]}}),
+             "assistant": {"ToolUse": {"message_id": "msg-011", "content": "Retrying.",
+                                       "tool_uses": [{"id": "tooluse_bash2", "name": "execute_bash",
+                                                      "orig_name": "execute_bash", "args": {"command": "rm -rf build"},
+                                                      "orig_args": {"command": "rm -rf build"}}]}},
+             "request_metadata": _kiro_meta(11, 1777039203000, 1777039204000, "ToolUse")},
+            {"user": _kiro_user({"CancelledToolUses": {"prompt": "stop, do not delete", "tool_use_results": [
+                {"tool_use_id": "tooluse_bash2", "content": [{"Text": "Tool use was cancelled by the user"}],
+                 "status": "Error"}]}}, "2026-04-24T07:00:10.000-07:00"),
+             "assistant": {"Response": {"message_id": "msg-012", "content": "Stopped."}},
+             "request_metadata": _kiro_meta(12, 1777039211000, 1777039212000, tags=["Compact"])},
+        ],
+        "valid_history_range": [0, 3], "transcript": [], "tools": {"native___": []},
+        "latest_summary": ["User asked to open an issue and cancelled a delete.",
+                           _kiro_meta(13, 1777039213000, 1777039214000)],
+        "model": "claude-3.7-sonnet",
+    }
+
+
+def build_kiro(home: Path) -> None:
+    base = home / ".local/share/amazon-q"
+    base.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(base / "data.sqlite3"))
+    con.executescript("""
+    CREATE TABLE migrations (id INTEGER PRIMARY KEY, version INTEGER NOT NULL, migration_time INTEGER NOT NULL);
+    CREATE TABLE history (id INTEGER PRIMARY KEY, command TEXT, shell TEXT, pid INTEGER, session_id TEXT, cwd TEXT,
+      start_time INTEGER, hostname TEXT, exit_code INTEGER, end_time INTEGER, duration INTEGER);
+    CREATE TABLE state (key TEXT PRIMARY KEY, value BLOB);
+    CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE conversations (key TEXT PRIMARY KEY, value TEXT);
+    """)
+    con.execute("INSERT INTO conversations (key, value) VALUES (?, ?)",
+                ("/srv/proj", json.dumps(kiro_conversation_records())))
+    con.execute("INSERT INTO conversations (key, value) VALUES (?, ?)", ("/srv/broken", "not json"))
+    con.execute("INSERT INTO history (command, shell, pid, session_id, cwd, start_time, hostname, exit_code, end_time, "
+                "duration) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                ("git status", "zsh", 4242, KIRO_SHELL_SESSION, "/srv/proj", 1776999600, "ws1", 0, 1776999601, 1000))
+    con.execute("INSERT INTO auth_kv VALUES ('codewhisperer:odic:token', '{\"access_token\":\"REDACT-ME\"}')")
+    con.commit()
+    con.close()
+    exports = home / ".aws/amazonq/exports"
+    exports.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(kiro_export_records(), indent=2)
+    (exports / "issue-chat.json").write_text(text, encoding="utf-8")
+    # an export cut mid-write, inside the third history entry
+    (exports / "issue-chat-cut.json").write_text(text[:text.index("stop, do not delete")], encoding="utf-8")
+    # noise the parser must not want: CLI settings, and a Kiro CLI session
+    # file whose format is unverified even though it looks like an export
+    (home / ".kiro/settings").mkdir(parents=True, exist_ok=True)
+    (home / ".kiro/settings/cli.json").write_text('{"chat.defaultModel": "auto"}', encoding="utf-8")
+    (home / ".kiro/sessions").mkdir(parents=True, exist_ok=True)
+    (home / ".kiro/sessions/s1.json").write_text(json.dumps(
+        {"conversation_id": "x", "history": [], "messages": [{"role": "user", "content": [{"text": "hi"}]}]}),
+        encoding="utf-8")
