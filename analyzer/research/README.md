@@ -22,7 +22,9 @@ it.
 | `agent-zero` | [agent-zero.md](agent-zero.md) | JSON per chat context, rewritten whole | yes |
 | `aider` | [aider.md](aider.md) | markdown and readline-style text in the repository | yes |
 | `antigravity` | [antigravity.md](antigravity.md) | SQLite of protobuf blobs; schema from the `agy` binary's embedded descriptors | yes |
+| `claude-code` | [claude-code.md](claude-code.md) | JSONL per session with `uuid`/`parentUuid` chains, subagent files beside it, prompt history | yes |
 | `cline` | [cline.md](cline.md) | JSON arrays per task; SDK session files; SQLite indexes | yes |
+| `codex-cli` | [codex-cli.md](codex-cli.md) | JSONL rollouts (`session_meta`, `response_item`, `event_msg`), optionally zstd-compressed | yes |
 | `cody` | [cody.md](cody.md) | rows in the editor `state.vscdb`; JetBrains global-state JSON | yes |
 | `continue` | [continue.md](continue.md) | JSON per session, session-level timestamps only | yes |
 | `crush` | [crush.md](crush.md) | per-project SQLite (WAL), parts as a JSON array | yes |
@@ -54,9 +56,6 @@ the agent; the analyzer README's parser table lists the files each one
 reads. `tools/check_research_links.py` at the repository root verifies the
 citation links in these documents; see the
 [collectors research index](../../collectors/research/README.md).
-
-Claude Code and Codex CLI were validated directly against real installs and
-are documented in their parser modules.
 
 Findings that cut across agents:
 

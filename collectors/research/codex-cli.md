@@ -1,5 +1,8 @@
 # codex-cli
 
+How the transcripts are encoded and how the parser reads them is in
+[`analyzer/research/codex-cli.md`](../../analyzer/research/codex-cli.md).
+
 ## 1. Source and evidence level
 
 Open source. github.com/openai/codex, shallow clone at `scratchpad/repos/codex`, HEAD [3e238776e857eccd3bde6bff3026e2e9798f6524](https://github.com/openai/codex/commit/3e238776e857eccd3bde6bff3026e2e9798f6524) (2026-10-03). All claims are **source** (file:line under `codex-rs/`) unless marked **local** (names-only listing of `~/.codex` on this host) or **web** (community write-ups used only for the desktop app).

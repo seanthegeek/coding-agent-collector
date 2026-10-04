@@ -1,5 +1,8 @@
 # claude-code
 
+How the transcripts are encoded and how the parser reads them is in
+[`analyzer/research/claude-code.md`](../../analyzer/research/claude-code.md).
+
 ## 1. Source and evidence level
 
 Closed source. Evidence is the shipped package: `npm pack @anthropic-ai/claude-code` gives 2.1.288, a 28 KB shim whose `package.json` lists `optionalDependencies` on eight platform packages (`scratchpad/npm/cc/package/package.json`). `npm pack @anthropic-ai/claude-code-linux-x64@2.1.288` gives a single 245 MB Bun-compiled binary `claude`; `strings -n 6` of it is `scratchpad/npm/cc.strings` and every "cc:NNN" below is a line in that file. Official docs: code.claude.com/docs/en/settings, /iam, /managed-settings; claude.com/docs/third-party/claude-desktop/data-storage. Layout confirmed names-only against `~/.claude` on this host (2.1.288 native install). Evidence level per claim: **bundle** unless marked **docs** or **local**.
