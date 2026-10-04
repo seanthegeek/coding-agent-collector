@@ -4,6 +4,7 @@
 *.manifest.jsonl
 *.collection.json
 *.log
+*.zip
 __pycache__/
 *.egg-info/
 analyzer/build/
