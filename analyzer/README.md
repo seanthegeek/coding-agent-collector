@@ -95,6 +95,8 @@ agents and which have parsers.
 | `kilo-code` | `.local/share/kilo/kilo*.db` and `opencode-*.db` plus the same JSON trees under `.local/share/kilo` (OpenCode parser, Kilo paths), and pre-migration VS Code tasks `<globalStorage>/kilocode.kilo-code/tasks/<id>/api_conversation_history.json` | Source at 76bcfd4, synthetic fixture |
 | `cline` | `<editor>/User/globalStorage/saoudrizwan.claude-dev/` and `.cline/data/`: `tasks/<id>/ui_messages.json` (preferred), `api_conversation_history.json` (only when `ui_messages.json` is absent; inherits the task start time), `task_metadata.json`, `state/taskHistory.json`; SDK `.cline/data/sessions/<id>/<id>.json` and `*.messages.json`, `.cline/data/db/sessions.db` | Source at 39ff2359, synthetic fixture; see `research/cline.md` |
 | `roo-code` | `<editor>/User/globalStorage/rooveterinaryinc.roo-cline/` and `.vscode-mock/global-storage/`: the Cline task files plus `tasks/<id>/history_item.json` and `tasks/_index.json` | Source at b867ec91, synthetic fixture; see `research/roo-code.md` |
+| `hermes` | `state.db` (SQLite with WAL sidecars; `sessions` and `messages`, rewound or compacted `active = 0` rows kept with a `[rewound]` prefix) and the fallback `sessions/<id>.jsonl` under `.hermes`, `.hermes_<suffix>`, `AppData/Local/hermes` and their `profiles/<name>/` homes | Source at 8b66a51, synthetic fixture |
+| `agent-zero` | `usr/chats/<ctxid>/chat.json` (UI log for timestamps, each agent's history for full text and model, `messages/<n>.txt` for long tool results; history-only turns without timestamps when the log was trimmed at 1000 items) under `agent-zero`, `agent-zero/<instance>` or `Desktop/agent-zero`, also the legacy `chats/<ctxid>.json` and `tmp/chats`; project path is the container path `/a0/usr/projects/<name>` | Source at e3051fb, synthetic fixture |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
@@ -113,8 +115,8 @@ parser's agent, so `--agent aider` also includes a repository's
 Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
 `augment`, `ollama`, `pearai`, `cody`, `twinny`, `tabby`,
-`open-interpreter`, `openhands`, `pi`, `little-coder`, `letta`, `hermes`,
-`openclaw`, `nanobot`, `agent-zero`, `shellgpt` and `local-deep-research`,
+`open-interpreter`, `openhands`, `pi`, `little-coder`, `letta`,
+`openclaw`, `nanobot`, `shellgpt` and `local-deep-research`,
 plus the `shared` and `shell-history` entries, which are not agents.
 Windsurf and Cursor need format work first.
 

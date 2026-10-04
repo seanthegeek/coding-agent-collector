@@ -20,6 +20,8 @@ from .opencode import OpenCodeParser
 from .kilo_code import KiloCodeParser
 from .cline import ClineParser
 from .roo_code import RooCodeParser
+from .hermes import HermesParser
+from .agent_zero import AgentZeroParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -38,6 +40,8 @@ ALL: List[Parser] = [
     KiloCodeParser(),
     ClineParser(),
     RooCodeParser(),
+    HermesParser(),
+    AgentZeroParser(),
 ]
 
 

@@ -176,6 +176,7 @@ class TimelineTests(ParserBase):
             "crush", "goose",
             "zed", "vscode",
             "cline", "roo-code",
+            "hermes", "agent-zero",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -188,6 +189,7 @@ class TimelineTests(ParserBase):
             GEMINI_SESSION, GEMINI_RESUMED, GEMINI_LEGACY, GEMINI_SUBAGENT,
             CRUSH_SESSION, GOOSE_SESSION, "20260301_090000",
             ZED_THREAD, ZED_EXTERNAL, VSCODE_SESSION, VSCODE_LEGACY_SESSION,
+            "20261001_120000_a1b2c3d4", "20261001_130000_0badf00d", "AbCd1234",
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -1529,3 +1531,167 @@ class RooCodeTests(ParserBase):
         self.assertEqual(len(rows), 10)
         self.assertEqual(rows[-1].turn_type, "system")
         self.assertIn("parser:", rows[-1].text)
+
+
+from dataclasses import replace as dc_replace  # noqa: E402
+
+from agent_analyzer.parsers.agent_zero import AgentZeroParser, recover_logs  # noqa: E402
+from agent_analyzer.parsers.hermes import HermesParser, decode_content  # noqa: E402
+from fixtures import (AGENT_ZERO_CHAT, AGENT_ZERO_LONG, AGENT_ZERO_REL, HERMES_CHILD, HERMES_DIVERTED,  # noqa: E402
+                      HERMES_DIVERTED_REL, HERMES_SESSION, agent_zero_chat, agent_zero_history)
+
+
+class HermesTests(ParserBase):
+    REL = ".hermes/state.db"
+
+    def test_rows(self):
+        rows = self.rows_for(HermesParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "system", "user", "tool_use", "tool_result", "assistant", "user", "user", "user"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.project_path), ("h1", "alice", "hermes", "/srv/proj"))
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        start, child, user, use, result, asst, rewound, image, sub = rows
+        self.assertEqual((start.session_id, start.text, start.timestamp_utc),
+                         (HERMES_SESSION, "session start | List files | source=cli", "2026-10-01T12:00:00.000Z"))
+        self.assertEqual((child.session_id, child.text),
+                         (HERMES_CHILD, "session start | Check disk | source=subagent | parent=%s | end=completed"
+                          % HERMES_SESSION))
+        self.assertEqual((user.text, user.timestamp_utc, user.git_branch, user.model),
+                         ("list files", "2026-10-01T12:00:01.250Z", "main", "anthropic/claude-sonnet-4"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("terminal", "call_1", "ls"))
+        self.assertEqual((result.tool_name, result.tool_use_id, result.text), ("terminal", "call_1", "a.txt b.txt"))
+        self.assertEqual(asst.text, "Two files: a.txt, b.txt.")
+        self.assertEqual(rewound.text, "[rewound] delete them instead")
+        self.assertEqual(image.text, "what is in this screenshot? [image]")
+        self.assertEqual((sub.session_id, sub.git_branch, sub.model, sub.project_path),
+                         (HERMES_CHILD, "", "openai/gpt-5", "/srv/proj"))   # cwd empty: git_repo_root
+        self.assertEqual([r.source_line for r in rows[2:]], [1, 2, 3, 4, 5, 6, 7])
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(HermesParser(), self.REL, include_thinking=True)
+        self.assertEqual([(r.turn_type, r.text) for r in rows if r.turn_type == "thinking"],
+                         [("thinking", "User wants a listing.")])
+        self.assertNotIn("thinking", [r.turn_type for r in self.rows_for(HermesParser(), self.REL)])
+
+    def test_diverted_jsonl_transcript(self):
+        rows = self.rows_for(HermesParser(), HERMES_DIVERTED_REL)
+        self.assertEqual([(r.turn_type, r.tool_name, r.tool_use_id, r.text) for r in rows],
+                         [("user", "", "", "show the env"), ("tool_use", "read_file", "call_9", "/srv/proj/.env"),
+                          ("tool_result", "read_file", "call_9", "TOKEN=x")])
+        self.assertEqual({(r.session_id, r.project_path) for r in rows}, {(HERMES_DIVERTED, "")})
+        self.assertEqual(rows[0].timestamp_utc, "2026-10-01T13:00:00.000Z")
+
+    def test_paths_and_noise(self):
+        p = HermesParser()
+        for rel in (".hermes/profiles/work/state.db", ".hermes_alt/state.db", "AppData/Local/hermes/state.db",
+                    "AppData/Local/hermes/profiles/x/sessions/abc.jsonl"):
+            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+        for rel in (".hermes/state-snapshots/1/state.db", ".hermes/response_store.db", ".hermes/sessions/abc.json"):
+            self.assertFalse(p.wants(SimpleNamespace(rel=rel)), rel)
+        for a in self.col.artifacts:
+            if a.agent == "hermes" and a.rel.endswith((".yaml", "auth.json", "sessions.json", "-wal", "-shm")):
+                self.assertFalse(p.wants(a), a.rel)
+        self.assertEqual(decode_content('\x00json:{"text":"x"}'), {"text": "x"})
+
+    def test_older_schema_without_active_or_reasoning(self):
+        db = self.tmp / "old" / "state.db"
+        db.parent.mkdir()
+        con = sqlite3.connect(str(db))
+        con.executescript("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT,"
+                          " tool_call_id TEXT, tool_calls TEXT, timestamp REAL);"
+                          "INSERT INTO messages VALUES (1,'s1','user','hi',NULL,NULL,1790856000.0);")
+        con.commit()
+        con.close()
+        art = dc_replace(next(a for a in self.col.artifacts if a.rel == self.REL), disk_path=db)
+        rows = list(HermesParser().parse(art, Options(include_thinking=True)))
+        self.assertEqual([(r.session_id, r.turn_type, r.text) for r in rows], [("s1", "user", "hi")])
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / HERMES_DIVERTED_REL)
+        rows = self.rows_for(HermesParser(), HERMES_DIVERTED_REL)
+        self.assertEqual([r.turn_type for r in rows], ["user", "tool_use", "tool_result", "system"])
+        self.assertEqual(rows[-1].text, "parser: 1 unparseable line(s), first at line 4")
+        self.assertEqual(rows[-1].session_id, HERMES_DIVERTED)
+
+    def test_not_sqlite_is_reported(self):
+        (self.home / self.REL).write_text("not a database", encoding="utf-8")
+        rows = self.rows_for(HermesParser(), self.REL)
+        self.assertEqual([(r.turn_type, r.text) for r in rows], [("system", "parser: not a SQLite database")])
+
+
+class AgentZeroTests(ParserBase):
+    REL = AGENT_ZERO_REL
+
+    def test_rows(self):
+        rows = self.rows_for(AgentZeroParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "user", "assistant", "tool_use", "tool_result", "tool_use", "tool_result",
+                          "system", "assistant"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "agent-zero", AGENT_ZERO_CHAT))
+            self.assertEqual((r.project_path, r.git_branch), ("/a0/usr/projects/demo", ""))
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        start, user, asst, use, result, use2, result2, warn, resp = rows
+        self.assertEqual((start.text, start.timestamp_utc),
+                         ("chat start | List files | type=user | profile=agent0 | project=demo",
+                          "2026-10-01T12:00:00.000Z"))
+        self.assertEqual((user.text, user.timestamp_utc), ("list files", "2026-10-01T12:00:01.000Z"))
+        self.assertEqual((asst.text, asst.model), ("Listing list", "openrouter/anthropic/claude-sonnet-4"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("code_execution_tool", "t1", "ls"))
+        self.assertEqual((result.tool_use_id, result.text), ("t1", "a.txt"))
+        self.assertEqual((use2.text, result2.tool_use_id), ("cat big.log", "t2"))
+        self.assertEqual(result2.text, AGENT_ZERO_LONG + " (from file)")   # messages/1.txt over the cut log
+        self.assertEqual(warn.text, "warning: Rate limit | retrying in 5s")
+        self.assertEqual((resp.text, resp.timestamp_utc), ("There is one file, a.txt.", "2026-10-01T12:00:05.000Z"))
+        self.assertEqual([r.source_line for r in rows], [0, 0, 1, 2, 2, 3, 3, 4, 5])
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(AgentZeroParser(), self.REL, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["the user wants a listing"])
+
+    def test_history_used_when_file_absent_and_log_cut(self):
+        (self.home / "agent-zero/usr/chats" / AGENT_ZERO_CHAT / "messages/1.txt").unlink()
+        rows = self.rows_for(AgentZeroParser(), self.REL)
+        self.assertEqual(rows[6].text, AGENT_ZERO_LONG)
+
+    def test_trimmed_log_adds_history_without_timestamps(self):
+        history = agent_zero_history()
+        history["bulks"] = [{"_cls": "Bulk", "summary": "earlier: set up the repo", "records": []}]
+        logs = [{"no": n, "id": "x%d" % n, "type": "info", "heading": "", "content": "tick %d" % n, "kvps": {},
+                 "timestamp": 1790856100.0 + n, "agentno": 0} for n in range(1000)]
+        (self.home / self.REL).write_text(json.dumps(agent_zero_chat(logs=logs, history=history)), encoding="utf-8")
+        rows = self.rows_for(AgentZeroParser(), self.REL)
+        self.assertEqual(rows[1].text, "log trimmed to its last 1000 items; earlier turns follow from the agent "
+                                       "history without timestamps")
+        early = rows[2:9]
+        self.assertEqual([(r.turn_type, r.timestamp_utc) for r in early],
+                         [("system", ""), ("user", ""), ("assistant", ""), ("tool_use", ""), ("tool_result", ""),
+                          ("tool_result", ""), ("system", "2026-10-01T12:01:40.000Z")])
+        self.assertEqual(early[0].text, "[summary] earlier: set up the repo")
+        self.assertEqual((early[2].text, early[2].model), ("Listing list", "openrouter/anthropic/claude-sonnet-4"))
+        self.assertEqual((early[3].tool_name, early[3].text), ("code_execution_tool", "ls"))
+        self.assertEqual(early[6].text, "info: tick 0")
+        self.assertEqual(len(rows), 2 + 6 + 1000)
+
+    def test_paths_and_noise(self):
+        p = AgentZeroParser()
+        for rel in ("agent-zero/inst-1/usr/chats/Zz/chat.json", "Desktop/agent-zero/usr/chats/Zz/chat.json",
+                    "agent-zero/usr/chats/Zz.json", "agent-zero/tmp/chats/Zz/chat.json"):
+            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+        for a in self.col.artifacts:
+            if a.agent == "agent-zero" and a.rel != self.REL:
+                self.assertFalse(p.wants(a), a.rel)
+        self.assertTrue(any(a.rel.endswith("messages/1.txt") for a in self.col.artifacts))
+
+    def test_truncated_file_is_reported_not_fatal(self):
+        raw = json.dumps(agent_zero_chat())
+        cut = raw.index('"id": "t2"')          # mid-file, inside the fourth log item
+        (self.home / self.REL).write_text(raw[:cut + 20], encoding="utf-8")
+        rows = self.rows_for(AgentZeroParser(), self.REL)
+        self.assertEqual(rows[0].turn_type, "system")
+        self.assertTrue(rows[0].text.startswith("parser: chat.json did not parse"), rows[0].text)
+        self.assertEqual([r.turn_type for r in rows[1:]], ["user", "assistant", "tool_use", "tool_result"])
+        self.assertEqual({r.session_id for r in rows}, {AGENT_ZERO_CHAT})
+        self.assertEqual(rows[4].text, "a.txt")
+        self.assertEqual(recover_logs('{"logs": [{"no": 0}, {"no": 1'), [{"no": 0}])

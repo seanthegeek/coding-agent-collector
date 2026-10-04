@@ -140,6 +140,8 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     build_kilo(home)
     build_cline(home)
     build_roo_code(home)
+    build_hermes(home)
+    build_agent_zero(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -1302,3 +1304,148 @@ def build_roo_code(home: Path) -> None:
     _json(mock / "tasks" / ROO_CLI_TASK / "history_item.json",
           roo_history_item(ROO_CLI_TASK, CLINE_T0 + 303000, "fix tests"))
     _json(mock / "secrets.json", {"roo_cline_config_api_config": "{\"apiKey\":\"sk-not-real\"}"})
+
+
+HERMES_SESSION = "20261001_120000_a1b2c3d4"
+HERMES_CHILD = "20261001_121500_e5f60708"
+HERMES_DIVERTED = "20261001_130000_0badf00d"
+
+# hermes_state_common.py:372-480 at hermes-agent 8b66a51, the columns
+# research/hermes.md section 8 lists (schema version 31).
+HERMES_SCHEMA = """
+CREATE TABLE schema_version (version INTEGER NOT NULL);
+CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT NOT NULL, model TEXT,
+  parent_session_id TEXT, started_at REAL NOT NULL, ended_at REAL, end_reason TEXT,
+  cwd TEXT, git_branch TEXT, git_repo_root TEXT, title TEXT);
+CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
+  role TEXT NOT NULL, content TEXT, tool_call_id TEXT, tool_calls TEXT, tool_name TEXT,
+  timestamp REAL NOT NULL, finish_reason TEXT, reasoning TEXT, reasoning_content TEXT,
+  active INTEGER NOT NULL DEFAULT 1, compacted INTEGER NOT NULL DEFAULT 0);
+"""
+
+
+def hermes_records(cwd="/srv/proj"):
+    """The INSERT statements of research/hermes.md section 8 with the shared
+    project path, plus a rewound turn kept as active=0, a multimodal user
+    message behind the NUL json prefix, and a subagent child session."""
+    return [
+        "INSERT INTO schema_version VALUES (31)",
+        "INSERT INTO sessions VALUES ('%s','cli','anthropic/claude-sonnet-4',NULL,1790856000.0,NULL,NULL,"
+        "'%s','main','%s','List files')" % (HERMES_SESSION, cwd, cwd),
+        "INSERT INTO sessions VALUES ('%s','subagent','openai/gpt-5',"
+        "'%s',1790856900.0,1790856910.0,'completed',NULL,NULL,'%s','Check disk')" % (HERMES_CHILD, HERMES_SESSION, cwd),
+        "INSERT INTO messages (session_id,role,content,tool_call_id,tool_calls,tool_name,timestamp,finish_reason,reasoning) VALUES "
+        "('%s','user','list files',NULL,NULL,NULL,1790856001.25,NULL,NULL)," % HERMES_SESSION +
+        """('%s','assistant','',NULL,""" % HERMES_SESSION +
+        """'[{"id":"call_1","call_id":"call_1","response_item_id":null,"type":"function","function":{"name":"terminal","arguments":"{\\"command\\":\\"ls\\"}"}}]',"""
+        "NULL,1790856002.5,'tool_calls','User wants a listing.'),"
+        "('%s','tool','a.txt' || char(10) || 'b.txt','call_1',NULL,'terminal',1790856003.0,NULL,NULL)," % HERMES_SESSION +
+        "('%s','assistant','Two files: a.txt, b.txt.',NULL,NULL,NULL,1790856004.0,'stop',NULL)" % HERMES_SESSION,
+        "INSERT INTO messages (session_id,role,content,timestamp,active,compacted) VALUES "
+        "('%s','user','delete them instead',1790856005.0,0,1)," % HERMES_SESSION +
+        """('%s','user',char(0) || 'json:[{"type":"text","text":"what is in this screenshot?"},"""
+        """{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}}]',1790856006.0,1,0)""" % HERMES_SESSION,
+        "INSERT INTO messages (session_id,role,content,timestamp) VALUES ('%s','user','df -h',1790856901.0)" % HERMES_CHILD,
+    ]
+
+
+def hermes_diverted_records():
+    """sessions/<id>.jsonl: message dicts appended while state.db was
+    replaced under a running process (hermes_state.py:429-444)."""
+    return [
+        {"role": "user", "content": "show the env", "timestamp": 1790859600.0},
+        {"role": "assistant", "content": "", "tool_calls": [
+            {"id": "call_9", "type": "function",
+             "function": {"name": "read_file", "arguments": "{\"path\":\"/srv/proj/.env\"}"}}],
+         "timestamp": 1790859601.0},
+        {"role": "tool", "content": "TOKEN=x", "tool_call_id": "call_9", "tool_name": "read_file",
+         "timestamp": 1790859602.0},
+    ]
+
+
+HERMES_DIVERTED_REL = ".hermes/sessions/%s.jsonl" % HERMES_DIVERTED
+
+
+def build_hermes(home: Path) -> None:
+    hermes = home / ".hermes"
+    _wal_db(hermes / "state.db", HERMES_SCHEMA, hermes_records())
+    _jsonl(home / HERMES_DIVERTED_REL, hermes_diverted_records())
+    (hermes / "config.yaml").write_text("model: anthropic/claude-sonnet-4\n", encoding="utf-8")
+    (hermes / "auth.json").write_text('{"providers": {"nous": {"access_token": "not-real"}}}', encoding="utf-8")
+    (hermes / "sessions/sessions.json").write_text("{}", encoding="utf-8")
+
+
+AGENT_ZERO_CHAT = "AbCd1234"
+AGENT_ZERO_REL = "agent-zero/usr/chats/%s/chat.json" % AGENT_ZERO_CHAT
+AGENT_ZERO_LONG = "x" * 600
+
+
+def _a0_message(mid, ai, content, metadata=None):
+    return {"_cls": "Message", "id": mid, "ai": ai, "content": content, "metadata": metadata or {},
+            "sequence": 0, "summary": "", "tokens": 5}
+
+
+def agent_zero_history():
+    """Agent 0's history from research/agent-zero.md section 8, with the
+    assistant message carrying the id of the `agent` log item that streamed
+    it (agent.py:529-534) and its provider model, and a second tool result
+    long enough to be saved to messages/1.txt."""
+    ai = json.dumps({"thoughts": ["list"], "headline": "Listing", "tool_name": "code_execution_tool",
+                     "tool_args": {"runtime": "terminal", "code": "ls"}})
+    return {"_cls": "History", "counter": 5, "bulks": [], "topics": [], "current": {
+        "_cls": "Topic", "summary": "", "messages": [
+            _a0_message("u1", False, {"user_message": "list files"}),
+            _a0_message("a1", True, ai, {"responses": {"response_id": "resp_1",
+                                                      "provider_model_key": "openrouter/anthropic/claude-sonnet-4",
+                                                      "usage": {"input": 10, "output": 20}}}),
+            _a0_message("t1", False, {"tool_name": "code_execution_tool", "tool_result": "a.txt"}),
+            _a0_message("t2", False, {"tool_name": "code_execution_tool", "tool_result": AGENT_ZERO_LONG,
+                                      "file": "/a0/usr/chats/%s/messages/1.txt" % AGENT_ZERO_CHAT}),
+        ]}}
+
+
+def agent_zero_logs():
+    return [
+        {"no": 0, "id": "u1", "type": "user", "heading": "", "content": "list files",
+         "kvps": {"attachments": []}, "timestamp": 1790856001.0, "agentno": 0},
+        {"no": 1, "id": "a1", "type": "agent", "heading": "icon://network_intelligence A0: Listing", "content": "",
+         "kvps": {"step": "Writing terminal command... (2)", "thoughts": ["list"], "headline": "Listing",
+                  "tool_name": "code_execution_tool", "tool_args": {"runtime": "terminal", "code": "ls"},
+                  "reasoning": "the user wants a listing"},
+         "timestamp": 1790856002.0, "agentno": 0},
+        {"no": 2, "id": "t1", "type": "tool", "heading": "A0: Using tool 'code_execution_tool'", "content": "a.txt",
+         "kvps": {"runtime": "terminal", "code": "ls", "_tool_name": "code_execution_tool"},
+         "timestamp": 1790856003.0, "agentno": 0},
+        {"no": 3, "id": "t2", "type": "tool", "heading": "A0: Using tool 'code_execution_tool'",
+         "content": AGENT_ZERO_LONG[:100] + "\n\n<< 500 Characters hidden >>\n\n",
+         "kvps": {"runtime": "terminal", "code": "cat big.log", "_tool_name": "code_execution_tool"},
+         "timestamp": 1790856004.0, "agentno": 0},
+        {"no": 4, "id": None, "type": "warning", "heading": "icon://warning Rate limit", "content": "retrying in 5s",
+         "kvps": {}, "timestamp": 1790856004.5, "agentno": 0},
+        {"no": 5, "id": "r1", "type": "response", "heading": "A0: Responding", "content": "There is one file, a.txt.",
+         "kvps": {}, "timestamp": 1790856005.0, "agentno": 0},
+    ]
+
+
+def agent_zero_chat(logs=None, history=None):
+    return {"id": AGENT_ZERO_CHAT, "name": "List files", "created_at": "2026-10-01T14:00:00+02:00", "type": "user",
+            "last_message": "2026-10-01T14:00:05+02:00", "streaming_agent": 0, "agent_profile": "agent0",
+            "data": {"project": "demo"}, "output_data": {},
+            "agents": [{"number": 0, "agent_profile": "agent0", "data": {},
+                        "history": json.dumps(history if history is not None else agent_zero_history(),
+                                              separators=(",", ":"))}],
+            "log": {"guid": "6b0f0c1e-0000-4000-8000-000000000001", "progress": "", "progress_no": 5,
+                    "logs": logs if logs is not None else agent_zero_logs()}}
+
+
+def build_agent_zero(home: Path) -> None:
+    """A docker-compose style install in ~/agent-zero, with the long tool
+    result file, and settings and secrets noise."""
+    usr = home / "agent-zero/usr"
+    chat = usr / "chats" / AGENT_ZERO_CHAT
+    chat.mkdir(parents=True, exist_ok=True)
+    (chat / "chat.json").write_text(json.dumps(agent_zero_chat(), ensure_ascii=False), encoding="utf-8")
+    (chat / "messages").mkdir(exist_ok=True)
+    (chat / "messages/1.txt").write_text(AGENT_ZERO_LONG + " (from file)", encoding="utf-8")
+    (usr / "settings.json").write_text('{"chat_model_provider": "openrouter"}', encoding="utf-8")
+    (usr / "secrets.env").write_text("API_KEY_OPENROUTER=not-real\n", encoding="utf-8")
