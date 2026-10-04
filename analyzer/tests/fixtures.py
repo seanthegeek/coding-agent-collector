@@ -127,6 +127,8 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     (gs / "state.vscdb").write_text("sqlite", encoding="utf-8")
     (gs / "saoudrizwan.claude-dev/state").mkdir(parents=True, exist_ok=True)
     (gs / "saoudrizwan.claude-dev/state/taskHistory.json").write_text("[]", encoding="utf-8")
+    build_continue(home)
+    build_aider(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -240,3 +242,95 @@ def build_antigravity(base: Path) -> None:
     summ.close()
     _jsonl(base / "history.jsonl", [{"display": "clean the logs", "timestamp": AGY_T0 * 1000, "workspace": "/home/u/proj"}])
     (base / "antigravity-oauth-token").write_text("secret", encoding="utf-8")
+
+
+CONTINUE_SESSION = "0f1e"
+CONTINUE_CREATED = "1790935200000"  # 2026-10-02T10:00:00Z, a millisecond epoch string as sessions.json stores it
+
+
+def continue_session():
+    """A Continue session file in the shape of core/index.d.ts `Session`."""
+    edit = {"id": "call_1", "type": "function",
+            "function": {"name": "edit_existing_file", "arguments": "{\"filepath\":\"a.py\"}"}}
+    term = {"id": "call_2", "type": "function",
+            "function": {"name": "run_terminal_command", "arguments": "{\"command\":\"rm -rf build\"}"}}
+    return {
+        "sessionId": CONTINUE_SESSION, "title": "Fix bug", "workspaceDirectory": "/srv/proj",
+        "history": [
+            {"message": {"role": "user", "content": [{"type": "text", "text": "rename foo"},
+                                                     {"type": "imageUrl", "imageUrl": {"url": "data:image/png;base64,AA"}}]},
+             "contextItems": []},
+            {"message": {"role": "thinking", "content": "consider the callers"}, "contextItems": []},
+            {"message": {"role": "assistant", "content": "", "toolCalls": [edit]}, "contextItems": [],
+             "reasoning": {"active": False, "text": "find foo first", "startAt": 1790935201000, "endAt": 1790935202000},
+             "promptLogs": [{"modelTitle": "GPT-4o", "modelProvider": "openai", "prompt": "<long prompt>", "completion": ""}],
+             "toolCallStates": [{"toolCallId": "call_1", "toolCall": edit, "status": "done",
+                                 "parsedArgs": {"filepath": "a.py"},
+                                 "output": [{"name": "Edit", "description": "", "content": "ok"}]}]},
+            {"message": {"role": "tool", "content": "ok", "toolCallId": "call_1"}, "contextItems": []},
+            {"message": {"role": "assistant", "content": "Renamed. Cleaning the build too.", "toolCalls": [term]},
+             "contextItems": [],
+             "toolCallStates": [{"toolCallId": "call_2", "toolCall": term, "status": "canceled",
+                                 "parsedArgs": {"command": "rm -rf build"}}]},
+        ],
+        "mode": "agent", "chatModelTitle": "GPT-4o",
+        "usage": {"promptTokens": 120, "completionTokens": 30, "totalCost": 0.01},
+    }
+
+
+def continue_index():
+    return [{"sessionId": CONTINUE_SESSION, "title": "Fix bug", "dateCreated": CONTINUE_CREATED,
+             "workspaceDirectory": "/srv/proj", "messageCount": 2}]
+
+
+def continue_dev_data():
+    base = {"schema": "0.2.0", "userId": "", "userAgent": "vscode/1.1 (Continue/1.0)", "selectedProfileId": "local"}
+    chat = dict(base, eventName="chatInteraction", timestamp="2026-10-02T10:00:05.000Z", prompt="rename foo",
+                completion="done", modelName="gpt-4o", modelTitle="GPT-4o", modelProvider="openai",
+                sessionId=CONTINUE_SESSION)
+    tool = dict(base, eventName="toolUsage", timestamp="2026-10-02T10:00:03.000Z", toolCallId="call_1",
+                functionName="edit_existing_file", functionParams={"filepath": "a.py"},
+                toolCallArgs="{\"filepath\":\"a.py\"}", accepted=True, succeeded=True,
+                output=[{"name": "Edit", "description": "", "content": "ok"}])
+    return [chat], [tool]
+
+
+def build_continue(home: Path) -> None:
+    sessions = home / ".continue/sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    (sessions / (CONTINUE_SESSION + ".json")).write_text(json.dumps(continue_session(), indent=2), encoding="utf-8")
+    (sessions / "sessions.json").write_text(json.dumps(continue_index()), encoding="utf-8")
+    chat, tool = continue_dev_data()
+    _jsonl(home / ".continue/dev_data/0.2.0/chatInteraction.jsonl", chat)
+    _jsonl(home / ".continue/dev_data/0.2.0/toolUsage.jsonl", tool)
+    (home / ".continue/config.yaml").write_text("name: Local\nmodels: []\n", encoding="utf-8")
+
+
+# Written the way aider/io.py writes them: user and blockquote lines end in
+# two spaces (markdown line breaks), assistant output is framed by blanks.
+AIDER_CHAT = "".join([
+    "\n# aider chat started at 2026-10-02 12:00:00\n\n",
+    "\n#### rename foo to bar  \n",
+    "\nHere is the change:\n\na.py\n<<<<<<< SEARCH\nfoo\n=======\nbar\n>>>>>>> REPLACE\n\n",
+    "> Applied edit to a.py  \n",
+    "> Commit abc1234 refactor: rename foo to bar  \n",
+    "\n# aider chat started at 2026-10-02 13:00:00\n\n",
+    "\n#### /add b.py  \n",
+    "> Added b.py to the chat  \n",
+    "\n#### <blank>  \n",
+])
+
+AIDER_INPUT = "\n# 2026-10-02 12:00:05.123456\n+rename foo to bar\n\n# 2026-10-02 13:00:02.000000\n+/add b.py\n"
+
+AIDER_LLM = ("TO LLM 2026-10-02T12:00:05\n-------\nSYSTEM Act as an expert\nSYSTEM software developer\n-------\n"
+             "USER rename foo to bar\nLLM RESPONSE 2026-10-02T12:00:09\nASSISTANT Here is the change:\nASSISTANT \n"
+             "ASSISTANT a.py\n")
+
+
+def build_aider(base: Path) -> None:
+    """Aider's history files in `base`, a home or a repository root."""
+    base.mkdir(parents=True, exist_ok=True)
+    (base / ".aider.chat.history.md").write_text(AIDER_CHAT, encoding="utf-8")
+    (base / ".aider.input.history").write_text(AIDER_INPUT, encoding="utf-8")
+    (base / ".aider.llm.history").write_text(AIDER_LLM, encoding="utf-8")
+    (base / ".aider.conf.yml").write_text("model: gpt-4o\n", encoding="utf-8")

@@ -162,11 +162,11 @@ class TimelineTests(ParserBase):
             rows = list(csv.DictReader(fh))
         ts = [r["timestamp_utc"] for r in rows if r["timestamp_utc"]]
         self.assertEqual(ts, sorted(ts))
-        self.assertEqual({r["agent"] for r in rows}, {"claude-code", "codex-cli", "antigravity"})
+        self.assertLessEqual({"claude-code", "codex-cli", "antigravity"}, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
         with open(out / "sessions.csv", encoding="utf-8", newline="") as fh:
             sessions = {r["session_id"]: r for r in csv.DictReader(fh)}
-        self.assertEqual(set(sessions), {CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000"})
+        self.assertLessEqual({CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000"}, set(sessions))
         c = sessions[CLAUDE_SESSION]
         self.assertEqual(c["models"], "claude-fable-5-1")
         self.assertEqual(c["tool_calls"], "1")
@@ -301,3 +301,155 @@ class AntigravityTests(ParserBase):
         self.assertEqual(tool_args_summary('{"CommandLine":"ls","Cwd":"/x"}'), "ls")
         self.assertEqual(tool_args_summary('{"Other":1}'), '{"Other":1}')
         self.assertEqual(tool_args_summary("not json"), "not json")
+
+
+from agent_analyzer.parsers.continue_dev import ContinueParser, load_session
+from agent_analyzer.parsers.aider import AiderParser, AiderProjectParser
+from fixtures import CONTINUE_SESSION, build_aider
+
+
+class ContinueTests(ParserBase):
+    REL = ".continue/sessions/%s.json" % CONTINUE_SESSION
+
+    def test_rows(self):
+        rows = self.rows_for(ContinueParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "user", "tool_use", "tool_result", "assistant", "tool_use", "tool_result"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "continue", CONTINUE_SESSION))
+            self.assertEqual((r.project_path, r.git_branch), ("/srv/proj", ""))
+            # no per-message time: every row inherits sessions.json dateCreated
+            self.assertEqual(r.timestamp_utc, "2026-10-02T10:00:00.000Z")
+        start, user, use1, res1, asst, use2, res2 = rows
+        self.assertIn("session start: Fix bug mode=agent items=5", start.text)
+        self.assertEqual(user.text, "rename foo [image]")
+        self.assertEqual((use1.tool_name, use1.tool_use_id, use1.text, use1.model),
+                         ("edit_existing_file", "call_1", '{"filepath":"a.py"}', "GPT-4o"))
+        self.assertEqual((res1.tool_name, res1.tool_use_id, res1.text), ("edit_existing_file", "call_1", "ok"))
+        self.assertEqual(asst.text, "Renamed. Cleaning the build too.")
+        # a call with no tool message keeps its outcome in toolCallStates
+        self.assertEqual((res2.tool_use_id, res2.text), ("call_2", "[canceled]"))
+        self.assertEqual([r.source_line for r in rows], [0, 1, 3, 4, 5, 5, 5])
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(ContinueParser(), self.REL, include_thinking=True)
+        thinking = [r for r in rows if r.turn_type == "thinking"]
+        self.assertEqual([r.text for r in thinking], ["consider the callers", "find foo first"])
+        self.assertEqual(thinking[1].timestamp_utc, "2026-10-02T10:00:01.000Z")   # reasoning.startAt
+
+    def test_dev_data(self):
+        rows = self.rows_for(ContinueParser(), ".continue/dev_data/0.2.0/chatInteraction.jsonl")
+        self.assertEqual([(r.turn_type, r.text) for r in rows], [("user", "rename foo"), ("assistant", "done")])
+        self.assertTrue(all(r.timestamp_utc == "2026-10-02T10:00:05.000Z" for r in rows))
+        self.assertEqual((rows[1].session_id, rows[1].project_path, rows[1].model), (CONTINUE_SESSION, "/srv/proj", "GPT-4o"))
+        rows = self.rows_for(ContinueParser(), ".continue/dev_data/0.2.0/toolUsage.jsonl")
+        self.assertEqual([(r.turn_type, r.tool_name, r.tool_use_id) for r in rows],
+                         [("tool_use", "edit_existing_file", "call_1"), ("tool_result", "edit_existing_file", "call_1")])
+        self.assertEqual(rows[1].text, "accepted=true succeeded=true ok")
+
+    def test_index_and_config_not_wanted(self):
+        p = ContinueParser()
+        for rel in (".continue/sessions/sessions.json", ".continue/config.yaml"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(p.wants(art), rel)
+
+    def test_truncated_session_keeps_earlier_turns(self):
+        path = self.home / self.REL
+        raw = path.read_text(encoding="utf-8")
+        path.write_text(raw[: raw.index('"toolCallId": "call_2"')], encoding="utf-8")
+        rows = self.rows_for(ContinueParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result", "system"])
+        self.assertIn("recovered 4 history item(s)", rows[-1].text)
+        self.assertEqual(rows[1].session_id, CONTINUE_SESSION)
+
+    def test_truncated_dev_data_line(self):
+        rel = ".continue/dev_data/0.2.0/chatInteraction.jsonl"
+        write_bad_line(self.home / rel)
+        rows = self.rows_for(ContinueParser(), rel)
+        self.assertEqual([r.turn_type for r in rows], ["user", "assistant", "system"])
+        self.assertIn("1 unparseable line", rows[-1].text)
+        self.assertEqual(rows[-1].source_line, 2)
+
+    def test_load_session_trailing_data(self):
+        obj, problem = load_session('{"sessionId": "x", "history": []}\n{"junk"')
+        self.assertEqual(obj["sessionId"], "x")
+        self.assertIn("trailing data", problem)
+
+
+class AiderTests(ParserBase):
+    CHAT = ".aider.chat.history.md"
+    S1 = "/alice/.aider.chat.history.md#2026-10-02 12:00:00"
+    S2 = "/alice/.aider.chat.history.md#2026-10-02 13:00:00"
+
+    def test_rows(self):
+        rows = self.rows_for(AiderParser(), self.CHAT)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "user", "assistant", "tool_result", "system", "user", "tool_result", "user"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.project_path), ("h1", "alice", "aider", "/alice"))
+            self.assertEqual((r.model, r.git_branch, r.tool_use_id), ("", "", ""))
+        start, user, asst, tool, start2, add, added, blank = rows
+        self.assertEqual([r.session_id for r in rows], [self.S1] * 4 + [self.S2] * 4)
+        self.assertEqual(start.timestamp_utc, "2026-10-02T12:00:00.000Z")
+        # the prompt takes its time from the matching input-history entry, and later rows inherit it
+        self.assertEqual((user.text, user.timestamp_utc), ("rename foo to bar", "2026-10-02T12:00:05.123Z"))
+        self.assertEqual(asst.timestamp_utc, "2026-10-02T12:00:05.123Z")
+        self.assertTrue(asst.text.startswith("Here is the change: a.py <<<<<<< SEARCH"))
+        self.assertTrue(asst.text.endswith(">>>>>>> REPLACE"))
+        self.assertEqual(tool.text, "Applied edit to a.py Commit abc1234 refactor: rename foo to bar")
+        self.assertEqual((add.text, add.timestamp_utc), ("/add b.py", "2026-10-02T13:00:02.000Z"))
+        self.assertEqual(added.text, "Added b.py to the chat")
+        self.assertEqual(blank.text, "<blank>")
+        self.assertEqual([r.source_line for r in rows], [2, 5, 7, 16, 19, 22, 23, 25])
+
+    def test_thinking_opt_in(self):
+        # Aider records no reasoning; the flag must not change the rows.
+        self.assertEqual(len(self.rows_for(AiderParser(), self.CHAT, include_thinking=True)),
+                         len(self.rows_for(AiderParser(), self.CHAT)))
+
+    def test_input_and_llm_history(self):
+        rows = self.rows_for(AiderParser(), ".aider.input.history")
+        self.assertEqual([(r.turn_type, r.text, r.timestamp_utc, r.session_id) for r in rows],
+                         [("user", "rename foo to bar", "2026-10-02T12:00:05.123Z", self.S1),
+                          ("user", "/add b.py", "2026-10-02T13:00:02.000Z", self.S2)])
+        rows = self.rows_for(AiderParser(), ".aider.llm.history")
+        self.assertEqual([r.turn_type for r in rows], ["system", "assistant"])
+        self.assertEqual(rows[0].text, "TO LLM: 2 message(s) (SYSTEM 1, USER 1); last user message: rename foo to bar")
+        self.assertEqual((rows[1].text, rows[1].timestamp_utc), ("Here is the change: a.py", "2026-10-02T12:00:09.000Z"))
+        self.assertTrue(all(r.session_id == self.S1 for r in rows))
+
+    def test_config_not_wanted(self):
+        art = next(a for a in self.col.artifacts if a.rel == ".aider.conf.yml")
+        self.assertFalse(AiderParser().wants(art))
+
+    def test_truncated_line(self):
+        write_bad_line(self.home / ".aider.input.history")
+        rows = self.rows_for(AiderParser(), ".aider.input.history")
+        self.assertEqual([r.turn_type for r in rows], ["user", "user", "system"])
+        self.assertIn("1 unparseable line", rows[-1].text)
+        self.assertEqual(rows[-1].source_line, 7)
+
+    def test_project_artifacts_from_manifest(self):
+        """The collector attributes repository files to agent `project` with
+        the project as the home; the rows still say aider."""
+        import json as _json
+        root = self.tmp / "collected"
+        build_aider(root / "fs/srv/proj")
+        (root / "collection.json").write_text(_json.dumps({"hostname": "h2"}), encoding="utf-8")
+        with open(root / "manifest.jsonl", "w", encoding="utf-8") as fh:
+            for name in (".aider.chat.history.md", ".aider.input.history", ".aider.llm.history", ".aider.conf.yml"):
+                fh.write(_json.dumps({"user": "alice", "home": "/srv/proj", "agent": "project",
+                                      "path": "/srv/proj/" + name, "archive_path": "fs/srv/proj/" + name,
+                                      "type": "file", "status": "collected", "secret": name.endswith(".yml")}) + "\n")
+        col = open_input(root, self.cat)
+        self.assertEqual(col.kind, "collected")
+        self.assertEqual({a.rel for a in col.artifacts if a.agent == "project"},
+                         {".aider.chat.history.md", ".aider.input.history", ".aider.llm.history", ".aider.conf.yml"})
+        rows, _, problems = cli.collect_rows(col, Options(), [])
+        self.assertEqual(problems, [])
+        self.assertEqual(len(rows), 8 + 2 + 2)
+        self.assertEqual({(r.host, r.user, r.agent, r.project_path) for r in rows}, {("h2", "alice", "aider", "/srv/proj")})
+        self.assertEqual({r.session_id for r in rows},
+                         {"/srv/proj/.aider.chat.history.md#2026-10-02 12:00:00",
+                          "/srv/proj/.aider.chat.history.md#2026-10-02 13:00:00"})
+        self.assertFalse(AiderProjectParser().wants(next(a for a in col.artifacts if a.rel == ".aider.conf.yml")))
