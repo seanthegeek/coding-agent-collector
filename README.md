@@ -26,7 +26,9 @@ collect Docker and Podman named volumes that belong to known agents. Output
 is one `tar.gz` (a `.zip` from the Windows collector where `tar.exe` is
 missing) holding the collected files, a hashed JSONL manifest and a run
 summary. Host state such as processes and network connections is left to the
-EDR the collectors supplement.
+EDR the collectors supplement. With `--inventory` they write nothing and
+print one JSON line per user and agent found to stdout instead, for a
+fleet-wide audit through the EDR console.
 
 Usage, options, the list of covered tools, the manifest schema and the test
 matrix are in [collectors/README.md](collectors/README.md).

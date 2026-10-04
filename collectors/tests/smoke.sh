@@ -758,6 +758,56 @@ check "docker desktop noted in stdout" "grep -q '^docker:     3 volumes found, 2
 check "docker desktop noted in collection.json" "grep -q '\"docker: Docker Desktop data at .*com.docker.docker; volumes inside its virtual machine disk are not collected\"' \"\$S\" && grep -q '\"docker_desktop\": true' \"\$S\""
 rm -rf "$B/Library/Containers"
 
+# ---- --inventory (1.6.0, 2026-10-04) ---------------------------------------
+# Stat-only fleet inventory: JSON Lines on stdout, nothing written anywhere.
+inv() { # inv NAME ARGS... -> $OUT/NAME.stdout and $OUT/NAME.stderr
+  _n=$1; shift
+  COLLECTOR_SH="$SHELL_UNDER_TEST" "$SHELL_UNDER_TEST" "$SCRIPT" -r "$ROOT" --inventory "$@" >"$OUT/$_n.stdout" 2>"$OUT/$_n.stderr"
+}
+agent_line() { grep -F "\"user\":\"$2\",\"agent\":\"$3\"," "$OUT/$1.stdout" | head -n1; }
+INV_HOST_RE='^{"type":"host","host":"[^"]*","collector":"[0-9.]*","mode":"image","at":"[0-9-]*T[0-9:]*Z","users_scanned":[0-9]*,"users_unreadable":[0-9]*,"docker_volumes":[0-9]*}$'
+INV_AGENT_RE='^{"type":"agent","host":"[^"]*","user":"[^"]*","agent":"[^"]*","files":[0-9]*,"bytes":[0-9]*,"first":"[^"]*","last":"[^"]*","projects":[0-9]*,"evidence":"[^"]*"}$'
+TZ=UTC0 touch -t 202609150102.03 "$ROOT/home/ollama/.ollama/history"
+mkdir -p "$OUT/invcwd"
+(cd "$OUT/invcwd" && inv inventory -q); check "inventory exit 0" "[ $? -eq 0 ]"
+check "inventory writes nothing in the current directory" "[ -z \"\$(ls -A \"$OUT/invcwd\")\" ]"
+check "inventory -q leaves stderr empty" "[ ! -s \"$OUT/inventory.stderr\" ]"
+check "inventory first line is the host line, keys in order" "head -n1 \"$OUT/inventory.stdout\" | grep -q '$INV_HOST_RE'"
+check "inventory host line counts" "head -n1 \"$OUT/inventory.stdout\" | grep -q '\"users_unreadable\":0,\"docker_volumes\":3}\$'"
+check "inventory every later line is an agent line, keys in order" "[ \"\$(sed 1d \"$OUT/inventory.stdout\" | grep -vc '$INV_AGENT_RE')\" = 0 ] && [ \"\$(grep -c . \"$OUT/inventory.stdout\")\" -gt 10 ]"
+check "inventory ollama line: one file, excluded models not counted" "agent_line inventory ollama ollama | grep -q '\"files\":1,\"bytes\":5,\"first\":\"2026-09-15T01:02:03Z\",\"last\":\"2026-09-15T01:02:03Z\",\"projects\":0,\"evidence\":\".ollama\"}\$'"
+check "inventory claude-code evidence in catalog order" "agent_line inventory alice claude-code | grep -q '\"evidence\":\".claude,.claude.json\\*\"}\$'"
+check "inventory first and last set for alice claude-code" "agent_line inventory alice claude-code | grep -q '\"first\":\"20[0-9-]*T[0-9:]*Z\",\"last\":\"20[0-9-]*T[0-9:]*Z\"'"
+check "inventory nested entry claimed from the enclosing agent" "agent_line inventory alice antigravity | grep -q '\"evidence\":\"[^\"]*.gemini/antigravity-cli' && agent_line inventory alice gemini-cli | grep -q '\"evidence\":\".gemini\"'"
+check "inventory projects counted per user" "agent_line inventory alice claude-code | grep -q '\"projects\":[1-9]'"
+check "inventory docker volume line" "agent_line inventory docker agent-zero | grep -q '\"files\":2,\"bytes\":63,.*\"projects\":0,\"evidence\":\"\\*a0_usr\"}\$'"
+check "inventory rootless docker volume line" "agent_line inventory docker tabby | grep -q '\"files\":1,\"bytes\":23,.*\"evidence\":\"\\*tabby\\*\"}\$'"
+check "inventory shared and shell-history not inventoried" "! grep -q '\"agent\":\"\\(shared\\|shell-history\\|project\\|live\\)\"' \"$OUT/inventory.stdout\""
+check "inventory prints no path below a home" "! grep -q '$ROOT' \"$OUT/inventory.stdout\""
+if command -v python3 >/dev/null 2>&1; then
+  check "inventory stdout is valid JSON Lines" "python3 -c 'import json,sys; [json.loads(l) for l in open(sys.argv[1])]' \"$OUT/inventory.stdout\""
+fi
+inv inventory-o -o "$OUT/inv-o"; check "inventory with -o exit 0" "[ $? -eq 0 ]"
+check "inventory with -o creates no output directory" "[ ! -e \"$OUT/inv-o\" ]"
+check "inventory with -o notes it on stderr" "grep -q 'NOTE: --inventory writes nothing; -o .*inv-o ignored' \"$OUT/inventory-o.stderr\""
+check "inventory without -q logs to stderr only" "[ -s \"$OUT/inventory-o.stderr\" ] && [ \"\$(grep -vc '$INV_HOST_RE' \"$OUT/inventory-o.stdout\" | head -n1)\" = \"\$(grep -c '$INV_AGENT_RE' \"$OUT/inventory-o.stdout\")\" ]"
+inv inventory-full -q --full
+check "inventory --full counts excluded files" "agent_line inventory-full ollama ollama | grep -q '\"files\":2,\"bytes\":10,'"
+inv inventory-u -q -u bob --no-docker
+check "inventory -u keeps one user" "! grep -q '\"user\":\"alice\"' \"$OUT/inventory-u.stdout\" && grep -q '\"user\":\"bob\"' \"$OUT/inventory-u.stdout\""
+check "inventory --no-docker: no volumes, no docker lines" "head -n1 \"$OUT/inventory-u.stdout\" | grep -q '\"users_scanned\":1,\"users_unreadable\":0,\"docker_volumes\":0}' && ! grep -q '\"user\":\"docker\"' \"$OUT/inventory-u.stdout\""
+if [ "$(id -u)" != 0 ]; then
+  mkdir -p "$ROOT/home/carol/.claude"
+  chmod 000 "$ROOT/home/carol"
+  inv inventory-perm -q; check "inventory unreadable home exit 0" "[ $? -eq 0 ]"
+  chmod 700 "$ROOT/home/carol"
+  check "inventory counts the unreadable home" "head -n1 \"$OUT/inventory-perm.stdout\" | grep -q '\"users_unreadable\":1,'"
+  check "inventory scanned count includes it" "[ \"\$(head -n1 \"$OUT/inventory-perm.stdout\" | sed 's/.*\"users_scanned\":\\([0-9]*\\).*/\\1/')\" = \"\$(( \$(head -n1 \"$OUT/inventory.stdout\" | sed 's/.*\"users_scanned\":\\([0-9]*\\).*/\\1/') + 1 ))\" ]"
+  rm -rf "$ROOT/home/carol"
+else
+  printf 'skip unreadable home inventory check (running as root)\n'
+fi
+
 # ---- live mode without the snapshot (1.6.0) --------------------------------
 mkdir -p "$OUT/livehost"
 COLLECTOR_SH="$SHELL_UNDER_TEST" "$SHELL_UNDER_TEST" "$SCRIPT" -o "$OUT/livehost" -q -u no-such-user-cac --no-docker --no-projects >/dev/null 2>&1

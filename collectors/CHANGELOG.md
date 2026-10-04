@@ -10,6 +10,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-04
+
+### Added
+
+- Inventory mode, `--inventory` / `-Inventory`, for fleet audits through
+  an EDR console: the collection walk (catalog, exclusions, nested claims,
+  Docker volumes, `-u`, `-r`, `--full`, `--no-docker`) with `lstat` only.
+  It writes nothing, not even a log; `-o` is ignored with a stderr note.
+  Exit code `0` once the walk has run.
+- Inventory output on stdout, JSON Lines: one `host` line (`type`, `host`,
+  `collector`, `mode`, `at`, `users_scanned`, `users_unreadable`,
+  `docker_volumes`).
+- Then one `agent` line per user and agent found (`type`, `host`, `user`,
+  `agent`, `files`, `bytes`, `first`, `last`, `projects`, `evidence`);
+  `projects` is the user's discovered project count, repeated on each of
+  the user's lines, and Docker volumes appear as user `docker`.
+- Inventory never opens a credential file: project discovery skips sources
+  that match `SECRET_GLOBS`.
+
+### Changed
+
+- PowerShell: the `profile not accessible (skipped)` log line is written
+  only for profiles selected by `-Users`.
+
 ### Removed
 
 - The live system snapshot. Both collectors no longer write the `live/`
@@ -185,7 +209,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.5.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.6.0...HEAD
+[1.6.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.5.0...collector-v1.6.0
 [1.5.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.4.0...collector-v1.5.0
 [1.4.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.3.0...collector-v1.4.0
 [1.3.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.2.0...collector-v1.3.0

@@ -19,11 +19,14 @@
 # Modes:
 #   live   (default)   collect from the running system
 #   image  (-r ROOT)   collect from a mounted disk image / alternate root
+# Either mode with --inventory writes nothing: it walks the catalog with lstat
+# only and prints one JSON line per (user, agent) found to stdout.
 #
 # Exit codes: 0 archive written (per-file errors are recorded in the manifest),
+#               or, with --inventory, the walk ran,
 #             1 usage error, 2 fatal (no output dir, no tar, ...).
 
-VERSION="1.5.0"
+VERSION="1.6.0"
 TOOL="collect-agent-artifacts"
 
 LC_ALL=C
@@ -1466,6 +1469,20 @@ done
 EOF_SKIP
 )"
 
+# Program run by find -exec in --inventory mode for every regular file under a
+# matched path: prints F|agent|size|mtime and copies, hashes and writes nothing.
+# args: agent files...
+INV_PROG="$COMMON
+$(cat <<'EOF_INV'
+agent=$1; shift
+for f in "$@"; do
+  st=$(stat_file "$f")
+  set -- $st
+  printf 'F|%s|%s|%s\n' "$agent" "$(num "${1:-}")" "$(num "${2:-}")"
+done
+EOF_INV
+)"
+
 # ---------------------------------------------------------------------------
 usage() {
   cat <<EOF
@@ -1482,6 +1499,9 @@ Usage: $0 [options]
       --no-docker         Skip Docker and Podman volume enumeration
       --max-file-size MB  Skip files larger than this (default 256, 0 = none)
   -k, --keep-staging      Keep the staging directory after archiving
+      --inventory         Write nothing; print one JSON line per user and agent
+                          found (file count, bytes, first and last mtime) to
+                          stdout. -o is ignored
       --list              Print the artifact catalog and exit
   -q, --quiet             Only print the final summary
   -V, --version           Print version and exit
@@ -1504,10 +1524,12 @@ MAX_MB=256
 KEEP=0
 QUIET=0
 LIST=0
+INVENTORY=0
+OUTDIR_SET=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -o|--output)        [ $# -ge 2 ] || { usage >&2; exit 1; }; OUTDIR=$2; shift ;;
+    -o|--output)        [ $# -ge 2 ] || { usage >&2; exit 1; }; OUTDIR=$2; OUTDIR_SET=1; shift ;;
     -r|--root)          [ $# -ge 2 ] || { usage >&2; exit 1; }; ROOT=$2; shift ;;
     -u|--users)         [ $# -ge 2 ] || { usage >&2; exit 1; }; USERS=$2; shift ;;
     -p|--project)       [ $# -ge 2 ] || { usage >&2; exit 1; }; EXTRA_PROJECTS="$EXTRA_PROJECTS
@@ -1519,6 +1541,7 @@ $2"; shift ;;
     --max-file-size)    [ $# -ge 2 ] || { usage >&2; exit 1; }; MAX_MB=$2; shift ;;
     -k|--keep-staging)  KEEP=1 ;;
     --list)             LIST=1 ;;
+    --inventory)        INVENTORY=1 ;;
     -q|--quiet)         QUIET=1 ;;
     -V|--version)       printf '%s %s\n' "$TOOL" "$VERSION"; exit 0 ;;
     -h|--help)          usage; exit 0 ;;
@@ -1547,11 +1570,14 @@ if [ -n "$ROOT" ]; then
 fi
 MODE=live
 [ -n "$ROOT" ] && MODE=image
+# --inventory writes nothing: no output directory, staging or log.
 
-[ -d "$OUTDIR" ] || mkdir -p "$OUTDIR" 2>/dev/null || { printf 'Cannot create output dir: %s\n' "$OUTDIR" >&2; exit 2; }
-OUTDIR=$(cd "$OUTDIR" && pwd) || exit 2
-[ -w "$OUTDIR" ] || { printf 'Output dir not writable: %s\n' "$OUTDIR" >&2; exit 2; }
-command -v tar >/dev/null 2>&1 || { printf 'tar not found\n' >&2; exit 2; }
+if [ "$INVENTORY" != 1 ]; then
+  [ -d "$OUTDIR" ] || mkdir -p "$OUTDIR" 2>/dev/null || { printf 'Cannot create output dir: %s\n' "$OUTDIR" >&2; exit 2; }
+  OUTDIR=$(cd "$OUTDIR" && pwd) || exit 2
+  [ -w "$OUTDIR" ] || { printf 'Output dir not writable: %s\n' "$OUTDIR" >&2; exit 2; }
+  command -v tar >/dev/null 2>&1 || { printf 'tar not found\n' >&2; exit 2; }
+fi
 command -v find >/dev/null 2>&1 || { printf 'find not found\n' >&2; exit 2; }
 
 # Capability detection, exported for the worker programs.
@@ -1579,6 +1605,9 @@ LOG="$OUTDIR/$NAME.log"
 MANIFEST="$OUTDIR/$NAME.manifest.jsonl"
 SUMMARY="$OUTDIR/$NAME.collection.json"
 WORKER_SH=${COLLECTOR_SH:-sh}
+if [ "$INVENTORY" = 1 ]; then
+  STAGE=; LOG=/dev/null; MANIFEST=/dev/null
+fi
 
 export HASH_TOOL STAT_MODE MAX_SIZE SECRET_GLOBS NO_SECRETS LOG QUIET
 
@@ -1590,8 +1619,10 @@ cleanup() {
 trap 'cleanup' EXIT
 trap 'log_line "interrupted"; cleanup; trap - EXIT; exit 130' INT TERM
 
-mkdir -p "$STAGE/fs" || { printf 'Cannot create staging dir\n' >&2; exit 2; }
-: >"$LOG"; : >"$MANIFEST"
+if [ "$INVENTORY" != 1 ]; then
+  mkdir -p "$STAGE/fs" || { printf 'Cannot create staging dir\n' >&2; exit 2; }
+  : >"$LOG"; : >"$MANIFEST"
+fi
 
 [ "$FULL" = 1 ] && ACTIVE_EXCLUDES= || ACTIVE_EXCLUDES=$EXCLUDES
 
@@ -1599,6 +1630,9 @@ log_line "$TOOL $VERSION starting on $HOST ($(uname -s 2>/dev/null) $(uname -r 2
 log_line "hash=$HASH_TOOL stat=$STAT_MODE max_file_size=${MAX_MB}MB full=$FULL no_secrets=$NO_SECRETS no_docker=$NO_DOCKER worker_sh=$WORKER_SH"
 if [ "$MODE" = live ] && [ "$(id -u 2>/dev/null)" != 0 ]; then
   log_line "WARNING: not running as root; other users' homes will probably be unreadable"
+fi
+if [ "$INVENTORY" = 1 ] && [ "$OUTDIR_SET" = 1 ]; then
+  log_line "NOTE: --inventory writes nothing; -o $OUTDIR ignored"
 fi
 
 # ---------------------------------------------------------------------------
@@ -1614,6 +1648,8 @@ expand_glob() {
 }
 
 # collect_path USER HOME AGENT PATH
+# With --inventory the same walk runs, but excluded subtrees are pruned
+# without a manifest row and regular files are only stat'ed by INV_PROG.
 collect_path() {
   _cp_user=$1; _cp_home=$2; _cp_agent=$3; _cp_m=$4
   if [ -d "$_cp_m" ] && [ ! -L "$_cp_m" ]; then
@@ -1638,11 +1674,21 @@ collect_path() {
       else set -- "$@" -o -path "$_cp_home/$_cp_e"; fi
     done
     IFS=$_cp_ifs
-    if [ "$_cp_first" = 0 ]; then
+    if [ "$_cp_first" = 0 ] && [ "$INVENTORY" = 1 ]; then
+      set -- "$@" ')' -prune -o
+    elif [ "$_cp_first" = 0 ]; then
       set -- "$@" ')' -prune -exec "$WORKER_SH" -c "$SKIP_PROG" sh "$ROOT" "$_cp_user" "$_cp_home" "$_cp_agent" "$MANIFEST" '{}' + -o
     fi
-    set -- "$@" '(' -type f -o -type l ')' -exec "$WORKER_SH" -c "$STAGE_PROG" sh "$STAGE" "$ROOT" "$_cp_user" "$_cp_home" "$_cp_agent" "$MANIFEST" '{}' +
+    if [ "$INVENTORY" = 1 ]; then
+      set -- "$@" -type f -exec "$WORKER_SH" -c "$INV_PROG" sh "$_cp_agent" '{}' +
+    else
+      set -- "$@" '(' -type f -o -type l ')' -exec "$WORKER_SH" -c "$STAGE_PROG" sh "$STAGE" "$ROOT" "$_cp_user" "$_cp_home" "$_cp_agent" "$MANIFEST" '{}' +
+    fi
     find "$@" 2>>"$LOG"
+  elif [ "$INVENTORY" = 1 ]; then
+    if [ -f "$_cp_m" ] && [ ! -L "$_cp_m" ]; then
+      "$WORKER_SH" -c "$INV_PROG" sh "$_cp_agent" "$_cp_m"
+    fi
   else
     "$WORKER_SH" -c "$STAGE_PROG" sh "$STAGE" "$ROOT" "$_cp_user" "$_cp_home" "$_cp_agent" "$MANIFEST" "$_cp_m"
   fi
@@ -1651,16 +1697,23 @@ collect_path() {
 # collect_tree USER BASE CATALOG
 # Every entry is expanded first so that each matched path can be excluded
 # from the walk of any enclosing match (see NESTED_CLAIMS in collect_path).
+# With --inventory, each match of an inventoried agent first prints
+# M|agent|glob on stdout, and shared and shell-history matches still claim
+# their paths but are not walked.
 collect_tree() {
   _ct_matches=$(printf '%s\n' "$3" | while IFS='|' read -r _ct_agent _ct_pat; do
     case "$_ct_agent" in ''|'#'*) continue ;; esac
     expand_glob "$2" "$_ct_pat" | while IFS= read -r _ct_m; do
-      printf '%s|%s\n' "$_ct_agent" "$_ct_m"
+      printf '%s|%s|%s\n' "$_ct_agent" "$_ct_pat" "$_ct_m"
     done
   done)
-  NESTED_CLAIMS=$(printf '%s\n' "$_ct_matches" | cut -d'|' -f2-)
-  printf '%s\n' "$_ct_matches" | while IFS='|' read -r _ct_agent _ct_m; do
+  NESTED_CLAIMS=$(printf '%s\n' "$_ct_matches" | cut -d'|' -f3-)
+  printf '%s\n' "$_ct_matches" | while IFS='|' read -r _ct_agent _ct_pat _ct_m; do
     [ -n "$_ct_agent" ] || continue
+    if [ "$INVENTORY" = 1 ]; then
+      case "$_ct_agent" in shared|shell-history) continue ;; esac
+      printf 'M|%s|%s\n' "$_ct_agent" "$_ct_pat"
+    fi
     log_line "  [$_ct_agent] $_ct_m"
     collect_path "$1" "$2" "$_ct_agent" "$_ct_m" </dev/null
   done
@@ -1709,8 +1762,8 @@ fi
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
-# Per-user collection
-printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
+# Per-user collection (--inventory walks the homes after project discovery)
+[ "$INVENTORY" = 1 ] || printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
   [ -n "$_h" ] || continue
   log_line "User $_u ($_h)"
   collect_tree "$_u" "$_h" "$CATALOG"
@@ -1727,10 +1780,11 @@ done
 # stop the collection.
 NOTES=
 DOCKER_SEEN=0; DOCKER_FOUND=0; DOCKER_COLLECTED=0; DOCKER_UNREADABLE=0; DOCKER_DESKTOP=0
+DOCKER_INV=
 add_note() { NOTES="$NOTES
 $1"; log_line "NOTE: $1"; }
-# docker_volume_agent NAME -> the agent of the first DOCKER_VOLUMES line whose glob matches
-docker_volume_agent() {
+# docker_volume_rule NAME -> the first DOCKER_VOLUMES line (agent|glob) whose glob matches
+docker_volume_rule() {
   _dv_ifs=$IFS
   IFS='
 '
@@ -1739,7 +1793,7 @@ docker_volume_agent() {
     case "$_dv_l" in ''|'#'*) continue ;; esac
     _dv_p=${_dv_l#*|}
     # shellcheck disable=SC2254 # the table entry is a glob
-    case "$1" in $_dv_p) set +f; IFS=$_dv_ifs; printf '%s' "${_dv_l%%|*}"; return 0 ;; esac
+    case "$1" in $_dv_p) set +f; IFS=$_dv_ifs; printf '%s' "$_dv_l"; return 0 ;; esac
   done
   set +f
   IFS=$_dv_ifs
@@ -1774,15 +1828,24 @@ collect_volume_dir() {
     if [ -L "$_vv" ] || [ ! -d "$_vv" ]; then continue; fi
     DOCKER_FOUND=$(( DOCKER_FOUND + 1 ))
     _vn=${_vv##*/}; _vdata="$_vv/_data"
-    _va=$(docker_volume_agent "$_vn")
+    _vrule=$(docker_volume_rule "$_vn")
+    _va=${_vrule%%|*}
     if [ ! -r "$_vv" ] || [ ! -x "$_vv" ] || { [ -d "$_vdata" ] && { [ ! -r "$_vdata" ] || [ ! -x "$_vdata" ]; }; }; then
       DOCKER_UNREADABLE=$(( DOCKER_UNREADABLE + 1 ))
       add_note "docker: volume $_vn (${_va:-unmatched}) at $_vv is not readable; run as root to collect it"
     elif [ -L "$_vdata" ] || [ ! -d "$_vdata" ]; then
       log_line "  volume $_vn has no _data directory, skipped"
+    elif [ -z "$_va" ] && [ "$INVENTORY" = 1 ]; then
+      :
     elif [ -z "$_va" ]; then
       _vkb=$(du -sk "$_vdata" 2>/dev/null | cut -f1)
       emit_row "$MANIFEST" docker "$_vdata" "" "$_vdata" "" dir "$(( $(num "$_vkb") * 1024 ))" 0 0 0 0 0 0 0 "" false skipped_unmatched_volume "" ""
+    elif [ "$INVENTORY" = 1 ]; then
+      log_line "  [$_va] $_vdata"
+      DOCKER_INV="$DOCKER_INV
+M|$_vrule
+$(collect_path docker "$_vdata" "$_va" "$_vdata" </dev/null)"
+      DOCKER_COLLECTED=$(( DOCKER_COLLECTED + 1 ))
     else
       log_line "  [$_va] $_vdata"
       _vl=$(wc -l <"$LOG" | tr -d ' ')
@@ -1833,21 +1896,46 @@ fi
 # Emits "user:path"; the user is whoever's state referenced the path. Only
 # plain-text sources are read here (JSON/JSONL via grep); SQLite-backed agents
 # (Zed, Goose, OpenCode, Kilo, Cline db/) are left to the analyst-side parser.
+# inv_secret FILE -> true when --inventory is on and FILE, relative to the home
+# being scanned ($_h), matches SECRET_GLOBS. Inventory never opens such a file,
+# so discovery sources that are credential files (.claude.json, the OpenClaw
+# and nanobot configs, Tabby's config.toml) are not read in that mode.
+inv_secret() {
+  [ "$INVENTORY" = 1 ] || return 1
+  _is_r=${1#"$_h"/}
+  _is_ifs=$IFS
+  IFS='
+'
+  set -f
+  for _is_p in $SECRET_GLOBS; do
+    # shellcheck disable=SC2254 # the table entry is a glob
+    case "$_is_r" in $_is_p) set +f; IFS=$_is_ifs; return 0 ;; esac
+  done
+  set +f
+  IFS=$_is_ifs
+  return 1
+}
+# Evaluated at the top of each discovery helper after its key is shifted off:
+# drops the files inv_secret rejects from "$@".
+INV_DROP_SECRETS='if [ "$INVENTORY" = 1 ]; then _ids_n=$#; for _ids_f do inv_secret "$_ids_f" || set -- "$@" "$_ids_f"; done; shift "$_ids_n"; fi'
 # json_vals KEY FILE... -> values of "KEY":"..." across the given files
 json_vals() {
   _jv_k=$1; shift
+  eval "$INV_DROP_SECRETS"
   [ $# -gt 0 ] || return 0
   grep -ho "\"$_jv_k\": *\"[^\"]*\"" "$@" 2>/dev/null | sed "s/^\"$_jv_k\": *\"//; s/\"\$//"
 }
 # abs_strings FILE... -> every quoted absolute path or file:// URI in the files
 # (JSON arrays of workspace paths, object keys, nested values alike)
 abs_strings() {
+  eval "$INV_DROP_SECRETS"
   [ $# -gt 0 ] || return 0
   grep -ho '"\(file:\/\/\/\)\{0,1\}/[^"]*"' "$@" 2>/dev/null | sed 's/^"//; s/"$//; s/^file:\/\///; s/%20/ /g'
 }
 # yaml_vals KEY FILE... -> values of top-level "KEY: value" lines
 yaml_vals() {
   _yv_k=$1; shift
+  eval "$INV_DROP_SECRETS"
   [ $# -gt 0 ] || return 0
   grep -h "^$_yv_k: *" "$@" 2>/dev/null | sed "s/^$_yv_k: *//; s/^[\"']//; s/[\"']\$//"
 }
@@ -1855,12 +1943,14 @@ yaml_vals() {
 # may be unquoted and the value single-quoted (OpenClaw config)
 json5_vals() {
   _j5_k=$1; shift
+  eval "$INV_DROP_SECRETS"
   [ $# -gt 0 ] || return 0
   grep -Eho "(^|[^A-Za-z0-9_\$])[\"']?${_j5_k}[\"']? *: *(\"[^\"]*\"|'[^']*')" "$@" 2>/dev/null | sed "s/^.*${_j5_k}[\"']\{0,1\} *: *[\"']//; s/[\"']\$//"
 }
 # toml_file_urls KEY FILE... -> local paths of KEY = "file://..." lines (Tabby)
 toml_file_urls() {
   _tf_k=$1; shift
+  eval "$INV_DROP_SECRETS"
   [ $# -gt 0 ] || return 0
   grep -ho "^ *$_tf_k *= *[\"']file://[^\"']*[\"']" "$@" 2>/dev/null | sed "s/^ *$_tf_k *= *[\"']file:\/\///; s/[\"']\$//; s/%20/ /g"
 }
@@ -1881,7 +1971,7 @@ discover_projects() {
     [ -n "$_h" ] || continue
     {
       json_vals project "$_h/.claude/history.jsonl"
-      [ -f "$_h/.claude.json" ] && grep -o '"/[^"]*": *{' "$_h/.claude.json" 2>/dev/null | sed 's/^"//; s/": *{$//'
+      [ -f "$_h/.claude.json" ] && ! inv_secret "$_h/.claude.json" && grep -o '"/[^"]*": *{' "$_h/.claude.json" 2>/dev/null | sed 's/^"//; s/": *{$//'
       [ -d "$_h/.codex/sessions" ] && find "$_h/.codex/sessions" -name '*.jsonl' -exec grep -ho '"cwd":"[^"]*"' {} + 2>/dev/null | sed 's/^"cwd":"//; s/"$//'
       json_vals cwd "$_h"/.qwen/projects/*/chats/*.jsonl "$_h"/.cline/data/sessions/*/*.json "$_h"/.cursor/chats/*/*/meta.json
       json_vals workspace_root "$_h"/.cline/data/sessions/*/*.json
@@ -1889,8 +1979,8 @@ discover_projects() {
       json_vals working_dir "$_h"/.local/share/goose/sessions/*.jsonl
       json_vals worktree "$_h"/.local/share/opencode/storage/project/*.json
       json_vals path "$_h/.local/share/crush/projects.json"
-      [ -f "$_h/.gemini/projects.json" ] && grep -o '"/[^"]*": *"' "$_h/.gemini/projects.json" 2>/dev/null | sed 's/^"//; s/": *"$//'
-      [ -f "$_h/.gemini/trustedFolders.json" ] && grep -o '"/[^"]*": *"' "$_h/.gemini/trustedFolders.json" 2>/dev/null | sed 's/^"//; s/": *"$//'
+      [ -f "$_h/.gemini/projects.json" ] && ! inv_secret "$_h/.gemini/projects.json" && grep -o '"/[^"]*": *"' "$_h/.gemini/projects.json" 2>/dev/null | sed 's/^"//; s/": *"$//'
+      [ -f "$_h/.gemini/trustedFolders.json" ] && ! inv_secret "$_h/.gemini/trustedFolders.json" && grep -o '"/[^"]*": *"' "$_h/.gemini/trustedFolders.json" 2>/dev/null | sed 's/^"//; s/": *"$//'
       cat "$_h"/.gemini/tmp/*/.project_root "$_h"/.gemini/history/*/.project_root 2>/dev/null
       json_vals workspace "$_h/.gemini/antigravity-cli/history.jsonl"
       abs_strings "$_h/.gemini/antigravity-cli/settings.json" "$_h/.gemini/antigravity-cli/cache/projects.json" "$_h"/.gemini/config/projects/*.json
@@ -1903,7 +1993,7 @@ discover_projects() {
       json_vals project "$_h/.letta/sessions.jsonl"
       json_vals cwd "$_h"/.letta/lc-local-backend/conversations/*/messages.jsonl "$_h"/.pi/agent/sessions/*/*.jsonl "$_h"/.pi/agent/*.jsonl \
         "$_h/.pi/agent/crashes.json" "$_h"/.pi/agent/experimental/sessions/*/meta.json
-      [ -f "$_h/.pi/agent/trust.json" ] && grep -o '"/[^"]*": *[tf]' "$_h/.pi/agent/trust.json" 2>/dev/null | sed 's/^"//; s/": *[tf]$//'
+      [ -f "$_h/.pi/agent/trust.json" ] && ! inv_secret "$_h/.pi/agent/trust.json" && grep -o '"/[^"]*": *[tf]' "$_h/.pi/agent/trust.json" 2>/dev/null | sed 's/^"//; s/": *[tf]$//'
       for _oi in "$_h/.openinterpreter/sessions" "$_h/.openinterpreter/archived_sessions"; do
         [ -d "$_oi" ] && find "$_oi" -name 'rollout-*.jsonl' -exec grep -ho '"cwd":"[^"]*"' {} + 2>/dev/null | sed 's/^"cwd":"//; s/"$//'
       done
@@ -1945,12 +2035,79 @@ $USER_LIST" in *":$_p
 "*|*":$_p") continue ;; esac
     printf '%s\n' "$_line"
   done)
-  printf '%s\n' "$PROJECT_LIST" | while IFS= read -r _line; do
+  [ "$INVENTORY" = 1 ] || printf '%s\n' "$PROJECT_LIST" | while IFS= read -r _line; do
     [ -n "$_line" ] || continue
     _owner=${_line%%:*}; _p=${_line#*:}
     log_line "Project ${_owner:+[$_owner] }$_p"
     collect_tree "$_owner" "$_p" "$PROJECT_CATALOG"
   done
+fi
+
+# ---------------------------------------------------------------------------
+# Inventory output. Every line goes to stdout and nothing is written. The host
+# line comes first but its counts are known only after the walk, so the agent
+# lines are held in a variable until then.
+# inv_aggregate: M|agent|glob and F|agent|size|mtime lines on stdin ->
+# agent|files|bytes|first|last|evidence per agent, in order of first match.
+# Dates are UTC from the epoch with plain arithmetic (no date -d, no strftime);
+# an mtime of 0 (stat unavailable) is left out of first and last.
+inv_aggregate() {
+  awk -F'|' '
+    function iso(t,   d, s, z, era, doe, yoe, y, doy, mp, dd, m) {
+      if (t <= 0) return ""
+      d = int(t / 86400); s = t - d * 86400
+      z = d + 719468; era = int(z / 146097); doe = z - era * 146097
+      yoe = int((doe - int(doe / 1460) + int(doe / 36524) - int(doe / 146096)) / 365)
+      y = yoe + era * 400; doy = doe - (365 * yoe + int(yoe / 4) - int(yoe / 100))
+      mp = int((5 * doy + 2) / 153); dd = doy - int((153 * mp + 2) / 5) + 1
+      m = (mp < 10) ? mp + 3 : mp - 9; if (m <= 2) y++
+      return sprintf("%04d-%02d-%02dT%02d:%02d:%02dZ", y, m, dd, int(s / 3600), int((s % 3600) / 60), s % 60)
+    }
+    $1 == "M" { a = $2
+      if (!(a in seen)) { seen[a] = 1; order[++n] = a; files[a] = 0; bytes[a] = 0; ev[a] = "" }
+      if (!((a, $3) in g)) { g[a, $3] = 1; ev[a] = ev[a] (ev[a] == "" ? "" : ",") $3 } }
+    $1 == "F" { a = $2; files[a]++; bytes[a] += $3
+      if ($4 > 0) {
+        if (!(a in lo) || $4 < lo[a]) lo[a] = $4
+        if (!(a in hi) || $4 > hi[a]) hi[a] = $4 } }
+    END { for (k = 1; k <= n; k++) { a = order[k]
+      printf "%s|%d|%.0f|%s|%s|%s\n", a, files[a], bytes[a], iso(lo[a] + 0), iso(hi[a] + 0), ev[a] } }'
+}
+# inv_emit USER PROJECTS: inv_aggregate lines on stdin -> agent JSON lines
+inv_emit() {
+  while IFS='|' read -r _ie_a _ie_f _ie_b _ie_lo _ie_hi _ie_ev; do
+    [ -n "$_ie_a" ] || continue
+    printf '{"type":"agent","host":"%s","user":"%s","agent":"%s","files":%s,"bytes":%s,"first":"%s","last":"%s","projects":%s,"evidence":"%s"}\n' \
+      "$(json_str "$HOST")" "$(json_str "$1")" "$(json_str "$_ie_a")" "$(num "$_ie_f")" "$(num "$_ie_b")" \
+      "$_ie_lo" "$_ie_hi" "$(num "$2")" "$(json_str "$_ie_ev")"
+  done
+}
+if [ "$INVENTORY" = 1 ]; then
+  # A home counts as unreadable when it cannot be both listed and entered
+  # (test -r and -x on the directory itself); its catalog globs match nothing.
+  USERS_SCANNED=0; USERS_UNREADABLE=0
+  while IFS=: read -r _u _h; do
+    [ -n "$_h" ] || continue
+    USERS_SCANNED=$(( USERS_SCANNED + 1 ))
+    if [ ! -r "$_h" ] || [ ! -x "$_h" ]; then
+      USERS_UNREADABLE=$(( USERS_UNREADABLE + 1 ))
+      log_line "WARNING: home of $_u is not readable: $_h"
+    fi
+  done <<EOF_INVUSERS
+$USER_LIST
+EOF_INVUSERS
+  INV_LINES=$(printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
+    [ -n "$_h" ] || continue
+    log_line "User $_u ($_h)"
+    _np=$(printf '%s\n' "$PROJECT_LIST" | awk -F: -v u="$_u" '$1 == u && length($0) > length(u) + 1 { n++ } END { print n + 0 }')
+    collect_tree "$_u" "$_h" "$CATALOG" | inv_aggregate | inv_emit "$_u" "$_np"
+  done)
+  printf '{"type":"host","host":"%s","collector":"%s","mode":"%s","at":"%s","users_scanned":%s,"users_unreadable":%s,"docker_volumes":%s}\n' \
+    "$(json_str "$HOST")" "$VERSION" "$MODE" "$START_TS" \
+    "$USERS_SCANNED" "$USERS_UNREADABLE" "$DOCKER_FOUND"
+  [ -z "$INV_LINES" ] || printf '%s\n' "$INV_LINES"
+  printf '%s\n' "$DOCKER_INV" | inv_aggregate | inv_emit docker 0
+  exit 0
 fi
 
 # ---------------------------------------------------------------------------

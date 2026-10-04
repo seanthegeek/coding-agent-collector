@@ -89,7 +89,7 @@ powershell.exe -ExecutionPolicy Bypass -File Collect-AgentArtifacts.ps1 -Root E:
 `Restricted`; it affects only that process and does not change machine policy.
 The parameters mirror the sh options: `-OutputDir`, `-Root`, `-Users`,
 `-Project`, `-Full`, `-NoSecrets`, `-NoProjects`, `-NoDocker`,
-`-MaxFileSizeMB`, `-KeepStaging`, `-List`, `-Quiet`, `-Version`. `-o`, `-r`,
+`-MaxFileSizeMB`, `-KeepStaging`, `-Inventory`, `-List`, `-Quiet`, `-Version`. `-o`, `-r`,
 `-u`, `-p`, `-k` and `-q` are accepted as aliases. `-Users` takes one
 comma-separated string. `-Project` takes a PowerShell array
 (`-Project C:\src\a,C:\src\b`) rather than a repeated parameter. There is no
@@ -118,6 +118,7 @@ archive's extension.
 | `--no-docker` | Skip Docker and Podman named volume enumeration (see [Docker volumes](#docker-volumes)). |
 | `--max-file-size MB` | Skip individual files larger than this whole number of MiB. Default 256, `0` disables. |
 | `-k, --keep-staging` | Keep the staging directory, `.stage-<archive name>` in the output directory, which holds the unpacked archive contents. |
+| `--inventory` | Write nothing: walk the catalog with `lstat` only and print JSON Lines to stdout, one host line and one line per user and agent found. `-o` is ignored, and `-k`, `--no-secrets` and `--max-file-size` have no effect. See [Inventory mode](#inventory-mode). PowerShell: `-Inventory`. |
 | `--list` | Print the five tables (home catalog, project catalog, exclusions, credential patterns, Docker volume names), then exit. |
 | `-q, --quiet` | Print only the final summary. Progress lines still go to the log file. |
 | `-V, --version` | Print `collect-agent-artifacts <version>` and exit. PowerShell: `-Version`. |
@@ -127,9 +128,9 @@ Exit codes:
 
 | Code | Meaning |
 | --- | --- |
-| `0` | An archive was written, even if individual files failed to copy (manifest status `error_copy`). Also `--list`, `--version` and `--help`. |
+| `0` | An archive was written, even if individual files failed to copy (manifest status `error_copy`). With `--inventory`, the walk ran, even if homes or Docker data roots were unreadable. Also `--list`, `--version` and `--help`. |
 | `1` | Usage error: unknown option, missing option value, or a `--max-file-size` that is not a whole number. PowerShell: a negative `-MaxFileSizeMB` or a parameter binding error. |
-| `2` | Fatal: the root is not a directory, the output directory cannot be created or written, `tar` or `find` is missing (sh), the staging directory cannot be created (sh), or no archive could be written. |
+| `2` | Fatal: the root is not a directory, the output directory cannot be created or written, `tar` or `find` is missing (sh), the staging directory cannot be created (sh), or no archive could be written. With `--inventory` only the root and `find` checks apply. |
 | `130` | sh only: interrupted by `INT` or `TERM`. The staging directory is removed unless `-k` is given. |
 
 Environment: the sh collector reads `COLLECTOR_SH`, the shell used to run
@@ -351,6 +352,87 @@ and:
 - The root-owned Docker and Podman data roots are reported as unreadable
   (see [Docker volumes](#docker-volumes)).
 
+## Inventory mode
+
+`--inventory` (sh) and `-Inventory` (PowerShell) answer a fleet question,
+which users have used which agents on which hosts, without collecting
+anything. Run the script on every host through the EDR console and keep
+what it prints: stdout is the whole result. Nothing is created, copied,
+hashed or written, not even a log, and `-o` is ignored. When `-o` or
+`-OutputDir` is given, a `NOTE: --inventory writes nothing; -o <dir>
+ignored` line (PowerShell: `-OutputDir <dir>`) goes to stderr, unless `-q`
+is given.
+
+The walk is the collection walk with the copy step removed. Homes are
+enumerated as for a collection and honour `-u` and `-r`. Every `CATALOG`
+entry is expanded against every home, nested entries claim their subtree
+from the enclosing entry, and the `EXCLUDES` patterns prune their subtrees
+(not with `--full`), so the counts cover what a collection would take.
+Regular files are counted with their `lstat` size and modification time
+(PowerShell: `Length` and `LastWriteTimeUtc`); symlinks and reparse points
+are neither followed nor counted. Docker and Podman volumes are enumerated
+as in [Docker volumes](#docker-volumes) unless `--no-docker` is given, and a
+volume that matches a `DOCKER_VOLUMES` line is walked like a home. Project
+discovery runs, so the project count is available, but `PROJECT_CATALOG`
+files are not walked. Credential files are never opened: discovery sources
+that match `SECRET_GLOBS` (`.claude.json`, `.openclaw*/openclaw.json`,
+`.clawdbot/clawdbot.json`, `.nanobot*/config.json`, `.tabby/config.toml`)
+are skipped in this mode, so the project count can be lower than the
+number of projects a collection takes from. The other discovery sources
+are read as in a collection, which updates their access time on
+filesystems that track it.
+
+stdout carries JSON Lines and nothing else: first one `host` line, then one
+`agent` line per user and agent, users in enumeration order and each user's
+agents in order of their first catalog match, then the Docker volume agents
+under user `docker`. Progress lines go to stderr unless `-q` is given. The
+exit code is `0` once the walk has run, including when homes or Docker data
+roots were unreadable.
+
+```
+{"type":"host","host":"host01","collector":"1.6.0","mode":"live","at":"2026-10-04T16:31:54Z","users_scanned":3,"users_unreadable":0,"docker_volumes":3}
+{"type":"agent","host":"host01","user":"alice","agent":"claude-code","files":6,"bytes":318,"first":"2026-09-15T01:02:03Z","last":"2026-10-04T16:31:11Z","projects":29,"evidence":".claude,.claude.json*"}
+{"type":"agent","host":"host01","user":"docker","agent":"agent-zero","files":2,"bytes":63,"first":"2026-10-04T16:31:11Z","last":"2026-10-04T16:31:11Z","projects":0,"evidence":"*a0_usr"}
+```
+
+The `host` line, one per run, keys in this order:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `type` | string | `host`. |
+| `host` | string | The host name, as in `collection.json` `hostname`: sh `hostname`, else `uname -n`; PowerShell `COMPUTERNAME`, else the DNS host name. Read from the machine running the collector, so with `-r` it is the analyst workstation's name. |
+| `collector` | string | The collector version, as printed by `--version`. |
+| `mode` | string | `live`, or `image` with `-r`. |
+| `at` | string | UTC start time to the second, `2026-10-04T16:31:54Z`. |
+| `users_scanned` | number | Home directories walked after `-u`. sh: every enumerated home that exists as a directory, readable or not. PowerShell: the same, plus enumerated profiles that .NET reports as missing although their parent directory lists them (access denied). A `ProfileList` entry whose directory is gone is not counted. |
+| `users_unreadable` | number | Of those, the homes that cannot be read. sh: a home for which `test -r` or `test -x` fails, so it cannot be listed or entered; its globs match nothing. PowerShell: a profile .NET reports as missing although its parent lists it, or one whose entries cannot be listed. Each is also logged to stderr as `WARNING: home of <user> is not readable: <home>` (sh, and PowerShell for listable-but-unreadable profiles; the PowerShell `profile not accessible (skipped)` line covers the rest). As root, or as Administrator with access, this is `0`; without, other users' homes are counted here. A directory that cannot be listed inside a readable home is not counted anywhere: its files are simply missing from the totals. |
+| `docker_volumes` | number | Volume directories found under the Docker and Podman volume roots, matched or not, as `collection.json` `docker.volumes_found`. `0` with `--no-docker`. Without root the root-owned data roots cannot be entered, so their volumes are not found; a `NOTE: docker:` line on stderr says so unless `-q` is given. |
+
+One `agent` line per user and agent for which at least one `CATALOG` entry
+matched an existing path, keys in this order. An entry that matched an
+empty directory, or only a symlink, still yields a line with `files` `0`.
+The `shared` and `shell-history` entries are not inventoried, and `project`
+never appears.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `type` | string | `agent`. |
+| `host` | string | As on the host line. |
+| `user` | string | The home's user, as in the manifest, or `docker` for a matched Docker or Podman volume. |
+| `agent` | string | The catalog agent name, or for a volume the `DOCKER_VOLUMES` agent. |
+| `files` | number | Regular files under the agent's matched paths after exclusions, with nested entries' subtrees left to their own agent. |
+| `bytes` | number | Their total size in bytes. |
+| `first`, `last` | string | The earliest and latest modification time of those files, UTC to the second. Empty when there are no files, or when no modification time was available (sh on a host with neither GNU nor BSD `stat`). |
+| `projects` | number | Project directories discovered for this user, the same number on each of the user's lines: discovery does not record which agent's state named a project. A project named by several users counts for the first of them in enumeration order, as in a collection, and a `-p` directory counts for the user whose home contains it. `0` for `docker` lines and with `--no-projects`. |
+| `evidence` | string | The `CATALOG` globs (the part after `agent\|`) that matched, in catalog order, joined by commas, so no path below the home is printed. For a volume, the `DOCKER_VOLUMES` globs that matched. |
+
+Strings are JSON-escaped: the sh collector escapes backslash, double
+quote, tab, carriage return and newline; PowerShell's `ConvertTo-Json`
+also escapes other control characters, and Windows PowerShell 5.1 escapes
+`<`, `>`, `&` and `'` as `\u` sequences. The analyzer's
+`inventory` command reads these lines from saved stdout files and builds a
+fleet CSV; see [the analyzer README](../analyzer/README.md#inventory).
+
 ## Output
 
 The output directory receives five files named
@@ -465,6 +547,14 @@ retrieve from, then pull the `tar.gz`. Use `-q` to keep the console output to
 the final summary. Runtime on a developer workstation with several agents
 installed is well under a minute.
 
+For a fleet inventory, run the script with `--inventory` (`-Inventory`) and
+no `-o`: nothing is uploaded back or left on the host, and the console
+output of the run is the result. Save each host's stdout as its own file
+(the EDR console's output export or a copy and paste of the response) and
+pass the files to the analyzer's `inventory` command. Add `-q` so stderr
+stays empty; stderr never mixes into stdout, but some consoles show both
+together.
+
 On Windows, files held open by a running editor (Cursor's `state.vscdb`,
 Electron LevelDB stores) are read with shared access so they still copy.
 Reparse points (symlinks and junctions) are recorded with their target and
@@ -492,8 +582,11 @@ powershell.exe -ExecutionPolicy Bypass -File tests\smoke.ps1   # on Windows
 
 `tests/smoke.sh [SHELL]` runs the collector script under `SHELL` (default
 `sh`, a name on the `PATH` or a path), and passes the same shell to the
-`find -exec` workers through `COLLECTOR_SH`. Every run is in image mode with
-`--max-file-size 1`. It works in a `cac-smoke.*` directory under `TMPDIR`
+`find -exec` workers through `COLLECTOR_SH`. Every collection run but one is
+in image mode with `--max-file-size 1`; the exception is a live run limited
+to a user that does not exist (`-u no-such-user-cac --no-docker
+--no-projects`), which checks that no `live/` directory or `live` row
+appears. It works in a `cac-smoke.*` directory under `TMPDIR`
 (default `/tmp`). The directory is removed when every check passes and kept,
 with its path printed, when one fails. The exit status is `0` or `1`.
 `tests/smoke.ps1` takes `-Collector PATH` to test a copy of the script other
@@ -513,7 +606,14 @@ references and runs under both PowerShell 5.1 and 7. Both smoke tests also
 build root and rootless Docker volumes, one matched and one unmatched, check
 `--no-docker` and the Docker Desktop note, and run `--no-secrets`, `--full`
 and `-u`. The sh test adds an unreadable volume and data root when it is not
-run as root.
+run as root. Both run `--inventory` / `-Inventory` against the same image
+and check the key order of both line types, one known line's `files`,
+`bytes`, `first`, `last` and `evidence`, that an excluded subtree is not
+counted (and is with `--full`), the Docker volume lines, `-u`,
+`--no-docker`, that nothing is written in the current directory or under
+`-o`, that stdout stays pure JSON Lines with and without `-q`, and, on a
+POSIX host not run as root, that an unreadable home is counted in
+`users_unreadable`.
 
 `tests/catalog-sync.sh` extracts the five tables from both scripts and fails
 if they differ. When `pwsh` is on the `PATH` it also compares `--list` with

@@ -36,6 +36,10 @@
   Skip files larger than this (default 256, 0 = none).
 .PARAMETER KeepStaging
   Keep the staging directory after archiving.
+.PARAMETER Inventory
+  Write nothing: walk the catalog with file metadata only and print one JSON
+  line per user and agent found (file count, bytes, first and last
+  modification time) to stdout. -OutputDir is ignored.
 .PARAMETER List
   Print the artifact catalog and exit.
 .PARAMETER Quiet
@@ -46,7 +50,8 @@
 .NOTES
   Copyright 2026 Sean Whalen
   SPDX-License-Identifier: Apache-2.0
-  Exit codes: 0 archive written (per-file errors are in the manifest),
+  Exit codes: 0 archive written (per-file errors are in the manifest), or,
+                with -Inventory, the walk ran,
               1 usage error, 2 fatal.
 #>
 [CmdletBinding()]
@@ -61,6 +66,7 @@ param(
   [switch]$NoDocker,
   [int]$MaxFileSizeMB = 256,
   [Alias('k')][switch]$KeepStaging,
+  [switch]$Inventory,
   [switch]$List,
   [Alias('q')][switch]$Quiet,
   [switch]$Version
@@ -68,7 +74,7 @@ param(
 
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
-$ToolVersion = '1.5.0'
+$ToolVersion = '1.6.0'
 $TOOL = 'collect-agent-artifacts'
 
 # ---------------------------------------------------------------------------
@@ -1560,9 +1566,12 @@ if ($Root -ne '') {
   $Root = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\', '/')
   $Mode = 'image'
 }
+# -Inventory writes nothing: no output directory, staging, log or archive.
+if (-not $Inventory) {
 if (-not (Test-PathQuiet $OutputDir 'Any')) { try { New-Item -ItemType Directory -Path $OutputDir -Force -ErrorAction Stop | Out-Null } catch { Write-Error "Cannot create output dir: $OutputDir"; exit 2 } }
 $OutputDir = (Resolve-Path -LiteralPath $OutputDir).Path.TrimEnd('\', '/')
 if ($OutputDir -eq '') { $OutputDir = $Sep }
+}
 
 $StartTs = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 $Stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
@@ -1575,22 +1584,28 @@ $ManifestPath = Join-PathSafe $OutputDir "$Name.manifest.jsonl"
 $SummaryPath = Join-PathSafe $OutputDir "$Name.collection.json"
 
 $TarExe = $null
+$tarCmd = $null
 $IsWindowsHost = ($env:OS -eq 'Windows_NT')
-if ($IsWindowsHost) { $tarCmd = Get-Command tar.exe -ErrorAction SilentlyContinue } else { $tarCmd = Get-Command tar -ErrorAction SilentlyContinue }
+if ($Inventory) { }
+elseif ($IsWindowsHost) { $tarCmd = Get-Command tar.exe -ErrorAction SilentlyContinue } else { $tarCmd = Get-Command tar -ErrorAction SilentlyContinue }
 if ($tarCmd) { $TarExe = $tarCmd.Source }
 if ($TarExe) { $Archive = Join-PathSafe $OutputDir "$Name.tar.gz" } else { $Archive = Join-PathSafe $OutputDir "$Name.zip" }
 
-New-Item -ItemType Directory -Path (Join-PathSafe $Stage 'fs') -Force | Out-Null
-$script:LogWriter = New-Object System.IO.StreamWriter($LogPath, $false, $Utf8NoBom)
-$script:ManifestWriter = New-Object System.IO.StreamWriter($ManifestPath, $false, $Utf8NoBom)
-$script:LogWriter.AutoFlush = $true
+$script:LogWriter = $null
+$script:ManifestWriter = $null
+if (-not $Inventory) {
+  New-Item -ItemType Directory -Path (Join-PathSafe $Stage 'fs') -Force | Out-Null
+  $script:LogWriter = New-Object System.IO.StreamWriter($LogPath, $false, $Utf8NoBom)
+  $script:ManifestWriter = New-Object System.IO.StreamWriter($ManifestPath, $false, $Utf8NoBom)
+  $script:LogWriter.AutoFlush = $true
+}
 $script:Counts = @{ collected = 0; symlink = 0; skipped_excluded = 0; skipped_size = 0; skipped_secret = 0; error_copy = 0; skipped_unmatched_volume = 0; bytes = [int64]0 }
 $script:WalkErrors = 0
 $script:ClaimedPaths = @{}
 
 function Write-Log([string]$msg) {
   $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-  $script:LogWriter.WriteLine("$ts $msg")
+  if ($script:LogWriter) { $script:LogWriter.WriteLine("$ts $msg") }
   if (-not $Quiet) { [Console]::Error.WriteLine($msg) }
 }
 
@@ -1614,9 +1629,54 @@ function Get-ArchiveRel([string]$full) {
 }
 
 # ---------------------------------------------------------------------------
+# Inventory accumulators. $script:Inv maps agent -> files, bytes, first and
+# last mtime (epoch seconds, 0 when unknown) and the matched catalog globs, in
+# order of first match. Add-File feeds it instead of copying under -Inventory.
+# ---------------------------------------------------------------------------
+$script:Inv = [ordered]@{}
+function Get-InvEntry([string]$agent) {
+  if (-not $script:Inv.Contains($agent)) {
+    $script:Inv[$agent] = @{ files = 0; bytes = [int64]0; first = [int64]0; last = [int64]0; evidence = (New-Object System.Collections.ArrayList) }
+  }
+  return $script:Inv[$agent]
+}
+function Add-InvEvidence([string]$agent, [string]$glob) {
+  $e = Get-InvEntry $agent
+  if (-not $e.evidence.Contains($glob)) { [void]$e.evidence.Add($glob) }
+}
+function Add-InvFile([string]$agent, $item) {
+  $e = Get-InvEntry $agent
+  $e.files++
+  try { $e.bytes += [int64]$item.Length } catch { }
+  $mt = Get-Epoch $item.LastWriteTimeUtc
+  if ($mt -gt 0) {
+    if ($e.first -eq 0 -or $mt -lt $e.first) { $e.first = $mt }
+    if ($mt -gt $e.last) { $e.last = $mt }
+  }
+}
+function Format-InvTime([int64]$t) {
+  if ($t -le 0) { return '' }
+  return [DateTimeOffset]::FromUnixTimeSeconds($t).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ', [Globalization.CultureInfo]::InvariantCulture)
+}
+# Agent lines of one accumulator, as compressed JSON in the documented key order.
+function Get-InvLines([string]$user, $acc, [int]$projects) {
+  foreach ($agent in @($acc.Keys)) {
+    $e = $acc[$agent]
+    $o = [ordered]@{ type = 'agent'; host = $HostName; user = $user; agent = $agent; files = [int64]$e.files; bytes = [int64]$e.bytes
+      first = (Format-InvTime $e.first); last = (Format-InvTime $e.last); projects = $projects; evidence = (@($e.evidence) -join ',') }
+    $o | ConvertTo-Json -Compress
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Collection
 # ---------------------------------------------------------------------------
 function Add-File([string]$user, [string]$homeDir, [string]$agent, $item) {
+  if ($Inventory) {
+    # Regular files only: reparse points are neither followed nor counted.
+    if ((($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0) -and -not $item.PSIsContainer) { Add-InvFile $agent $item }
+    return
+  }
   $full = $item.FullName
   $hrel = Get-RelPath $homeDir $full
   $arel = Get-ArchiveRel $full
@@ -1651,6 +1711,7 @@ function Add-File([string]$user, [string]$homeDir, [string]$agent, $item) {
 }
 
 function Add-Excluded([string]$user, [string]$homeDir, [string]$agent, $item) {
+  if ($Inventory) { return }
   $full = $item.FullName
   if ($item.PSIsContainer) { $type = 'dir'; $size = Get-DirSize $full } else { $type = 'file'; $size = [int64]0; try { $size = [int64]$item.Length } catch { } }
   Write-Row $user $homeDir $agent $full '' $type $size (Get-Epoch $item.LastWriteTimeUtc) (Get-Epoch $item.LastAccessTimeUtc) 0 (Get-Epoch $item.CreationTimeUtc) '' ([string]$item.Attributes) '' $false 'skipped_excluded' '' ''
@@ -1692,12 +1753,18 @@ function Invoke-CatalogCollection([string]$user, [string]$base, [string]$table) 
     if ($parts.Count -lt 2) { continue }
     $agent = $parts[0]; $pattern = $parts[1]
     foreach ($m in @(Expand-Glob $base $pattern)) {
-      $claimed += ,@($agent, $m)
+      $claimed += ,@($agent, $m, $pattern)
       $script:ClaimedPaths[$m] = $true
     }
   }
   foreach ($pair in $claimed) {
     $agent = $pair[0]; $m = $pair[1]
+    # -Inventory: shared and shell-history still claim their paths above but
+    # are not walked; every other match is recorded as evidence.
+    if ($Inventory) {
+      if ($agent -eq 'shared' -or $agent -eq 'shell-history') { continue }
+      Add-InvEvidence $agent $pair[2]
+    }
     Write-Log "  [$agent] $m"
     Add-Path $user $base $agent $m
   }
@@ -1733,8 +1800,8 @@ function Get-UserHomes {
     $hp = $h.home.TrimEnd('\', '/')
     if ($SkipHomes -contains $h.user -or $h.user -match $SkipHomeRe) { continue }
     if ([System.IO.File]::Exists($hp)) { continue }
-    if (-not (Test-PathQuiet $hp 'Container')) { $script:InaccessibleHomes += $hp; continue }
     if ($wanted.Count -gt 0 -and -not ($wanted -contains $h.user)) { continue }
+    if (-not (Test-PathQuiet $hp 'Container')) { if (-not ($script:InaccessibleHomes -contains $hp)) { $script:InaccessibleHomes += $hp }; continue }
     $key = $hp.ToLowerInvariant()
     if ($seen.ContainsKey($key)) { continue }
     $seen[$key] = $true
@@ -1750,6 +1817,7 @@ Write-Log "$TOOL $ToolVersion starting on $HostName ($([Environment]::OSVersion.
 Write-Log "archive=$(if ($TarExe) { 'tar.gz via ' + $TarExe } else { 'zip (tar.exe not found)' }) max_file_size=${MaxFileSizeMB}MB full=$($Full.IsPresent) no_secrets=$($NoSecrets.IsPresent) no_docker=$($NoDocker.IsPresent)"
 $IsAdmin = $false
 try { $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) } catch { }
+if ($Inventory -and $PSBoundParameters.ContainsKey('OutputDir')) { Write-Log "NOTE: -Inventory writes nothing; -OutputDir $OutputDir ignored" }
 if ($Mode -eq 'live' -and -not $IsAdmin) { Write-Log "WARNING: not running as Administrator; other users' profiles will probably be unreadable" }
 if ($UserList.Count -eq 0) { Write-Log 'WARNING: no user profile directories found' }
 foreach ($ih in $script:InaccessibleHomes) { Write-Log "profile not accessible (skipped): $ih" }
@@ -1757,9 +1825,12 @@ foreach ($ih in $script:InaccessibleHomes) { Write-Log "profile not accessible (
 # ---------------------------------------------------------------------------
 # Per-user collection
 # ---------------------------------------------------------------------------
+$script:InvUsers = @()
 foreach ($u in $UserList) {
   Write-Log "User $($u.user) ($($u.home))"
+  $script:Inv = [ordered]@{}
   Invoke-CatalogCollection $u.user $u.home $CATALOG
+  if ($Inventory) { $script:InvUsers += , @($u, $script:Inv) }
 }
 
 # ---------------------------------------------------------------------------
@@ -1779,12 +1850,14 @@ $script:DockerVolumeRules = @()
 foreach ($line in (Get-TableLines $DOCKER_VOLUMES)) {
   $parts = @($line -split '\|', 2)
   if ($parts.Count -lt 2) { continue }
-  $script:DockerVolumeRules += , @($parts[0], (Convert-GlobToRegex $parts[1] $false))
+  $script:DockerVolumeRules += , @($parts[0], (Convert-GlobToRegex $parts[1] $false), $parts[1])
 }
-function Get-DockerVolumeAgent([string]$name) {
+$script:InvDocker = [ordered]@{}
+# The first DOCKER_VOLUMES rule (agent, regex, glob) whose glob matches, or $null.
+function Get-DockerVolumeRule([string]$name) {
   # Volume names are case-sensitive, as in the sh collector's case(1) match.
-  foreach ($rule in $script:DockerVolumeRules) { if ($name -cmatch $rule[1]) { return $rule[0] } }
-  return ''
+  foreach ($rule in $script:DockerVolumeRules) { if ($name -cmatch $rule[1]) { return , $rule } }
+  return $null
 }
 function Test-IsLink([string]$p) {
   try {
@@ -1826,13 +1899,15 @@ function Invoke-VolumeDir([string]$base, [string]$rel) {
     $script:Docker.found++
     $name = $v.Name
     $data = Join-PathSafe $v.FullName '_data'
-    $agent = Get-DockerVolumeAgent $name
+    $rule = Get-DockerVolumeRule $name
+    $agent = ''; if ($rule) { $agent = $rule[0] }
     $label = $agent; if (-not $label) { $label = 'unmatched' }
     if (-not (Test-DirReadable $v.FullName) -or ((Test-PathQuiet $data 'Container') -and -not (Test-DirReadable $data))) {
       $script:Docker.unreadable++
       Add-Note "docker: volume $name ($label) at $($v.FullName) is not readable; run as root to collect it"
     } elseif ((Test-IsLink $data) -or -not (Test-PathQuiet $data 'Container')) {
       Write-Log "  volume $name has no _data directory, skipped"
+    } elseif (-not $agent -and $Inventory) {
     } elseif (-not $agent) {
       $attrs = ''; try { $attrs = [string](Get-Item -LiteralPath $data -Force -ErrorAction Stop).Attributes } catch { }
       Write-Row 'docker' $data '' $data '' 'dir' (Get-DirSize $data) 0 0 0 0 '' $attrs '' $false 'skipped_unmatched_volume' '' ''
@@ -1840,7 +1915,14 @@ function Invoke-VolumeDir([string]$base, [string]$rel) {
       Write-Log "  [$agent] $data"
       $script:WalkErrors = 0
       $script:ClaimedPaths = @{}
-      Add-Path 'docker' $data $agent $data
+      if ($Inventory) {
+        $saved = $script:Inv; $script:Inv = $script:InvDocker
+        Add-InvEvidence $agent $rule[2]
+        Add-Path 'docker' $data $agent $data
+        $script:Inv = $saved
+      } else {
+        Add-Path 'docker' $data $agent $data
+      }
       $script:Docker.collected++
       if ($script:WalkErrors -gt 0) {
         $script:Docker.unreadable++
@@ -1901,10 +1983,19 @@ function ConvertTo-LocalPath([string]$v) {
   }
   return $null
 }
+# -Inventory never opens a credential file: a discovery source whose path
+# relative to the home being scanned matches SECRET_GLOBS (.claude.json, the
+# OpenClaw and nanobot configs, Tabby's config.toml) is skipped in that mode.
+$script:DiscoveryHome = ''
+function Test-InventorySecret([string]$f) {
+  if (-not $Inventory -or -not $script:DiscoveryHome) { return $false }
+  return (Test-AnyMatch (Get-RelPath $script:DiscoveryHome $f) $script:SecretRegexes)
+}
 function Get-JsonValues([string]$key, [string[]]$files) {
   $rx = '"' + [regex]::Escape($key) + '"\s*:\s*"((?:[^"\\]|\\.)*)"'
   foreach ($f in $files) {
     if (-not $f -or -not (Test-PathQuiet $f 'Leaf')) { continue }
+    if (Test-InventorySecret $f) { continue }
     try { foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f), $rx)) { $m.Groups[1].Value } } catch { }
   }
 }
@@ -1912,6 +2003,7 @@ function Get-JsonKeys([string]$suffix, [string[]]$files) {
   $rx = '"([A-Za-z]:(?:[^"\\]|\\.)*|/(?:[^"\\]|\\.)*)"\s*:\s*' + $suffix
   foreach ($f in $files) {
     if (-not $f -or -not (Test-PathQuiet $f 'Leaf')) { continue }
+    if (Test-InventorySecret $f) { continue }
     try { foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f), $rx)) { $m.Groups[1].Value } } catch { }
   }
 }
@@ -1920,6 +2012,7 @@ function Get-PathStrings([string[]]$files) {
   $rx = '"((?:file:///|/|[A-Za-z]:\\\\)(?:[^"\\]|\\.)*)"'
   foreach ($f in $files) {
     if (-not $f -or -not (Test-PathQuiet $f 'Leaf')) { continue }
+    if (Test-InventorySecret $f) { continue }
     try { foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f), $rx)) { $m.Groups[1].Value } } catch { }
   }
 }
@@ -1927,6 +2020,7 @@ function Get-YamlValues([string]$key, [string[]]$files) {
   $rx = '(?m)^' + [regex]::Escape($key) + ':[ \t]*["'']?([^"''\r\n]+)["'']?[ \t]*$'
   foreach ($f in $files) {
     if (-not $f -or -not (Test-PathQuiet $f 'Leaf')) { continue }
+    if (Test-InventorySecret $f) { continue }
     try { foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f), $rx)) { $m.Groups[1].Value } } catch { }
   }
 }
@@ -1935,6 +2029,7 @@ function Get-Json5Values([string]$key, [string[]]$files) {
   $rx = '(?<![\w$])["'']?' + [regex]::Escape($key) + '["'']?\s*:\s*(?:"((?:[^"\\]|\\.)*)"|''([^'']*)'')'
   foreach ($f in $files) {
     if (-not $f -or -not (Test-PathQuiet $f 'Leaf')) { continue }
+    if (Test-InventorySecret $f) { continue }
     try {
       foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f), $rx)) {
         if ($m.Groups[1].Success) { $m.Groups[1].Value } else { $m.Groups[2].Value }
@@ -1947,6 +2042,7 @@ function Get-TomlFileUrls([string]$key, [string[]]$files) {
   $rx = '(?m)^[ \t]*' + [regex]::Escape($key) + '[ \t]*=[ \t]*["''](file://[^"''\r\n]*)["'']'
   foreach ($f in $files) {
     if (-not $f -or -not (Test-PathQuiet $f 'Leaf')) { continue }
+    if (Test-InventorySecret $f) { continue }
     try { foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($f), $rx)) { $m.Groups[1].Value } } catch { }
   }
 }
@@ -1972,6 +2068,7 @@ function Find-Projects {
   $found = @()
   foreach ($u in $UserList) {
     $h = $u.home
+    $script:DiscoveryHome = $h
     $vals = @()
     $vals += Get-JsonValues 'project' @((Join-PathSafe $h '.claude/history.jsonl'))
     $vals += Get-JsonKeys '\{' @((Join-PathSafe $h '.claude.json'))
@@ -2013,6 +2110,7 @@ function Find-Projects {
       $vals += Get-JsonValues 'cwdOnTaskInitialization' (@(Expand-Glob $ws 'globalStorage/saoudrizwan.claude-dev/state/taskHistory.json') + @(Expand-Glob $ws 'globalStorage/saoudrizwan.claude-dev/tasks/*/task_metadata.json'))
       $vals += Get-JsonValues 'workspace' (@(Expand-Glob $ws 'globalStorage/rooveterinaryinc.roo-cline/tasks/_index.json') + @(Expand-Glob $ws 'globalStorage/kilocode.kilo-code/tasks/_index.json'))
     }
+    $script:DiscoveryHome = ''
     foreach ($v in $vals) {
       $lp = ConvertTo-LocalPath ([string]$v)
       if ($lp) { $found += @{ user = $u.user; path = $lp.TrimEnd('\', '/') } }
@@ -2038,10 +2136,35 @@ function Find-Projects {
 $ProjectList = @()
 if (-not $NoProjects) {
   $ProjectList = @(Find-Projects)
-  foreach ($pj in $ProjectList) {
+  if (-not $Inventory) { foreach ($pj in $ProjectList) {
     Write-Log "Project $(if ($pj.user) { '[' + $pj.user + '] ' })$($pj.path)"
     Invoke-CatalogCollection $pj.user $pj.path $PROJECT_CATALOG
+  } }
+}
+
+# ---------------------------------------------------------------------------
+# Inventory output: the host line, then one line per (user, agent), then the
+# Docker volume agents as user docker. Nothing is written to disk.
+# ---------------------------------------------------------------------------
+if ($Inventory) {
+  # A home is unreadable when .NET reports it missing although its parent
+  # directory lists it (access denied; a ProfileList entry for a deleted
+  # profile is not counted), or when its entries cannot be listed.
+  $denied = @($script:InaccessibleHomes | Where-Object {
+    $leaf = Split-Path -Leaf $_; $parent = Split-Path -Parent $_
+    try { @([System.IO.Directory]::GetDirectories($parent, $leaf)).Count -gt 0 } catch { $false } })
+  $unreadable = $denied.Count
+  foreach ($u in $UserList) { if (-not (Test-DirReadable $u.home)) { $unreadable++; Write-Log "WARNING: home of $($u.user) is not readable: $($u.home)" } }
+  $hostLine = [ordered]@{ type = 'host'; host = $HostName; collector = $ToolVersion; mode = $Mode; at = $StartTs
+    users_scanned = ($UserList.Count + $denied.Count); users_unreadable = $unreadable; docker_volumes = $script:Docker.found }
+  Write-Output ($hostLine | ConvertTo-Json -Compress)
+  foreach ($pair in $script:InvUsers) {
+    $u = $pair[0]
+    $np = @($ProjectList | Where-Object { $_.user -eq $u.user }).Count
+    Get-InvLines $u.user $pair[1] $np
   }
+  Get-InvLines 'docker' $script:InvDocker 0
+  exit 0
 }
 
 # ---------------------------------------------------------------------------

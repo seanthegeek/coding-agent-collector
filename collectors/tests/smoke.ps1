@@ -750,6 +750,72 @@ Check 'Docker Desktop noted in collection.json' { $sum.docker.docker_desktop -eq
 Check 'Docker Desktop noted in stdout' { $script:stdout -match '(?m)^docker:     3 volumes found, 2 collected, 0 unreadable; Docker Desktop VM disk not collected\s*$' }
 Remove-Item -LiteralPath (P 'Users/alice/AppData/Local/Docker') -Recurse -Force
 
+# ---- -Inventory (1.6.0, 2026-10-04) ---------------------------------------
+# Stat-only fleet inventory: JSON Lines on stdout, nothing written anywhere.
+function Inv([hashtable]$extra) {
+  $cargs = @{ Root = $Root; Inventory = $true; Quiet = $true }
+  foreach ($k in $extra.Keys) { $cargs[$k] = $extra[$k] }
+  $global:LASTEXITCODE = 0
+  $script:invLines = @(& $Collector @cargs 2>$null | ForEach-Object { [string]$_ })
+  $script:rc = $LASTEXITCODE
+  $script:inv = @($script:invLines | ForEach-Object { $_ | ConvertFrom-Json })
+}
+function InvAgent([string]$user, [string]$agent) { return ($script:inv | Where-Object { $_.type -eq 'agent' } | Where-Object { $_.user -eq $user -and $_.agent -eq $agent } | Select-Object -First 1) }
+# The raw line, for the timestamps: PowerShell 7's ConvertFrom-Json turns ISO strings into DateTime.
+function InvRaw([string]$user, [string]$agent) { return ($script:invLines | Where-Object { $_.Contains('"user":"' + $user + '","agent":"' + $agent + '",') } | Select-Object -First 1) }
+$hostKeys = 'type,host,collector,mode,at,users_scanned,users_unreadable,docker_volumes'
+$agentKeys = 'type,host,user,agent,files,bytes,first,last,projects,evidence'
+[System.IO.File]::SetLastWriteTimeUtc((P 'home/bob/.ollama/history'), (New-Object DateTime 2026, 9, 15, 1, 2, 3, ([DateTimeKind]::Utc)))
+$invCwd = Join-Path $Out 'invcwd'
+New-Item -ItemType Directory -Path $invCwd -Force | Out-Null
+Push-Location -LiteralPath $invCwd
+Inv @{}
+Pop-Location
+Check 'Inventory exit 0' { $script:rc -eq 0 }
+Check 'Inventory writes nothing in the current directory' { @(Get-ChildItem -LiteralPath $invCwd -Force).Count -eq 0 }
+Check 'Inventory first line is the host line, keys in order' { $script:inv[0].type -eq 'host' -and (@($script:inv[0].PSObject.Properties | ForEach-Object { $_.Name }) -join ',') -eq $hostKeys -and $script:inv[0].mode -eq 'image' -and $script:invLines[0] -match '"at":"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"' }
+Check 'Inventory host line counts' { $script:inv[0].users_unreadable -eq 0 -and $script:inv[0].docker_volumes -eq 3 -and $script:inv[0].users_scanned -ge 2 }
+Check 'Inventory every later line is an agent line, keys in order' { $script:inv.Count -gt 10 -and @($script:inv | Select-Object -Skip 1 | Where-Object { $_.type -ne 'agent' -or (@($_.PSObject.Properties | ForEach-Object { $_.Name }) -join ',') -ne $agentKeys }).Count -eq 0 }
+$r = InvAgent 'bob' 'ollama'
+Check 'Inventory ollama line: one file, excluded models not counted' { $r -and $r.files -eq 1 -and $r.bytes -eq 4 -and (InvRaw 'bob' 'ollama').Contains('"first":"2026-09-15T01:02:03Z","last":"2026-09-15T01:02:03Z"') -and $r.evidence -eq '.ollama' }
+$r = InvAgent 'alice' 'claude-code'
+Check 'Inventory claude-code evidence in catalog order' { $r -and $r.evidence -eq '.claude,.claude.json*' }
+Check 'Inventory first and last set for alice claude-code' { (InvRaw 'alice' 'claude-code') -match '"first":"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","last":"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ"' }
+Check 'Inventory projects counted per user' { $r.projects -ge 1 }
+Check 'Inventory nested entry claimed from the enclosing agent' { (InvAgent 'alice' 'antigravity').evidence -like '*.gemini/antigravity-cli*' -and (InvAgent 'alice' 'gemini-cli').evidence -eq '.gemini' }
+$r = InvAgent 'docker' 'agent-zero'
+Check 'Inventory docker volume line' { $r -and $r.files -eq 2 -and $r.bytes -eq 61 -and $r.projects -eq 0 -and $r.evidence -eq '*a0_usr' }
+$r = InvAgent 'docker' 'tabby'
+Check 'Inventory rootless docker volume line' { $r -and $r.files -eq 1 -and $r.bytes -eq 22 -and $r.evidence -eq '*tabby*' }
+Check 'Inventory shared and shell-history not inventoried' { -not ($script:inv | Where-Object { $_.type -eq 'agent' } | Where-Object { @('shared', 'shell-history', 'project', 'live') -contains $_.agent }) }
+Check 'Inventory prints no path below a home' { -not ($script:invLines | Where-Object { $_.Contains($Root) -or $_.Contains($Root.Replace('\', '\\')) }) }
+$invO = Join-Path $Out 'inv-o'
+Inv @{ OutputDir = $invO }
+Check 'Inventory with -OutputDir exit 0' { $script:rc -eq 0 }
+Check 'Inventory with -OutputDir creates no output directory' { -not (Test-Path -LiteralPath $invO) }
+Inv @{ Full = $true }
+Check 'Inventory -Full counts excluded files' { $r = InvAgent 'bob' 'ollama'; $r -and $r.files -eq 2 -and $r.bytes -eq 8 }
+Inv @{ Users = 'bob'; NoDocker = $true }
+Check 'Inventory -Users keeps one user' { $a = @($script:inv | Where-Object { $_.type -eq 'agent' }); -not ($a | Where-Object { $_.user -eq 'alice' }) -and ($a | Where-Object { $_.user -eq 'bob' }) }
+Check 'Inventory -NoDocker: no volumes, no docker lines' { $script:inv[0].users_scanned -eq 1 -and $script:inv[0].docker_volumes -eq 0 -and -not ($script:inv | Where-Object { $_.type -eq 'agent' } | Where-Object { $_.user -eq 'docker' }) }
+# stderr is only observable from a child process: the collector logs through [Console]::Error.
+$self = (Get-Process -Id $PID).Path
+$errFile = Join-Path $Out 'inv-child.stderr'
+$childOut = @(& $self -NoProfile -ExecutionPolicy Bypass -File $Collector -Root $Root -Inventory -OutputDir $invO 2>$errFile)
+Check 'Inventory without -Quiet: stdout is pure JSON Lines, log on stderr' { $childOut.Count -gt 10 -and @($childOut | Where-Object { $_ -notmatch '^\{"type":"(host|agent)",' }).Count -eq 0 -and (Get-Content -LiteralPath $errFile -Raw) -match 'User ' }
+Check 'Inventory child stdout parses line by line' { @($childOut | Where-Object { $_ -ne '' } | ForEach-Object { try { $null = $_ | ConvertFrom-Json; $true } catch { $false } } | Where-Object { -not $_ }).Count -eq 0 }
+Check 'Inventory -OutputDir noted on stderr' { (Get-Content -LiteralPath $errFile -Raw) -match 'NOTE: -Inventory writes nothing; -OutputDir .*inv-o ignored' }
+$childQ = @(& $self -NoProfile -ExecutionPolicy Bypass -File $Collector -Root $Root -Inventory -Quiet 2>$errFile)
+Check 'Inventory -Quiet leaves stderr empty' { $childQ.Count -gt 10 -and -not ((Get-Content -LiteralPath $errFile -Raw) -match '\S') }
+if ($Sep -eq '/' -and (& id -u) -ne '0') {
+  New-Item -ItemType Directory -Path (P 'home/carol/.claude') -Force | Out-Null
+  & chmod 000 (P 'home/carol')
+  Inv @{}
+  & chmod 700 (P 'home/carol')
+  Check 'Inventory counts the unreadable home' { $script:inv[0].users_unreadable -eq 1 }
+  Remove-Item -LiteralPath (P 'home/carol') -Recurse -Force
+} else { Write-Output 'note: unreadable home inventory check needs a non-root POSIX host, skipped' }
+
 # ---- live mode without the snapshot (1.6.0) --------------------------------
 $lo = Join-Path $Out 'livemode'
 New-Item -ItemType Directory -Path $lo -Force | Out-Null
