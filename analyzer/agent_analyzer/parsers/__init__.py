@@ -21,6 +21,8 @@ from .kilo_code import KiloCodeParser
 from .cline import ClineParser
 from .roo_code import RooCodeParser
 from .tabby import TabbyParser
+from .openhands import OpenHandsParser
+from .shellgpt import ShellGptParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -40,6 +42,8 @@ ALL: List[Parser] = [
     ClineParser(),
     RooCodeParser(),
     TabbyParser(),
+    OpenHandsParser(),
+    ShellGptParser(),
 ]
 
 
