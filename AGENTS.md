@@ -22,8 +22,9 @@ It must work in three situations:
 Roadmap: v1 (done) collects, with sh and PowerShell 5.1 collectors. v2, in
 progress under `analyzer/`, is the analyst-side Python tool that detects agent
 state in any collected directory and parses transcripts into a CSV timeline;
-Claude Code and Codex CLI parsers exist, the rest of the catalog is detected
-but not yet parsed. Parsing never happens on the host.
+the parser table in `analyzer/README.md` lists which agents are parsed, the
+rest of the catalog is detected but not yet parsed. Parsing never happens on
+the host.
 
 ## Repository layout
 
@@ -202,6 +203,55 @@ rules are different from the collectors'.
   wanted.
 - **Tests.** `analyzer/tests/run.sh` must pass. Add a fixture and a test
   class for every parser, and a detection test for every new input shape.
+
+## Adding a parser
+
+The research is already done for every agent in the parser backlog: start
+from `analyzer/research/<agent>.md`, whose section 8 is a parser plan mapped
+to the timeline columns and whose sample records are meant to become the
+fixture. Do not redo the research. The citations link to the commit that was
+reviewed, so check the record shape at that link, not on the default branch,
+and say in the module docstring if the shape has drifted since.
+
+1. Create `agent_analyzer/parsers/<agent>.py` with a class that subclasses
+   `Parser` from `parsers/base.py`. Its `agent` attribute must equal the
+   catalog name. `wants()` selects by `artifact.rel` with a regex;
+   `parse()` yields rows built from `base_row()`, which fills host, user,
+   agent and `source_file`. Reuse `iter_jsonl`, `text_of` and
+   `compact_json` from `base.py`, `compact` from `model.py` and `to_utc`
+   from `timeutil.py` rather than writing new ones. List the field names
+   the parser depends on in the module docstring, as the existing modules do.
+2. Register an instance in the `ALL` list in `parsers/__init__.py`. Nothing
+   else discovers parsers.
+3. Row semantics the existing parsers share: `tool_use` rows carry
+   `tool_name` and `tool_use_id`; `tool_result` rows join on
+   `tool_use_id`; `thinking` rows are yielded only when
+   `opts.include_thinking` is set; a bad line or a truncated file becomes
+   one `system` row and the earlier turns are still yielded; `session_id`
+   and `project_path` propagate from the session header to every row;
+   `git_branch` stays empty when the format does not record it. Formats
+   without per-message timestamps (Continue, Zed, Cline's legacy history)
+   inherit the session timestamp; say so in the docstring.
+4. SQLite stores are opened through `sqlite_util.py` so the WAL sidecar is
+   read and the evidence copy is never opened directly. Protobuf blobs are
+   decoded with `protobuf.py`. A new dependency such as `zstandard` for Zed
+   goes in both `requirements.txt` and `pyproject.toml`.
+5. Add a `<agent>_records()` builder to `tests/fixtures.py` and wire it into
+   `build_home`, which the detection tests share. Use the same `/srv/proj`
+   project path so the timeline tests see the rows, add a noise file the
+   parser must not want (a config or credential file), and use
+   `write_bad_line` for the truncation case.
+6. Add a `<Agent>Tests(ParserBase)` class to `tests/test_parsers.py` with
+   the same cases the existing classes have: rows, thinking opt-in, history,
+   not-wanted, truncated line.
+7. Add the row to the parser table in `analyzer/README.md`, remove the agent
+   from the "detected but not yet parsed" list there, bump `VERSION` in
+   `agent_analyzer/__init__.py` and `pyproject.toml`, and run
+   `analyzer/tests/run.sh`.
+
+Each parser is self-contained and fully specified by its research document
+and this list, so one parser per agent, run in parallel, is the natural way
+to delegate the backlog.
 
 ## Adding an agent to the catalog
 

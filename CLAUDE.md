@@ -12,3 +12,11 @@ Claude Code specific notes:
 - A live run against this workstation collects the author's own Claude Code,
   Gemini, Antigravity, Codex and Copilot state. Write it under the scratchpad
   directory and delete it afterwards.
+- The research documents under `collectors/research/` and `analyzer/research/`
+  link every source citation to the commit that was reviewed. Open that link
+  when checking a path or record shape; the line numbers are only valid at
+  that commit, not on the default branch.
+- Parser work suits delegation: give a subagent the research document and the
+  "Adding a parser" checklist in AGENTS.md, one agent per parser, and reserve
+  the main session for review. The same pattern, one agent per lineage pair,
+  did the citation linking pass.
