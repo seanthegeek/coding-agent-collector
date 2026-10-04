@@ -5,6 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+# Linter versions for the lint job. AGENTS.md ("Quality gates") and
+# .githooks/pre-commit list the same versions; change all three together.
+env:
+  RUFF_VERSION: "0.16.10"
+  PYRIGHT_VERSION: "1.1.414"
+  MARKDOWNLINT_CLI2_VERSION: "0.23.3"
+  SHELLCHECK_VERSION: "0.11.0"
+  SHFMT_VERSION: "3.14.1"
+  CHECKBASHISMS_TAG: "v2.26.13"
+  PSSA_VERSION: "1.25.0"
+
 jobs:
   catalog-sync:
     name: Catalog tables in sync (sh, PowerShell, analyzer copy)
@@ -29,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install shells
-        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck dash busybox-static zsh
+        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck dash busybox-static zsh posh
       - name: shellcheck
         run: shellcheck -s sh -S warning collectors/collect-agent-artifacts.sh
       - name: smoke (sh)
@@ -46,6 +57,8 @@ jobs:
         run: |
           printf '#!/bin/sh\nexec zsh --emulate sh "$@"\n' > /tmp/zsh-sh && chmod +x /tmp/zsh-sh
           collectors/tests/smoke.sh /tmp/zsh-sh
+      - name: smoke (posh)
+        run: collectors/tests/smoke.sh posh
 
   powershell-7:
     name: PowerShell collector (smoke under PowerShell 7 on Linux)
@@ -80,3 +93,51 @@ jobs:
         run: pip install -r analyzer/requirements.txt
       - name: unittest
         run: analyzer/tests/run.sh
+
+  lint:
+    name: Lint (ruff, pyright, markdownlint, sh linters, PSScriptAnalyzer)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+      - name: Install Python linters and analyzer dependencies
+        run: pip install "ruff==$RUFF_VERSION" "pyright==$PYRIGHT_VERSION" -r analyzer/requirements.txt
+      - name: ruff check
+        run: ruff check .
+      - name: ruff format --check
+        run: ruff format --check .
+      - name: pyright (Python 3.10, zstandard installed)
+        run: pyright
+      - name: markdownlint
+        run: npx -y "markdownlint-cli2@$MARKDOWNLINT_CLI2_VERSION" "**/*.md"
+      - name: Install sh linters
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -sfL "https://github.com/koalaman/shellcheck/releases/download/v$SHELLCHECK_VERSION/shellcheck-v$SHELLCHECK_VERSION.linux.x86_64.tar.xz" | tar xJ -C /tmp
+          install /tmp/shellcheck-v$SHELLCHECK_VERSION/shellcheck "$HOME/bin/shellcheck"
+          curl -sfL -o "$HOME/bin/shfmt" "https://github.com/mvdan/sh/releases/download/v$SHFMT_VERSION/shfmt_v${SHFMT_VERSION}_linux_amd64"
+          curl -sfL -o "$HOME/bin/checkbashisms" "https://salsa.debian.org/debian/devscripts/-/raw/$CHECKBASHISMS_TAG/scripts/checkbashisms.pl"
+          printf '%s  %s\n' \
+            4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b "$HOME/bin/shellcheck" \
+            76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf "$HOME/bin/shfmt" \
+            7ffec5f4f3282d7551b7f1dd103d84ea6034bb1f177efdce2cebc60bfd72c088 "$HOME/bin/checkbashisms" | sha256sum -c -
+          chmod +x "$HOME/bin/shfmt" "$HOME/bin/checkbashisms"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: shfmt POSIX parse (no reformatting)
+        run: shfmt -ln posix $(shfmt -f .) > /dev/null
+      - name: shellcheck (all sh files, .shellcheckrc)
+        run: shellcheck -s sh $(shfmt -f .)
+      - name: checkbashisms
+        run: checkbashisms -p $(shfmt -f .)
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -Scope CurrentUser -RequiredVersion $env:PSSA_VERSION -Force
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Import-Module PSScriptAnalyzer -RequiredVersion $env:PSSA_VERSION
+          $r = @('collectors/Collect-AgentArtifacts.ps1', 'collectors/tests/smoke.ps1') | ForEach-Object { Invoke-ScriptAnalyzer -Path $_ -Settings collectors/PSScriptAnalyzerSettings.psd1 }
+          $r | Format-Table -AutoSize
+          exit @($r).Count
