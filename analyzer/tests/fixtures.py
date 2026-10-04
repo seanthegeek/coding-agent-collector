@@ -383,6 +383,7 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     build_cody(home)
     build_twinny(home)
     build_pearai(home)
+    build_muse_code(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -5037,3 +5038,573 @@ def build_pearai(home: Path) -> None:
             }
         },
     )
+
+
+MUSE_SESSION = "01a0f000-0000-7000-8000-000000000001"
+MUSE_CHILD = "0f3c2b1a-5d6e-4f70-8a9b-0c1d2e3f4a5b"
+MUSE_RUN = "0b7e6f5a-4c3d-4e2f-9a1b-2c3d4e5f6a7b"
+MUSE_MODEL = "muse-spark-1.3-contributor"
+MUSE_DIR = ".local/share/muse/sessions/2026/10/01/%s/" % MUSE_SESSION
+MUSE_REL = MUSE_DIR + "session.jsonl"
+MUSE_CHILD_REL = MUSE_DIR + "subagent/%s/session.jsonl" % MUSE_CHILD
+MUSE_HISTORY_REL = ".local/share/muse/tui-history.jsonl"
+MUSE_T0 = 1790845200000000  # 2026-10-01T09:00:00Z in microseconds
+
+
+def _muse_env(sid, seq, t_us, ptype, payload, version=1, cause=None, ns="8000"):
+    return {
+        "schema_version": 1,
+        "id": "00000000-0000-4000-%s-%012d" % (ns, seq),
+        "stream": {"kind": "session", "id": sid},
+        "sequence": seq,
+        "recorded_at": t_us,
+        "record_type": "event",
+        "durability": "durable",
+        "causation_id": cause,
+        "payload_type": ptype,
+        "payload_schema_version": version,
+        "payload": payload,
+    }
+
+
+def _muse_run(sid, seq, t_us, run_id, event, src_seq, ns="8000"):
+    return _muse_env(
+        sid,
+        seq,
+        t_us,
+        "runtime.session",
+        {
+            "event": event,
+            "kind": "run",
+            "run_id": run_id,
+            "source_run_record_id": "10000000-0000-4000-8000-%012d" % src_seq,
+            "source_run_record_sequence": src_seq,
+        },
+        ns=ns,
+    )
+
+
+def _muse_frame(sid, n, ns="8000"):
+    children = [
+        _muse_env(
+            sid,
+            1,
+            MUSE_T0,
+            "runtime.session.permission_format_declared",
+            {"format": "profile_v1", "schema_version": 1},
+            ns=ns,
+        ),
+        _muse_env(
+            sid,
+            2,
+            MUSE_T0,
+            "runtime.session.permission_profile_committed",
+            {
+                "actor": {"id": None, "kind": "runtime"},
+                "cause": "new_session_default",
+                "permission_epoch": 1,
+                "resolved_snapshot": {
+                    "approval": "on_request",
+                    "reviewer": "auto_review",
+                    "schema_version": 1,
+                },
+                "schema_version": 1,
+                "source": {"display_name": "Auto-review", "id": ":auto-review", "kind": "built_in"},
+            },
+            ns=ns,
+        ),
+    ]
+    return {
+        "retained_frame": "session_permission_transaction",
+        "frame_schema_version": 1,
+        "outer_log_ordinal": 1,
+        "transaction_id": "a1b2c3d4-0000-4000-8000-%012d" % n,
+        "children": [
+            {"child_index": i, "record_json": json.dumps(c, separators=(",", ":"))}
+            for i, c in enumerate(children)
+        ],
+        "content_sha256": "sha256:" + "0" * 64,
+    }
+
+
+def _muse_model(sid, seq, t_us, run_id, ns="8000"):
+    return _muse_env(
+        sid,
+        seq,
+        t_us,
+        "run.model.configured",
+        {
+            "kind": "run_model",
+            "record": {
+                "command_id": run_id,
+                "display_label": MUSE_MODEL,
+                "model_id": MUSE_MODEL,
+                "profile_id": "tbh",
+                "provider_id": "meta",
+                "run_stream": {"id": run_id, "kind": "run"},
+                "source": "startup",
+            },
+        },
+        ns=ns,
+    )
+
+
+def muse_session_records():
+    """The main fixture of research/muse-code.md section 8, less the cut
+    line (tests append one with `write_bad_line`)."""
+    s, r, t = MUSE_SESSION, MUSE_RUN, MUSE_T0
+    bash = {
+        "chunk_id": "exec-1-1",
+        "command": "npm test",
+        "description": "Run the test suite",
+        "exit_code": 1,
+        "terminal_status": "completed",
+        "output": "1 failing",
+        "original_output_bytes": 9,
+        "original_output_tokens": 3,
+        "truncated": False,
+    }
+    effect = {
+        "call_id": "call_01",
+        "effect_id": "30000000-0000-7000-8000-000000000001",
+        "model_call_index": 0,
+        "task_id": "30000000-0000-7000-8000-000000000001",
+        "task_stream": {"id": "30000000-0000-7000-8000-000000000001", "kind": "task"},
+    }
+    return [
+        _muse_frame(s, 1),
+        _muse_env(
+            s,
+            3,
+            t + 100000,
+            "runtime.session.metadata",
+            {
+                "kind": "metadata",
+                "record": {
+                    "build": {"semver": "1.4.2", "sha": "0123abcd45"},
+                    "model_id": MUSE_MODEL,
+                    "provider_id": "meta",
+                    "tool_surface_version": "2",
+                    "web_search_mode": "client",
+                    "workspace_root": "/srv/proj",
+                },
+            },
+        ),
+        _muse_env(
+            s,
+            4,
+            t + 200000,
+            "session.workspace_branch.observed",
+            {
+                "kind": "workspace_branch",
+                "record": {
+                    "command_id": s,
+                    "commit": "0123456789ab",
+                    "reference": {"kind": "branch", "name": "main"},
+                    "vcs": "git",
+                    "workspace_root": "/srv/proj",
+                },
+            },
+        ),
+        _muse_env(
+            s,
+            5,
+            t + 300000,
+            "session.name.changed",
+            {
+                "authority_id": "d0d0d0d0-0000-4000-8000-000000000001",
+                "new_name": "quiet-lyra",
+                "operation_id": "e0e0e0e0-0000-4000-8000-000000000001",
+                "previous_name": None,
+                "session_id": s,
+                "source": "automatic",
+            },
+            cause="f0f0f0f0-0000-4000-8000-000000000001",
+        ),
+        _muse_model(s, 6, t + 900000, r),
+        _muse_env(
+            s,
+            7,
+            t + 1000000,
+            "runtime.user_intent.accepted",
+            {
+                "bindings": [],
+                "delivery_policy": "session_current",
+                "intent_id": r,
+                "model_messages": [{"content": [{"kind": "text", "text": "fix the failing test"}]}],
+                "refill_blocks": [{"kind": "text", "text": "fix the failing test"}],
+                "semantic_kind": {"kind": "chat"},
+                "source_session_id": s,
+                "surface": "main",
+                "wake_policy": "start_once",
+            },
+        ),
+        _muse_run(s, 8, t + 1000000, r, {"kind": "started", "prompt": "fix the failing test"}, 1),
+        _muse_run(
+            s,
+            9,
+            t + 3000000,
+            r,
+            {
+                "kind": "reasoning_summary_delta",
+                "message_id": "20000000-0000-4000-8000-000000000001",
+                "summary_index": 0,
+                "text": "Running the tests first.",
+            },
+            5,
+        ),
+        _muse_run(
+            s,
+            10,
+            t + 3100000,
+            r,
+            {
+                "kind": "reasoning_summary_committed",
+                "message_id": "20000000-0000-4000-8000-000000000001",
+                "provider_item_id": "rs_0001:rs_0002",
+                "response_id": "resp_0001",
+                "text": "Running the tests first.",
+            },
+            6,
+        ),
+        _muse_run(
+            s,
+            11,
+            t + 3200000,
+            r,
+            {
+                "encrypted_content": "Q-AAAA",
+                "kind": "reasoning_committed",
+                "message_id": "20000000-0000-4000-8000-000000000002",
+                "provider_item_id": "rs_0001:rs_0002",
+                "response_id": "resp_0001",
+                "text": "",
+            },
+            7,
+        ),
+        _muse_run(
+            s,
+            12,
+            t + 3300000,
+            r,
+            {
+                "duration_ms": 2300,
+                "finish_reason": "tool_calls",
+                "kind": "model_completed",
+                "model": MUSE_MODEL,
+                "usage": {
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0,
+                    "cached_tokens": 0,
+                    "input_tokens": 900,
+                    "output_tokens": 40,
+                    "reasoning_tokens": 12,
+                },
+            },
+            8,
+        ),
+        _muse_run(
+            s,
+            13,
+            t + 3400000,
+            r,
+            {
+                "kind": "assistant_tool_calls_committed",
+                "message_id": "20000000-0000-4000-8000-000000000003",
+                "response_id": "resp_0001",
+                "tool_calls": [
+                    {
+                        "args": json.dumps(
+                            {"command": "npm test", "description": "Run the test suite"}
+                        ),
+                        "call_id": "call_01",
+                        "id": "fc_01",
+                        "name": "bash",
+                    }
+                ],
+            },
+            9,
+        ),
+        _muse_env(
+            s,
+            14,
+            t + 3500000,
+            "tool_batch.effect.started",
+            {
+                "kind": "tool_batch_effect",
+                "record": dict(
+                    effect,
+                    kind="started",
+                    parallel_profile={"kind": "ineligible"},
+                    tool_name="bash",
+                ),
+                "run_id": r,
+            },
+        ),
+        {
+            "retained_marker": "omitted_live_only",
+            "schema_version": 1,
+            "stream": {"kind": "session", "id": s},
+            "position": {"id": "40000000-0000-4000-8000-000000000015", "sequence": 15},
+            "omitted_record": {
+                "record_type": "status",
+                "durability": "ephemeral",
+                "payload_type": "runtime.session",
+                "payload_schema_version": 1,
+                "payload_kind": "task",
+                "omission_class": "task_tool_delta_v1",
+            },
+        },
+        _muse_env(
+            s,
+            16,
+            t + 4400000,
+            "tool_batch.effect.terminal",
+            {
+                "kind": "tool_batch_effect",
+                "record": dict(
+                    effect,
+                    kind="terminal",
+                    outcome={
+                        "kind": "completed",
+                        "output_ref_count": 0,
+                        "task_completion": {"kind": "terminal", "terminal": {"kind": "completed"}},
+                    },
+                ),
+                "run_id": r,
+            },
+        ),
+        _muse_run(
+            s,
+            17,
+            t + 4500000,
+            r,
+            {
+                "batch_id": "20000000-0000-4000-8000-000000000003",
+                "kind": "tool_result_batch_committed",
+                "results": [
+                    {"text": json.dumps(bash), "tool_call_id": "call_01", "tool_call_index": 0}
+                ],
+            },
+            14,
+        ),
+        _muse_env(
+            s,
+            18,
+            t + 5000000,
+            "runtime.session",
+            {
+                "event": {
+                    "approval_subject": {
+                        "kind": "tool_action",
+                        "network": {
+                            "host": "registry.example.org",
+                            "port": 443,
+                            "protocol": "https",
+                        },
+                        "origin": {"kind": "url", "url": "https://registry.example.org/pkg"},
+                        "tool_name": "network",
+                    },
+                    "kind": "requested",
+                    "pending_action_id": "50000000-0000-7000-8000-000000000001",
+                    "raw_args": "https registry.example.org:443",
+                    "task_id": "30000000-0000-7000-8000-000000000002",
+                    "tool_call_id": "call_02",
+                    "tool_name": "network",
+                },
+                "kind": "approval",
+                "run_id": r,
+            },
+            version=3,
+        ),
+        _muse_env(
+            s,
+            19,
+            t + 6000000,
+            "runtime.session",
+            {
+                "event": {
+                    "amendment": None,
+                    "decision": "approved",
+                    "decision_source": {
+                        "kind": "llm_judge",
+                        "review_id": "60000000-0000-4000-8000-000000000001",
+                    },
+                    "kind": "decision_applied",
+                    "pending_action_id": "50000000-0000-7000-8000-000000000001",
+                    "policy_result": "allow",
+                    "session_stream": {"id": s, "kind": "session"},
+                },
+                "kind": "approval",
+                "run_id": r,
+            },
+            version=3,
+        ),
+        _muse_run(
+            s,
+            20,
+            t + 7000000,
+            r,
+            {
+                "child_session_id": MUSE_CHILD,
+                "child_session_log_path": "subagent/%s/session.jsonl" % MUSE_CHILD,
+                "generation_id": 1,
+                "kind": "memory_reminder_child_session_linked",
+                "parent_run_id": r,
+                "parent_session_id": s,
+                "reminder_agent_id": "verify-reminder",
+                "task_id": "30000000-0000-7000-8000-000000000003",
+                "task_stream": {"id": "30000000-0000-7000-8000-000000000003", "kind": "task"},
+            },
+            20,
+        ),
+        _muse_run(
+            s,
+            21,
+            t + 9000000,
+            r,
+            {
+                "kind": "assistant_message_committed",
+                "message_id": "20000000-0000-4000-8000-000000000004",
+                "provider_item_id": "msg_0001",
+                "response_id": "resp_0002",
+                "text": "The test fails because the fixture date is stale.",
+            },
+            30,
+        ),
+        _muse_run(
+            s,
+            22,
+            t + 9100000,
+            r,
+            {
+                "eot_gate_ms": 3,
+                "kind": "terminal",
+                "reason": None,
+                "terminal": "completed",
+                "time_to_first_token_ms": 800,
+                "turn_duration_ms": 8100,
+            },
+            31,
+        ),
+        _muse_env(
+            s,
+            23,
+            t + 20000000,
+            "session.end",
+            {
+                "kind": "session_end",
+                "record": {
+                    "exit_reason": "clean",
+                    "schema_version": 1,
+                    "session_id": s,
+                    "uptime_ms": 20000,
+                },
+            },
+        ),
+    ]
+
+
+def muse_subagent_records():
+    c, t, ns = MUSE_CHILD, MUSE_T0, "9000"
+    return [
+        _muse_frame(c, 2, ns=ns),
+        _muse_env(
+            c,
+            3,
+            t + 7100000,
+            "runtime.session.metadata",
+            {"kind": "metadata", "record": {"model_id": MUSE_MODEL, "provider_id": "meta"}},
+            ns=ns,
+        ),
+        _muse_model(c, 4, t + 7100000, c, ns=ns),
+        _muse_run(
+            c,
+            5,
+            t + 7200000,
+            c,
+            {"kind": "started", "prompt": "You are a reminder observer for the main agent."},
+            1,
+            ns=ns,
+        ),
+        _muse_run(
+            c,
+            6,
+            t + 8000000,
+            c,
+            {
+                "kind": "assistant_tool_calls_committed",
+                "message_id": "20000000-0000-4000-8000-000000000010",
+                "response_id": "resp_0010",
+                "tool_calls": [
+                    {
+                        "args": json.dumps(
+                            {"decision": "none", "next_step": None, "reason": "Tests were run."}
+                        ),
+                        "call_id": "call_10",
+                        "id": "fc_10",
+                        "name": "submit_reminder_decision",
+                    }
+                ],
+            },
+            13,
+            ns=ns,
+        ),
+        _muse_run(
+            c,
+            7,
+            t + 8100000,
+            c,
+            {
+                "batch_id": "20000000-0000-4000-8000-000000000010",
+                "kind": "tool_result_batch_committed",
+                "results": [
+                    {
+                        "text": "reminder decision recorded",
+                        "tool_call_id": "call_10",
+                        "tool_call_index": 0,
+                    }
+                ],
+            },
+            16,
+            ns=ns,
+        ),
+        _muse_run(
+            c,
+            8,
+            t + 8199999,
+            c,
+            {
+                "kind": "terminal",
+                "reason": None,
+                "terminal": "completed",
+                "time_to_first_token_ms": 500,
+                "turn_duration_ms": 1000,
+            },
+            18,
+            ns=ns,
+        ),
+    ]
+
+
+def build_muse_code(home: Path) -> None:
+    _jsonl(home / MUSE_REL, muse_session_records())
+    _jsonl(home / MUSE_CHILD_REL, muse_subagent_records())
+    _jsonl(
+        home / MUSE_HISTORY_REL,
+        ["fix the failing test", {"project": "/srv/proj", "session": MUSE_SESSION}],
+    )
+    # Noise the parser must not want: the automated approval reviewer's log
+    # (same envelope, synthetic clock) and the settings file.
+    review = _muse_run(
+        "7a7a7a7a-0000-4000-8000-000000000001",
+        1,
+        1780531500000000,
+        "7a7a7a7a-0000-4000-8000-000000000002",
+        {"kind": "started", "prompt": '{"approval_review_context": {}}'},
+        1,
+    )
+    review["stream"]["kind"] = "approval.review.runtime"
+    _jsonl(home / MUSE_DIR / "approval-review/7a7a7a7a-0000-4000-8000-000000000001.jsonl", [review])
+    (home / ".config/muse").mkdir(parents=True, exist_ok=True)
+    (home / ".config/muse/settings.json").write_text("{}", encoding="utf-8")

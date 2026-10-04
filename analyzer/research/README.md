@@ -47,6 +47,7 @@ it.
 | `twinny` | [twinny.md](twinny.md) | rows in the editor `state.vscdb` | yes |
 | `tabby` | [tabby.md](tabby.md) | server SQLite (WAL) `ee/db.sqlite`, event JSON logs | yes |
 | `shellgpt` | [shellgpt.md](shellgpt.md) | one JSON message array per chat id in the temp dir | yes |
+| `muse-code` | [muse-code.md](muse-code.md) | event-sourced JSONL per session and subagent; closed source, from the binary's strings, vendor skills and a real install | yes |
 
 The Parser column says whether `agent_analyzer/parsers/` has a parser for
 the agent; the analyzer README's parser table lists the files each one

@@ -19,6 +19,7 @@ from .kilo_code import KiloCodeParser
 from .kiro import KiroParser
 from .letta import LettaParser
 from .little_coder import LittleCoderParser
+from .muse_code import MuseCodeParser
 from .nanobot import NanobotParser
 from .open_interpreter import OpenInterpreterParser
 from .openclaw import OpenClawParser
@@ -65,6 +66,7 @@ ALL: list[Parser] = [
     CodyParser(),
     TwinnyParser(),
     PearAiParser(),
+    MuseCodeParser(),
 ]
 
 
