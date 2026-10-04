@@ -154,7 +154,7 @@ def claude_session_records(cwd="/srv/proj", branch="main"):
             timestamp="2026-10-01T10:00:03.500Z",
             sessionId=sid,
             content="also check /tmp",
-        ),  # 7: dropped, the attachment on line 8 delivers it
+        ),  # 7: delivered by the attachment on line 8
         _claude_attachment(
             c,
             "t1",

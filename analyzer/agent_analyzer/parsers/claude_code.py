@@ -50,9 +50,12 @@ Validated against a real install (Claude Code 2.1.286 to 2.1.289, October
     (`relocatedCwd`) becomes `cwd changed:` and sets `project_path` for
     every later row of the file; `pr-link` (`prUrl`, `prNumber`) is re-
     appended on every metadata flush and is emitted once per session and
-    URL (the first record wins); `queue-operation` (`operation`, `content`)
-    is emitted except an `enqueue` whose `content` is delivered in the same
-    file by a `queued_command` attachment or a `user` record, which wins.
+    URL (the first record wins); `queue-operation` (`operation`, `content`,
+    `timestamp`) is `queue <operation>: <content>`, except an `enqueue`
+    whose `content` a `queued_command` attachment or a `user` record of the
+    same file delivers: the prompt text stays on that record's row, and the
+    enqueue keeps the time it was typed as `prompt queued: delivered at
+    line N` (the first delivering line after the enqueue, else the first).
     The other state types (mode, last-prompt, cost-state,
     file-history-snapshot, file-history-delta, bridge-session, atis-latch,
     permission-mode, ...) are skipped.
@@ -261,14 +264,20 @@ class ClaudeCodeParser(Parser):
             yield row
 
     @staticmethod
-    def _prescan(artifact: Artifact) -> tuple[set, bool, str, str]:
-        """Prompts delivered by an attachment or a user record (to drop the
-        queue enqueue that repeats them), whether the file is a fork, and the
-        first cwd and branch (for state records before any transcript one)."""
-        delivered: set = set()
+    def _prescan(artifact: Artifact) -> tuple[dict, bool, str, str]:
+        """The lines that deliver each prompt by an attachment or a user
+        record (so a queue enqueue can point at them instead of repeating the
+        text), whether the file is a fork, and the first cwd and branch (for
+        state records before any transcript one)."""
+        delivered: dict[str, list[int]] = {}
         fork = False
         cwd = branch = ""
-        for _n, rec in iter_jsonl(artifact.disk_path, []):
+
+        def deliver(text: str, n: int) -> None:
+            if text:
+                delivered.setdefault(text, []).append(n)
+
+        for n, rec in iter_jsonl(artifact.disk_path, []):
             rtype = rec.get("type")
             if not cwd and rec.get("cwd"):
                 cwd = str(rec.get("cwd"))
@@ -277,19 +286,18 @@ class ClaudeCodeParser(Parser):
             if rtype == "attachment":
                 att = rec.get("attachment") or {}
                 if isinstance(att, dict) and att.get("type") == "queued_command":
-                    delivered.add(text_of(att.get("prompt")))
+                    deliver(text_of(att.get("prompt")), n)
             elif rtype == "user":
                 content = (rec.get("message") or {}).get("content")
                 if isinstance(content, str):
-                    delivered.add(content)
+                    deliver(content, n)
                 elif isinstance(content, list):
                     for b in content:
                         if isinstance(b, dict) and b.get("type") == "text":
                             t = str(b.get("text") or "")
-                            delivered.add(t)
+                            deliver(t, n)
                             if t.lstrip().startswith(FORK_MARK):
                                 fork = True
-        delivered.discard("")
         return delivered, fork, cwd, branch
 
     def _parse_session(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
@@ -384,7 +392,10 @@ class ClaudeCodeParser(Parser):
                     yield state_row("pr-link: " + url)
             elif rtype == "queue-operation":
                 content = text_of(rec.get("content"))
-                if rec.get("operation") == "enqueue" and content in delivered:
+                lines = delivered.get(content) if rec.get("operation") == "enqueue" else None
+                if lines:
+                    at = next((x for x in lines if x > n), lines[0])
+                    yield state_row("prompt queued: delivered at line %d" % at)
                     continue
                 yield state_row("queue %s: %s" % (rec.get("operation"), content))
         if errors:

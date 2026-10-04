@@ -26,7 +26,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Claude Code: prompts typed while a turn was running and delivered as
   `queued_command` attachments are now `user` rows; they were missing.
-  The `queue enqueue` row that repeated a delivered prompt is dropped.
+  The `enqueue` that repeated a delivered prompt's text is now
+  `prompt queued: delivered at line N`, keeping the time it was typed;
+  an `enqueue` with no delivery in the file is still
+  `queue enqueue: <prompt>`.
 - Claude Code: a subagent's task, task notifications, slash commands and
   their output, peer and coordinator messages, interruption markers and
   compaction summaries were `user` rows; they are now `system` rows with

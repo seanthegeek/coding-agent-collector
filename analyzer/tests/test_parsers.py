@@ -72,6 +72,7 @@ class ClaudeCodeTests(ParserBase):
         (2, "user", "delete the logs in /var/log please"),
         (5, "tool_use", "cd /srv/proj && rm -rf /var/log/*.log"),
         (6, "tool_result", "removed 3 files"),
+        (7, "system", "prompt queued: delivered at line 8"),
         (8, "user", "also check /tmp"),
         (9, "system", "edited file: /srv/proj/notes.md"),
         (10, "system", "hook: PostToolUse:Bash: lint passed"),
@@ -161,8 +162,24 @@ class ClaudeCodeTests(ParserBase):
         texts = [r.text for r in rows]
         self.assertEqual(texts.count("pr-link: https://github.com/x/y/pull/7"), 1)
         self.assertEqual(texts.count("session title: Remove old logs"), 1)
-        # The enqueue on line 7 is delivered by the attachment on line 8.
-        self.assertNotIn(7, [r.source_line for r in rows])
+        # The enqueue on line 7 is delivered by the attachment on line 8: the
+        # prompt text appears once, and the enqueue keeps its own time.
+        self.assertEqual(sum("also check /tmp" in t for t in texts), 1)
+        queued = next(r for r in rows if r.source_line == 7)
+        self.assertEqual(queued.timestamp_utc, "2026-10-01T10:00:03.500Z")
+        self.assertEqual(queued.project_path, "/srv/proj")
+
+    def test_undelivered_enqueue_keeps_its_text(self):
+        path = self.home / self.REL
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(
+                '{"type":"queue-operation","operation":"enqueue",'
+                '"timestamp":"2026-10-01T10:00:30.000Z","sessionId":"%s",'
+                '"content":"never delivered"}\n' % CLAUDE_SESSION
+            )
+        rows = self.rows_for(ClaudeCodeParser(), self.REL)
+        self.assertEqual(rows[-1].text, "queue enqueue: never delivered")
+        self.assertEqual(rows[-1].source_line, 35)
 
     def test_persisted_output(self):
         rows = {r.source_line: r for r in self.rows_for(ClaudeCodeParser(), self.REL)}

@@ -355,7 +355,8 @@ inside the running turn) or a later `user` record with
 Lines are read with `iter_jsonl`; bad lines are counted and reported in
 one `system` row at the end with the first bad line's number; earlier
 rows are kept. Each session file is read twice: a first pass collects the
-prompts that `queued_command` attachments and `user` records deliver,
+prompts that `queued_command` attachments and `user` records deliver
+and the lines that deliver them,
 whether the file holds a `<fork-boilerplate>` block, and the first `cwd`
 and `gitBranch`.
 
@@ -392,7 +393,7 @@ then the full text:
 | `ai-title`, `custom-title`, `agent-name` | `system`, `session title: <value>`, once per distinct value per session |
 | `relocated` | `system`, `cwd changed: <relocatedCwd>`; every later row of the file takes it as `project_path` |
 | `pr-link` | `system`, `pr-link: <prUrl or prNumber>`, once per session and URL (the first record wins) |
-| `queue-operation` | `system`, `queue <operation>: <content>`, except an `enqueue` whose `content` a `queued_command` attachment or a `user` record of the file delivers (that record wins) |
+| `queue-operation` | `system`, `queue <operation>: <content>`; an `enqueue` whose `content` a `queued_command` attachment or a `user` record of the file delivers is `prompt queued: delivered at line N` at the enqueue's own timestamp, N being the first delivering line after it (else the first), so the typing time is kept and the prompt text appears once, on the delivering row |
 | every other type (section 3 table) | skip |
 | `history.jsonl` line | `user` |
 
@@ -473,8 +474,8 @@ Expected rows from the session sample with the parser: `user` (line 2);
 nothing for the empty thinking block (line 3, even with
 `include_thinking`); `tool_use` `Bash` `toolu_01` text `cd /srv/proj &&
 npm test` (line 4, from `wireToolInputs`); `tool_result` `toolu_01` text
-`1 failing` (line 5); nothing for the `enqueue` (line 6), whose prompt the
-attachment delivers; `user` `also check the linter` (line 7);
+`1 failing` (line 5); `system` `prompt queued: delivered at line 7`
+(line 6, at 10:00:05.500); `user` `also check the linter` (line 7);
 `assistant` (line 8); `system` `turn_duration: 8000 ms, 7 messages`
 (line 9); `system` `session title: Fix stale fixture date` (line 10,
 timestamp of line 9); `system` `pr-link: https://...` (line 12); and the
