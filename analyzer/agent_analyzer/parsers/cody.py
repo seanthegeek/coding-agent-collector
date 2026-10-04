@@ -9,9 +9,9 @@ checked. Every chat of every account lives in one JSON object,
   of `<editor User dir>/globalStorage/state.vscdb`, whose JSON value is the
   extension's whole global state; the history is its
   `cody-local-chatHistory-v2` member. The catalog attributes that file to
-  `vscode`, so this parser lists `vscode` in `reads_agents`. Only the
-  `vscode` editors are covered: a state.vscdb the catalog gives to a fork
-  with its own catalog name (Cursor, Windsurf, PearAI) is not offered here.
+  `vscode`, or to the fork (Cursor, Windsurf, PearAI, Kiro, Antigravity)
+  whose `User/` directory it sits in, so this parser lists all of them,
+  `vscode_state.EDITOR_AGENTS`, in `reads_agents`.
 * The JetBrains plugin (Cody agent): the file
   `Cody-nodejs/[Data/]JetBrains-globalState/cody-local-chatHistory-v2`,
   whose whole content is the JSON history.
@@ -49,7 +49,7 @@ from typing import Dict, Iterator, List, Tuple
 from ..inputs import Artifact
 from ..model import Row, compact
 from ..timeutil import to_utc
-from ..vscode_state import STATE_DB_RX, read_item
+from ..vscode_state import EDITOR_AGENTS, STATE_DB_RX, read_item
 from .base import Options, Parser, compact_json, text_of
 from .cline_legacy import iter_array_at, read_text
 
@@ -119,7 +119,7 @@ def _fs_path(uri) -> str:
 class CodyParser(Parser):
     agent = "cody"
     name = "cody"
-    reads_agents = ("vscode",)
+    reads_agents = EDITOR_AGENTS
 
     def wants(self, artifact: Artifact) -> bool:
         return bool(STATE_DB_RX.search(artifact.rel) or JETBRAINS_RX.search(artifact.rel))

@@ -24,6 +24,11 @@ from typing import Dict, Iterable, List, Tuple
 from . import sqlite_util
 
 STATE_DB_RX = re.compile(r"(?:^|/)User/globalStorage/state\.vscdb$")
+# Catalog agents whose `User/` directory holds a VS Code family state.vscdb.
+# An extension installed in a fork writes its global state to the fork's
+# database, which the catalog attributes to the fork, so parsers for such
+# extensions list all of these in `reads_agents`.
+EDITOR_AGENTS = ("vscode", "cursor", "windsurf", "pearai", "kiro", "antigravity")
 SECRET_PREFIX = "secret://"
 
 

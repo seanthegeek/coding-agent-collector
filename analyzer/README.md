@@ -6,9 +6,10 @@ agents left state in it, and parses the transcripts it knows how to read into
 one normalised CSV timeline. It never runs on the host under investigation, so
 unlike the collectors it may carry dependencies. It needs Python 3.9 or
 later and the packages in `requirements.txt` (`pip install -r
-requirements.txt`): today only `zstandard`, for Zed threads. Without it the
-Zed parser reports each thread as one undecodable `system` row and
-everything else still runs.
+requirements.txt`): today only `zstandard`, for Zed threads, Codex and Open
+Interpreter `.jsonl.zst` rollouts and OpenClaw's compressed transcript rows.
+Without it each such thread, rollout or row is reported as an undecodable
+`system` row and everything else still runs.
 
 [CHANGELOG.md](CHANGELOG.md) lists what changed in each version, including
 changes to the `timeline.csv` and `sessions.csv` columns.
@@ -106,8 +107,8 @@ agents and which have parsers.
 | `open-interpreter` | Codex rollouts (Codex parser, Open Interpreter paths): `.openinterpreter/sessions/**/rollout-*.jsonl` and `archived_sessions/`, also as `.jsonl.zst`, `.openinterpreter/history.jsonl`, and `external_agent_session_imports.json` (one `system` row per `/import`ed thread, naming the Claude Code or Cursor source file; that thread's record times are import time) | Source at 2767e5f, synthetic fixture |
 | `openclaw` | `agents/<id>/agent/openclaw-agent.sqlite` (SQLite with WAL sidecars: `transcript_events`, zstd `event_zstd` rows need `zstandard`; unpublished reset/deleted archives and SQLite cold archives), legacy `agents/<id>/sessions/<id>.jsonl` and `sessions/*.jsonl`, reset and deleted archives `*.jsonl.reset.*` / `*.jsonl.deleted.*` (optionally `.zst`) and `sessions/cold/*.jsonl.zst`, under `.openclaw`, `.openclaw-<profile>`, `.clawdbot` or `.moltbot`. The session key (channel and sender) is in each session's start row; `auth_profile_store` is never read | Source at 3b16db7, synthetic fixture |
 | `nanobot` | `.nanobot*/sessions/<workspace-id>/<key>.jsonl` (project path from the sibling `.workspace`), legacy `sessions/*.jsonl` and `.migration-conflicts/`, and `memory/history.jsonl`; times are host local time, emitted as if UTC | Source at acdae3d, synthetic fixture |
-| `cody` | The `sourcegraph.cody-ai` row of a `vscode` editor's `User/globalStorage/state.vscdb` (its `cody-local-chatHistory-v2` member) and the JetBrains file `Cody-nodejs/[Data/]JetBrains-globalState/cody-local-chatHistory-v2`. Every row of a chat carries the chat's creation time (its id); no project path is recorded | Source at 8e20ac6c, synthetic fixture |
-| `twinny` | The `rjmacarthy.twinny` row of a `vscode` editor's `User/globalStorage/state.vscdb` (`twinny.conversations`). Messages have no time of their own: every row carries the conversation's `updatedAt`. Provider `apiKey`s in the same value are never emitted | Source at 9339bd10, synthetic fixture |
+| `cody` | The `sourcegraph.cody-ai` row of a VS Code or fork `User/globalStorage/state.vscdb` (its `cody-local-chatHistory-v2` member) and the JetBrains file `Cody-nodejs/[Data/]JetBrains-globalState/cody-local-chatHistory-v2`. Every row of a chat carries the chat's creation time (its id); no project path is recorded | Source at 8e20ac6c, synthetic fixture |
+| `twinny` | The `rjmacarthy.twinny` row of a VS Code or fork `User/globalStorage/state.vscdb` (`twinny.conversations`). Messages have no time of their own: every row carries the conversation's `updatedAt`. Provider `apiKey`s in the same value are never emitted | Source at 9339bd10, synthetic fixture |
 | `pearai` | `.pearai/sessions/<sessionId>.json` (Continue fork, `history` and `perplexityHistory`, timestamped from `sessions.json` `dateCreated`) and `<editor>/User/globalStorage/pearai.pearai-roo-cline/tasks/<id>/` (Roo Code 3.15 fork through the Cline task mapping; XML tool calls in `api_conversation_history.json`; project from `taskHistory` in the sibling `state.vscdb`) | Source at 51eceef6 and 0b6df736, synthetic fixture |
 
 The field names each parser relies on are listed in its module docstring
@@ -124,17 +125,19 @@ every parser and keeps the rows of any parser that accepts it, under that
 parser's agent, so `--agent aider` also includes a repository's
 `.aider.chat.history.md` and `--agent crush` its `.crush/crush.db`.
 
-Cody and Twinny keep their chats as rows of the editor's own `state.vscdb`,
-which the catalog attributes to `vscode`; their parsers list `vscode` in
-`reads_agents`, so that file is offered to them too and the rows come out
-under `cody` or `twinny`. `secret://` rows are never read.
+Every other file goes to the parsers of the agent the manifest (or, for loose
+input, the catalog) attributes it to, plus any parser that names that agent
+in its `reads_agents` attribute. Cody and Twinny keep their chats as rows of
+the editor's own `state.vscdb`, which the catalog attributes to `vscode` or
+to the fork whose `User/` directory holds it (`cursor`, `windsurf`, `pearai`,
+`kiro`, `antigravity`); both parsers list all six editors in `reads_agents`,
+so that file is offered to them too and the rows come out under `cody` or
+`twinny`, and `--agent cody` selects them. `secret://` rows are never read.
 
 Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
-`augment`, `ollama`, `pearai`, `cody`, `twinny`,
-`open-interpreter`, `openhands`, `pi`, `little-coder`, `letta`, `hermes`,
-`agent-zero`, `shellgpt` and `local-deep-research`,
-plus the `shared` and `shell-history` entries, which are not agents.
+`augment`, `ollama` and `local-deep-research`, plus the `shared` and
+`shell-history` entries, which are not agents.
 Windsurf and Cursor need format work first.
 
 Protobuf stores are decoded by `agent_analyzer/protobuf.py`, a small
@@ -223,13 +226,14 @@ collector on the fake image and analyses the resulting archive end to end.
 ## Adding a parser
 
 1. Confirm the record format against source or a real install and write the
-   field names into the module docstring, as the two existing parsers do.
+   field names into the module docstring, as the existing parsers do.
 2. Subclass `Parser` in `agent_analyzer/parsers/<agent>.py`: set `agent` to
    the catalog name, implement `wants` on `artifact.rel` and `parse` yielding
    `Row` objects. Use `iter_jsonl` so a truncated line is reported, not fatal.
    Timestamps go through `to_utc`; text through `compact`, which collapses
    whitespace and applies `--max-text-length`.
-3. Register it in `agent_analyzer/parsers/__init__.py`.
+3. Register it in `agent_analyzer/parsers/__init__.py`. A parser that must
+   read a file the catalog attributes to another agent sets `reads_agents`.
 4. Add fixture records to `tests/fixtures.py` and a test class to
    `tests/test_parsers.py`. Then add the row to the table above.
 

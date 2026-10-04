@@ -165,7 +165,7 @@ def parsers_for(artifact, parsers: Dict[str, list]) -> list:
         return ALL
     own = parsers.get(artifact.agent, [])
     # Parsers that read another agent's files (Cody and Twinny rows inside
-    # the `vscode` state.vscdb) say so in `reads_agents`.
+    # the state.vscdb of `vscode` or a fork) say so in `reads_agents`.
     return own + [p for p in ALL if artifact.agent in p.reads_agents and p not in own]
 
 

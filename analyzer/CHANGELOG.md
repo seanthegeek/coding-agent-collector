@@ -8,12 +8,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-04
+
 ### Added
 
+- Transcript parsers for fourteen more agents: `tabby`, `openhands`,
+  `shellgpt`, `pi`, `little-coder`, `letta`, `hermes`, `agent-zero`,
+  `open-interpreter`, `openclaw`, `nanobot`, `cody`, `twinny` and `pearai`,
+  for thirty parsed agents in all. little-coder and Letta Code sessions are
+  read with the pi parser's reader, and Open Interpreter rollouts with the
+  Codex one.
+- `reads_agents` routing: a parser can name other catalog agents whose files
+  it is also offered. Cody and Twinny use it to read their rows of the
+  `state.vscdb` that the catalog attributes to `vscode` or to a fork
+  (`cursor`, `windsurf`, `pearai`, `kiro`, `antigravity`); the rows come out
+  under `cody` or `twinny`, and `--agent cody` selects them.
+- `agent_analyzer/vscode_state.py`, a helper that reads one extension's
+  global state out of a VS Code family `state.vscdb` through
+  `sqlite_util`, never reading `secret://` rows.
 - Detection of the fifteen agents added in collector 1.4.0: `pearai`,
   `cody`, `twinny`, `tabby`, `open-interpreter`, `openhands`, `pi`,
   `little-coder`, `letta`, `hermes`, `openclaw`, `nanobot`, `agent-zero`,
   `shellgpt` and `local-deep-research`, from the regenerated catalog copy.
+
+### Changed
+
+- The Codex parser now also reads archived rollouts under
+  `archived_sessions/` and zstd-compressed `.jsonl.zst` rollouts (needs
+  `zstandard`; without it each compressed rollout is one `system` row). Its
+  rollout reader is now the reusable `RolloutParser` base class.
 
 ## [0.3.1] - 2026-10-04
 
@@ -83,7 +106,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--summary-length` (default 400), `--include-thinking` and `--agent`;
   `detect --json` and `--files`; `catalog --agents`.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.3.1...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.4.0...HEAD
+[0.4.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.3.1...analyzer-v0.4.0
 [0.3.1]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.3.0...analyzer-v0.3.1
 [0.3.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.2.0...analyzer-v0.3.0
 [0.2.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.1.0...analyzer-v0.2.0

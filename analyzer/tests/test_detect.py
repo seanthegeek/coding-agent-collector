@@ -45,6 +45,7 @@ class LooseDetectTests(unittest.TestCase):
             "continue", "aider",
             "zed",
             "roo-code",
+            "tabby",
             "openhands", "shellgpt",
             "pi", "little-coder", "letta",
             "hermes", "agent-zero",

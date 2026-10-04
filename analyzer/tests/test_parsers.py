@@ -2493,7 +2493,7 @@ from agent_analyzer.parsers.twinny import TwinnyParser  # noqa: E402
 from fixtures import (CODY_ACCOUNT, CODY_AGENTIC_CHAT, CODY_CHAT, CODY_JB_REL, CODY_TOKEN,  # noqa: E402
                       CODY_VSCDB_REL, CODY_VSCODE_CHAT, PEARAI_GS, PEARAI_ROO, PEARAI_SEARCH_SESSION,
                       PEARAI_SESSION, PEARAI_TASK, PEARAI_UI_TASK, TWINNY_ACTIVE, TWINNY_API_KEY,
-                      TWINNY_CONVERSATION, TWINNY_VSCDB_REL, _vscdb)
+                      TWINNY_CONVERSATION, TWINNY_VSCDB_REL, _vscdb, cody_vscode_state)
 
 
 class ReadsAgentsRoutingTests(ParserBase):
@@ -2518,6 +2518,22 @@ class ReadsAgentsRoutingTests(ParserBase):
         self.assertEqual(from_vscdb, {"cody", "twinny"})
         rows, _, _ = cli.collect_rows(self.col, Options(), ["twinny"])
         self.assertEqual({r.agent for r in rows}, {"twinny"})
+
+    def test_fork_state_vscdb_reaches_cody(self):
+        # Cody installed in Cursor writes to Cursor's state.vscdb, which the
+        # catalog attributes to `cursor`, not `vscode`.
+        rel = ".config/Cursor/User/globalStorage/state.vscdb"
+        _vscdb(self.home / rel, {"sourcegraph.cody-ai": cody_vscode_state()})
+        col = open_input(self.tmp / "home", self.cat, host="h1")
+        art = next(a for a in col.artifacts if a.rel == rel)
+        self.assertEqual(art.agent, "cursor")
+        self.assertIn("cody", {p.agent for p in cli.parsers_for(art, by_agent())})
+        rows, _, problems = cli.collect_rows(col, Options(), ["cody"])
+        self.assertEqual(problems, [])
+        from_cursor = [r for r in rows if r.source_file.endswith(rel)]
+        self.assertTrue(from_cursor)
+        self.assertEqual({r.agent for r in from_cursor}, {"cody"})
+        self.assertIn(CODY_VSCODE_CHAT, {r.session_id for r in from_cursor})
 
 
 class CodyTests(ParserBase):

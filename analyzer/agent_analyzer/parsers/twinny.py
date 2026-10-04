@@ -5,9 +5,10 @@ Validated against source, twinnydotdev/twinny at 9339bd10 (see
 was checked. Twinny keeps no transcript file of its own: every conversation
 is inside the `ItemTable` row `key = 'rjmacarthy.twinny'` of the editor's
 `<User dir>/globalStorage/state.vscdb`, whose JSON value is the extension's
-whole global state. The catalog attributes that file to `vscode`, so this
-parser lists `vscode` in `reads_agents`; a state.vscdb the catalog gives to
-a fork with its own catalog name (Cursor, Windsurf, PearAI) is not offered.
+whole global state. The catalog attributes that file to `vscode`, or to the
+fork (Cursor, Windsurf, PearAI, Kiro, Antigravity) whose `User/` directory
+it sits in, so this parser lists all of them, `vscode_state.EDITOR_AGENTS`,
+in `reads_agents`.
 
 Keys read from the value: `twinny.conversations` (an object keyed by
 conversation id) and `twinny.active-conversation` (a copy of the open
@@ -41,7 +42,7 @@ from typing import Iterator, List
 from ..inputs import Artifact
 from ..model import Row, compact
 from ..timeutil import to_utc
-from ..vscode_state import STATE_DB_RX, read_item
+from ..vscode_state import EDITOR_AGENTS, STATE_DB_RX, read_item
 from .base import Options, Parser, compact_json, text_of
 
 ITEM_KEY = "rjmacarthy.twinny"
@@ -64,7 +65,7 @@ def split_think(content: str):
 class TwinnyParser(Parser):
     agent = "twinny"
     name = "twinny"
-    reads_agents = ("vscode",)
+    reads_agents = EDITOR_AGENTS
 
     def wants(self, artifact: Artifact) -> bool:
         return bool(STATE_DB_RX.search(artifact.rel))

@@ -21,7 +21,8 @@ class Parser:
     name: str = ""
     # Other catalog agents whose artifacts this parser is also offered: an
     # extension whose chats are rows of the editor's own state.vscdb, which
-    # the catalog attributes to `vscode`, lists ("vscode",) here.
+    # the catalog attributes to `vscode` or to a fork such as `cursor`, lists
+    # those editors here (`vscode_state.EDITOR_AGENTS`).
     reads_agents: Tuple[str, ...] = ()
 
     def wants(self, artifact: Artifact) -> bool:

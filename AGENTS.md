@@ -240,6 +240,12 @@ and say in the module docstring if the shape has drifted since.
    `compact_json` from `base.py`, `compact` from `model.py` and `to_utc`
    from `timeutil.py` rather than writing new ones. List the field names
    the parser depends on in the module docstring, as the existing modules do.
+   A parser that must read a file the catalog attributes to another agent
+   (Cody and Twinny rows inside an editor's `state.vscdb`) lists that agent
+   in its `reads_agents` attribute; nothing else routes files across agents.
+   A wrapper over another agent's format reuses that agent's reader rather
+   than copying it: little-coder and Letta Code sessions go through the pi
+   parser's reader, and Open Interpreter subclasses Codex's `RolloutParser`.
 2. Register an instance in the `ALL` list in `parsers/__init__.py`. Nothing
    else discovers parsers.
 3. Row semantics the existing parsers share: `tool_use` rows carry
