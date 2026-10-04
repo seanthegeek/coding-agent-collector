@@ -1,0 +1,13 @@
+# Weekly update pull requests for the analyzer's Python dependencies and for
+# the actions the CI workflow uses. Security alerts are checked separately
+# by .githooks/pre-commit.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /analyzer
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
