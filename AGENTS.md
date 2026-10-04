@@ -555,6 +555,11 @@ Windows PowerShell 5.1. From this WSL checkout that is:
 Symlink creation needs a privilege the test may not have on Windows; it
 skips the symlink checks and says so. A pass under PowerShell 7 alone is not
 enough: 5.1 is stricter about `.Count` on scalars and lacks several APIs.
+A pass under 5.1 through the WSL path is still weaker than a pass on the
+CI runner: the runner has longer temp paths, a different console width and
+no symlink privilege, and two 5.1 failures so far appeared only there. A
+change is done when the CI run for the pushed commit is green; check it
+with `gh run watch` and fix what fails before moving on.
 
 The smoke test builds a fake disk image under `$TMPDIR` with two users, a
 service account, a `nobody` account to skip, awkward filenames (quotes,
