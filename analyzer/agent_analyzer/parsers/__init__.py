@@ -26,6 +26,8 @@ from .shellgpt import ShellGptParser
 from .pi import PiParser
 from .little_coder import LittleCoderParser
 from .letta import LettaParser
+from .hermes import HermesParser
+from .agent_zero import AgentZeroParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -50,6 +52,8 @@ ALL: List[Parser] = [
     PiParser(),
     LittleCoderParser(),
     LettaParser(),
+    HermesParser(),
+    AgentZeroParser(),
 ]
 
 
