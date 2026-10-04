@@ -766,6 +766,8 @@ function InvRaw([string]$user, [string]$agent) { return ($script:invLines | Wher
 $hostKeys = 'type,host,collector,mode,at,users_scanned,users_unreadable,docker_volumes'
 $agentKeys = 'type,host,user,agent,files,bytes,first,last,projects,evidence'
 [System.IO.File]::SetLastWriteTimeUtc((P 'home/bob/.ollama/history'), (New-Object DateTime 2026, 9, 15, 1, 2, 3, ([DateTimeKind]::Utc)))
+# bob's ~/.gemini holds only the nested antigravity-cli entry: no gemini-cli line.
+Mk 'home/bob/.gemini/antigravity-cli/conversations/b1.db' 'db'
 $invCwd = Join-Path $Out 'invcwd'
 New-Item -ItemType Directory -Path $invCwd -Force | Out-Null
 Push-Location -LiteralPath $invCwd
@@ -781,6 +783,8 @@ Check 'Inventory ollama line: one file, excluded models not counted' { $r -and $
 $r = InvAgent 'alice' 'claude-code'
 Check 'Inventory claude-code evidence in catalog order' { $r -and $r.evidence -eq '.claude,.claude.json*' }
 Check 'Inventory first and last set for alice claude-code' { (InvRaw 'alice' 'claude-code') -match '"first":"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","last":"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ"' }
+Check 'Inventory: matched directory with no files of its own gives no line' { $null -eq (InvAgent 'bob' 'gemini-cli') -and ($b = InvAgent 'bob' 'antigravity') -and $b.files -eq 1 -and $b.bytes -eq 2 -and $b.evidence -eq '.gemini/antigravity-cli' }
+Check 'Inventory: no agent line has zero files' { -not ($script:inv | Where-Object { $_.type -eq 'agent' } | Where-Object { $_.files -eq 0 }) }
 Check 'Inventory projects counted per user' { $r.projects -ge 1 }
 Check 'Inventory nested entry claimed from the enclosing agent' { (InvAgent 'alice' 'antigravity').evidence -like '*.gemini/antigravity-cli*' -and (InvAgent 'alice' 'gemini-cli').evidence -eq '.gemini' }
 $r = InvAgent 'docker' 'agent-zero'
@@ -807,6 +811,7 @@ Check 'Inventory child stdout parses line by line' { @($childOut | Where-Object 
 Check 'Inventory -OutputDir noted on stderr' { (Get-Content -LiteralPath $errFile -Raw) -match 'NOTE: -Inventory writes nothing; -OutputDir .*inv-o ignored' }
 $childQ = @(& $self -NoProfile -ExecutionPolicy Bypass -File $Collector -Root $Root -Inventory -Quiet 2>$errFile)
 Check 'Inventory -Quiet leaves stderr empty' { $childQ.Count -gt 10 -and -not ((Get-Content -LiteralPath $errFile -Raw) -match '\S') }
+Remove-Item -LiteralPath (P 'home/bob/.gemini') -Recurse -Force
 if ($Sep -eq '/' -and (& id -u) -ne '0') {
   New-Item -ItemType Directory -Path (P 'home/carol/.claude') -Force | Out-Null
   & chmod 000 (P 'home/carol')

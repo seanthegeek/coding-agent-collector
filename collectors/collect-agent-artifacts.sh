@@ -2048,7 +2048,9 @@ fi
 # line comes first but its counts are known only after the walk, so the agent
 # lines are held in a variable until then.
 # inv_aggregate: M|agent|glob and F|agent|size|mtime lines on stdin ->
-# agent|files|bytes|first|last|evidence per agent, in order of first match.
+# agent|files|bytes|first|last|evidence per agent with at least one file, in
+# order of first match. A match with no files of its own after exclusions and
+# nested claims (~/.gemini holding only antigravity-cli) gives no line.
 # Dates are UTC from the epoch with plain arithmetic (no date -d, no strftime);
 # an mtime of 0 (stat unavailable) is left out of first and last.
 inv_aggregate() {
@@ -2070,7 +2072,7 @@ inv_aggregate() {
       if ($4 > 0) {
         if (!(a in lo) || $4 < lo[a]) lo[a] = $4
         if (!(a in hi) || $4 > hi[a]) hi[a] = $4 } }
-    END { for (k = 1; k <= n; k++) { a = order[k]
+    END { for (k = 1; k <= n; k++) { a = order[k]; if (files[a] == 0) continue
       printf "%s|%d|%.0f|%s|%s|%s\n", a, files[a], bytes[a], iso(lo[a] + 0), iso(hi[a] + 0), ev[a] } }'
 }
 # inv_emit USER PROJECTS: inv_aggregate lines on stdin -> agent JSON lines

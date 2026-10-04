@@ -22,7 +22,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Inventory output on stdout, JSON Lines: one `host` line (`type`, `host`,
   `collector`, `mode`, `at`, `users_scanned`, `users_unreadable`,
   `docker_volumes`).
-- Then one `agent` line per user and agent found (`type`, `host`, `user`,
+- Then one `agent` line per user and agent with at least one file after
+  exclusions and nested claims (`type`, `host`, `user`,
   `agent`, `files`, `bytes`, `first`, `last`, `projects`, `evidence`);
   `projects` is the user's discovered project count, repeated on each of
   the user's lines, and Docker volumes appear as user `docker`.

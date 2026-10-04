@@ -408,9 +408,13 @@ The `host` line, one per run, keys in this order:
 | `users_unreadable` | number | Of those, the homes that cannot be read. sh: a home for which `test -r` or `test -x` fails, so it cannot be listed or entered; its globs match nothing. PowerShell: a profile .NET reports as missing although its parent lists it, or one whose entries cannot be listed. Each is also logged to stderr as `WARNING: home of <user> is not readable: <home>` (sh, and PowerShell for listable-but-unreadable profiles; the PowerShell `profile not accessible (skipped)` line covers the rest). As root, or as Administrator with access, this is `0`; without, other users' homes are counted here. A directory that cannot be listed inside a readable home is not counted anywhere: its files are simply missing from the totals. |
 | `docker_volumes` | number | Volume directories found under the Docker and Podman volume roots, matched or not, as `collection.json` `docker.volumes_found`. `0` with `--no-docker`. Without root the root-owned data roots cannot be entered, so their volumes are not found; a `NOTE: docker:` line on stderr says so unless `-q` is given. |
 
-One `agent` line per user and agent for which at least one `CATALOG` entry
-matched an existing path, keys in this order. An entry that matched an
-empty directory, or only a symlink, still yields a line with `files` `0`.
+One `agent` line per user and agent with at least one regular file under
+its matched `CATALOG` paths after exclusions and nested claims, keys in this
+order. A match that holds no files of its own gives no line: an empty
+directory, a symlink, an excluded-only tree, or a `~/.gemini` that holds
+only the `antigravity-cli` directory claimed by the nested `antigravity`
+entry. The same rule applies to Docker volumes. `files` is therefore never
+`0`.
 The `shared` and `shell-history` entries are not inventoried, and `project`
 never appears.
 
@@ -422,7 +426,7 @@ never appears.
 | `agent` | string | The catalog agent name, or for a volume the `DOCKER_VOLUMES` agent. |
 | `files` | number | Regular files under the agent's matched paths after exclusions, with nested entries' subtrees left to their own agent. |
 | `bytes` | number | Their total size in bytes. |
-| `first`, `last` | string | The earliest and latest modification time of those files, UTC to the second. Empty when there are no files, or when no modification time was available (sh on a host with neither GNU nor BSD `stat`). |
+| `first`, `last` | string | The earliest and latest modification time of those files, UTC to the second. Empty when no modification time was available (sh on a host with neither GNU nor BSD `stat`). |
 | `projects` | number | Project directories discovered for this user, the same number on each of the user's lines: discovery does not record which agent's state named a project. A project named by several users counts for the first of them in enumeration order, as in a collection, and a `-p` directory counts for the user whose home contains it. `0` for `docker` lines and with `--no-projects`. |
 | `evidence` | string | The `CATALOG` globs (the part after `agent\|`) that matched, in catalog order, joined by commas, so no path below the home is printed. For a volume, the `DOCKER_VOLUMES` globs that matched. |
 

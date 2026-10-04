@@ -1662,6 +1662,8 @@ function Format-InvTime([int64]$t) {
 function Get-InvLines([string]$user, $acc, [int]$projects) {
   foreach ($agent in @($acc.Keys)) {
     $e = $acc[$agent]
+    # A match with no files of its own after exclusions and nested claims gives no line.
+    if ($e.files -eq 0) { continue }
     $o = [ordered]@{ type = 'agent'; host = $HostName; user = $user; agent = $agent; files = [int64]$e.files; bytes = [int64]$e.bytes
       first = (Format-InvTime $e.first); last = (Format-InvTime $e.last); projects = $projects; evidence = (@($e.evidence) -join ',') }
     $o | ConvertTo-Json -Compress

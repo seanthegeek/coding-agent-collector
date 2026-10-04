@@ -768,7 +768,9 @@ agent_line() { grep -F "\"user\":\"$2\",\"agent\":\"$3\"," "$OUT/$1.stdout" | he
 INV_HOST_RE='^{"type":"host","host":"[^"]*","collector":"[0-9.]*","mode":"image","at":"[0-9-]*T[0-9:]*Z","users_scanned":[0-9]*,"users_unreadable":[0-9]*,"docker_volumes":[0-9]*}$'
 INV_AGENT_RE='^{"type":"agent","host":"[^"]*","user":"[^"]*","agent":"[^"]*","files":[0-9]*,"bytes":[0-9]*,"first":"[^"]*","last":"[^"]*","projects":[0-9]*,"evidence":"[^"]*"}$'
 TZ=UTC0 touch -t 202609150102.03 "$ROOT/home/ollama/.ollama/history"
-mkdir -p "$OUT/invcwd"
+mkdir -p "$OUT/invcwd" "$B/.gemini/antigravity-cli/conversations"
+# bob's ~/.gemini holds only the nested antigravity-cli entry: no gemini-cli line.
+printf 'db\n' >"$B/.gemini/antigravity-cli/conversations/b1.db"
 (cd "$OUT/invcwd" && inv inventory -q); check "inventory exit 0" "[ $? -eq 0 ]"
 check "inventory writes nothing in the current directory" "[ -z \"\$(ls -A \"$OUT/invcwd\")\" ]"
 check "inventory -q leaves stderr empty" "[ ! -s \"$OUT/inventory.stderr\" ]"
@@ -779,6 +781,8 @@ check "inventory ollama line: one file, excluded models not counted" "agent_line
 check "inventory claude-code evidence in catalog order" "agent_line inventory alice claude-code | grep -q '\"evidence\":\".claude,.claude.json\\*\"}\$'"
 check "inventory first and last set for alice claude-code" "agent_line inventory alice claude-code | grep -q '\"first\":\"20[0-9-]*T[0-9:]*Z\",\"last\":\"20[0-9-]*T[0-9:]*Z\"'"
 check "inventory nested entry claimed from the enclosing agent" "agent_line inventory alice antigravity | grep -q '\"evidence\":\"[^\"]*.gemini/antigravity-cli' && agent_line inventory alice gemini-cli | grep -q '\"evidence\":\".gemini\"'"
+check "inventory: matched directory with no files of its own gives no line" "[ -z \"\$(agent_line inventory bob gemini-cli)\" ] && agent_line inventory bob antigravity | grep -q '\"files\":1,\"bytes\":3,.*\"evidence\":\".gemini/antigravity-cli\"}\$'"
+check "inventory: no agent line has zero files" "! grep -q '\"files\":0,' \"$OUT/inventory.stdout\""
 check "inventory projects counted per user" "agent_line inventory alice claude-code | grep -q '\"projects\":[1-9]'"
 check "inventory docker volume line" "agent_line inventory docker agent-zero | grep -q '\"files\":2,\"bytes\":63,.*\"projects\":0,\"evidence\":\"\\*a0_usr\"}\$'"
 check "inventory rootless docker volume line" "agent_line inventory docker tabby | grep -q '\"files\":1,\"bytes\":23,.*\"evidence\":\"\\*tabby\\*\"}\$'"
@@ -796,6 +800,7 @@ check "inventory --full counts excluded files" "agent_line inventory-full ollama
 inv inventory-u -q -u bob --no-docker
 check "inventory -u keeps one user" "! grep -q '\"user\":\"alice\"' \"$OUT/inventory-u.stdout\" && grep -q '\"user\":\"bob\"' \"$OUT/inventory-u.stdout\""
 check "inventory --no-docker: no volumes, no docker lines" "head -n1 \"$OUT/inventory-u.stdout\" | grep -q '\"users_scanned\":1,\"users_unreadable\":0,\"docker_volumes\":0}' && ! grep -q '\"user\":\"docker\"' \"$OUT/inventory-u.stdout\""
+rm -rf "$B/.gemini"
 if [ "$(id -u)" != 0 ]; then
   mkdir -p "$ROOT/home/carol/.claude"
   chmod 000 "$ROOT/home/carol"
