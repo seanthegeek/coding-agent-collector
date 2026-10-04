@@ -12,6 +12,8 @@ from .qwen_code import QwenCodeParser
 from .gemini_cli import GeminiCliParser
 from .crush import CrushParser
 from .goose import GooseParser
+from .continue_dev import ContinueParser
+from .aider import AiderParser, AiderProjectParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -22,6 +24,9 @@ ALL: List[Parser] = [
     GeminiCliParser(),
     CrushParser(),
     GooseParser(),
+    ContinueParser(),
+    AiderParser(),
+    AiderProjectParser(),
 ]
 
 
