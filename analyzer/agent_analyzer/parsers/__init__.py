@@ -31,6 +31,9 @@ from .agent_zero import AgentZeroParser
 from .open_interpreter import OpenInterpreterParser
 from .openclaw import OpenClawParser
 from .nanobot import NanobotParser
+from .cody import CodyParser
+from .twinny import TwinnyParser
+from .pearai import PearAiParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -60,6 +63,9 @@ ALL: List[Parser] = [
     OpenInterpreterParser(),
     OpenClawParser(),
     NanobotParser(),
+    CodyParser(),
+    TwinnyParser(),
+    PearAiParser(),
 ]
 
 

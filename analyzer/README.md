@@ -106,6 +106,9 @@ agents and which have parsers.
 | `open-interpreter` | Codex rollouts (Codex parser, Open Interpreter paths): `.openinterpreter/sessions/**/rollout-*.jsonl` and `archived_sessions/`, also as `.jsonl.zst`, `.openinterpreter/history.jsonl`, and `external_agent_session_imports.json` (one `system` row per `/import`ed thread, naming the Claude Code or Cursor source file; that thread's record times are import time) | Source at 2767e5f, synthetic fixture |
 | `openclaw` | `agents/<id>/agent/openclaw-agent.sqlite` (SQLite with WAL sidecars: `transcript_events`, zstd `event_zstd` rows need `zstandard`; unpublished reset/deleted archives and SQLite cold archives), legacy `agents/<id>/sessions/<id>.jsonl` and `sessions/*.jsonl`, reset and deleted archives `*.jsonl.reset.*` / `*.jsonl.deleted.*` (optionally `.zst`) and `sessions/cold/*.jsonl.zst`, under `.openclaw`, `.openclaw-<profile>`, `.clawdbot` or `.moltbot`. The session key (channel and sender) is in each session's start row; `auth_profile_store` is never read | Source at 3b16db7, synthetic fixture |
 | `nanobot` | `.nanobot*/sessions/<workspace-id>/<key>.jsonl` (project path from the sibling `.workspace`), legacy `sessions/*.jsonl` and `.migration-conflicts/`, and `memory/history.jsonl`; times are host local time, emitted as if UTC | Source at acdae3d, synthetic fixture |
+| `cody` | The `sourcegraph.cody-ai` row of a `vscode` editor's `User/globalStorage/state.vscdb` (its `cody-local-chatHistory-v2` member) and the JetBrains file `Cody-nodejs/[Data/]JetBrains-globalState/cody-local-chatHistory-v2`. Every row of a chat carries the chat's creation time (its id); no project path is recorded | Source at 8e20ac6c, synthetic fixture |
+| `twinny` | The `rjmacarthy.twinny` row of a `vscode` editor's `User/globalStorage/state.vscdb` (`twinny.conversations`). Messages have no time of their own: every row carries the conversation's `updatedAt`. Provider `apiKey`s in the same value are never emitted | Source at 9339bd10, synthetic fixture |
+| `pearai` | `.pearai/sessions/<sessionId>.json` (Continue fork, `history` and `perplexityHistory`, timestamped from `sessions.json` `dateCreated`) and `<editor>/User/globalStorage/pearai.pearai-roo-cline/tasks/<id>/` (Roo Code 3.15 fork through the Cline task mapping; XML tool calls in `api_conversation_history.json`; project from `taskHistory` in the sibling `state.vscdb`) | Source at 51eceef6 and 0b6df736, synthetic fixture |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
@@ -120,6 +123,11 @@ catalog are recorded with agent `project`; the analyzer offers each of them to
 every parser and keeps the rows of any parser that accepts it, under that
 parser's agent, so `--agent aider` also includes a repository's
 `.aider.chat.history.md` and `--agent crush` its `.crush/crush.db`.
+
+Cody and Twinny keep their chats as rows of the editor's own `state.vscdb`,
+which the catalog attributes to `vscode`; their parsers list `vscode` in
+`reads_agents`, so that file is offered to them too and the rows come out
+under `cody` or `twinny`. `secret://` rows are never read.
 
 Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,

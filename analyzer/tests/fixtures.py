@@ -151,6 +151,9 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     build_open_interpreter(home)
     build_openclaw(home)
     build_nanobot(home)
+    build_cody(home)
+    build_twinny(home)
+    build_pearai(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -2112,3 +2115,189 @@ def build_nanobot(home: Path) -> None:
     ])
     (home / ".nanobot/config.json").write_text('{"providers": {"openai": {"apiKey": "sk-not-real"}}}',
                                                encoding="utf-8")
+# ---- VS Code state.vscdb rows (Cody, Twinny) and PearAI ----------------------------
+# Shapes from analyzer/research/cody.md, twinny.md and pearai.md.
+
+VSCDB_SCHEMA = "CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB);"
+
+
+def _vscdb(path: Path, items: dict) -> None:
+    """Add `ItemTable` rows to a plain (non-WAL) state.vscdb."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(path))
+    con.executescript(VSCDB_SCHEMA.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"))
+    for k, v in items.items():
+        con.execute("INSERT INTO ItemTable (key, value) VALUES (?, ?)",
+                    (k, (v if isinstance(v, str) else json.dumps(v)).encode("utf-8")))
+    con.commit()
+    con.close()
+
+
+CODY_ACCOUNT = "https://sourcegraph.com/-alice"
+CODY_CHAT = "Sat, 03 Oct 2026 10:00:00 GMT"
+CODY_AGENTIC_CHAT = "Sat, 03 Oct 2026 10:30:00 GMT"
+CODY_VSCODE_CHAT = "Sat, 03 Oct 2026 09:00:00 GMT"
+CODY_MODEL = "anthropic::2024-10-22::claude-sonnet-4-latest"
+CODY_JB_REL = ".local/share/Cody-nodejs/JetBrains-globalState/cody-local-chatHistory-v2"
+CODY_VSCDB_REL = ".config/VSCodium/User/globalStorage/state.vscdb"
+CODY_TOKEN = "sgp_cody_secret_not_real"
+
+
+def cody_records():
+    """The JetBrains AccountKeyedChatHistory: the research fixture chat and
+    its agentic variant."""
+    chat = {"id": CODY_CHAT, "chatTitle": "Fix flaky test", "lastInteractionTimestamp": CODY_CHAT, "interactions": [
+        {"humanMessage": {"speaker": "human", "text": "why is test_login flaky?", "intent": "chat",
+                          "contextFiles": [{"type": "file", "source": "user", "uri": {
+                              "$mid": 1, "fsPath": "/srv/proj/tests/test_login.py",
+                              "path": "/srv/proj/tests/test_login.py", "scheme": "file"}}]},
+         "assistantMessage": {"speaker": "assistant", "model": CODY_MODEL,
+                              "text": "It depends on wall-clock time.", "intent": "chat"}}]}
+    agentic = {"id": CODY_AGENTIC_CHAT, "chatTitle": "run the tests", "lastInteractionTimestamp": CODY_AGENTIC_CHAT,
+               "interactions": [
+                   {"humanMessage": {"speaker": "human", "text": "run the tests", "intent": "agentic"},
+                    "assistantMessage": {"speaker": "assistant", "model": CODY_MODEL, "text": "Running tests.",
+                                         "content": [{"type": "text", "text": "Running tests."},
+                                                     {"type": "tool_call", "tool_call": {
+                                                         "id": "toolu_01", "name": "run_terminal_command",
+                                                         "arguments": "{\"command\":\"pytest -q\"}"}}],
+                                         "processes": [{"type": "tool", "id": "toolu_01",
+                                                        "title": "run_terminal_command", "content": "pytest -q",
+                                                        "state": "success"}]}},
+                   {"humanMessage": {"speaker": "human", "text": "",
+                                     "content": [{"type": "tool_result",
+                                                  "tool_result": {"id": "toolu_01", "content": "3 passed"}}]},
+                    "assistantMessage": {"speaker": "assistant", "model": CODY_MODEL, "text": "All three pass.",
+                                         "error": {"name": "RateLimitError", "message": "rate limit exceeded"}}}]}
+    return {CODY_ACCOUNT: {"chat": {CODY_CHAT: chat, CODY_AGENTIC_CHAT: agentic}}}
+
+
+def cody_vscode_state():
+    """The `sourcegraph.cody-ai` global state value of a VS Code install."""
+    return {"cody-local-chatHistory-v2": {CODY_ACCOUNT: {"chat": {CODY_VSCODE_CHAT: {
+        "id": CODY_VSCODE_CHAT, "lastInteractionTimestamp": CODY_VSCODE_CHAT, "interactions": [
+            {"humanMessage": {"speaker": "human", "text": "explain build.sh"},
+             "assistantMessage": {"speaker": "assistant", "model": CODY_MODEL, "text": "It runs make."}}]}}}},
+        "cody-anonymous-user-id": "anon-1"}
+
+
+def build_cody(home: Path) -> None:
+    jb = home / CODY_JB_REL
+    jb.parent.mkdir(parents=True, exist_ok=True)
+    jb.write_text(json.dumps(cody_records()), encoding="utf-8")
+    (home / ".local/share/Cody-nodejs/user-settings.json").write_text('{"cody.serverEndpoint": "x"}',
+                                                                       encoding="utf-8")
+    _vscdb(home / CODY_VSCDB_REL, {
+        "sourcegraph.cody-ai": cody_vscode_state(),
+        'secret://{"extensionId":"sourcegraph.cody-ai","key":"cody.access-token"}': CODY_TOKEN,
+    })
+
+
+TWINNY_CONVERSATION = "7d1c2b3a-1111-4000-8000-000000000001"
+TWINNY_ACTIVE = "7d1c2b3a-1111-4000-8000-000000000002"
+TWINNY_API_KEY = "sk-twinny-fixture-not-real"
+TWINNY_VSCDB_REL = ".vscode-server/data/User/globalStorage/state.vscdb"
+
+
+def twinny_records():
+    """The `rjmacarthy.twinny` global state value: the research fixture plus
+    an unsaved active conversation, a failed tool step and provider keys."""
+    return {
+        "twinny.conversations": {TWINNY_CONVERSATION: {
+            "id": TWINNY_CONVERSATION, "title": "List the tests", "updatedAt": 1791028805000, "messages": [
+                {"role": "user", "content": "which tests fail?"},
+                {"role": "assistant", "content": "<think>run the suite</think>Two tests fail.",
+                 "meta": {"model": "qwen2.5-coder:7b", "provider": "Ollama", "durationMs": 5200,
+                          "withheld": [{"kind": "aws-key", "count": 1}]},
+                 "toolSteps": [{"id": "step-1", "name": "run_command", "summary": "ran `npm test`",
+                                "args": {"command": "npm test"}, "output": "2 failing", "status": "done"},
+                               {"id": "step-2", "name": "read_file", "args": {"path": "src/a.ts"},
+                                "output": "permission denied", "status": "failed"}]}]}},
+        "twinny.active-conversation": {"id": TWINNY_ACTIVE, "title": "draft", "updatedAt": 1791028900000,
+                                       "messages": [{"role": "user", "content": "unsaved question"}]},
+        "twinny.inference-providers": {"p1": {"id": "p1", "label": "Ollama", "provider": "ollama", "type": "chat",
+                                              "modelName": "qwen2.5-coder:7b", "apiHostname": "localhost",
+                                              "apiPort": 11434, "apiKey": TWINNY_API_KEY}},
+        "twinny.active-chat-provider": {"id": "p1", "apiKey": TWINNY_API_KEY},
+    }
+
+
+def build_twinny(home: Path) -> None:
+    """Rows only in the -wal sidecar, as with the editor still running."""
+    def lit(s):
+        return "'" + s.replace("'", "''") + "'"
+    _wal_db(home / TWINNY_VSCDB_REL, VSCDB_SCHEMA, [
+        "INSERT INTO ItemTable VALUES ('rjmacarthy.twinny', CAST(%s AS BLOB))" % lit(json.dumps(twinny_records())),
+        "INSERT INTO ItemTable VALUES (%s, %s)" % (
+            lit('secret://{"extensionId":"rjmacarthy.twinny","key":"gateway"}'), lit(TWINNY_API_KEY)),
+    ])
+    tw = home / ".config/Code/User/globalStorage/rjmacarthy.twinny"
+    tw.mkdir(parents=True, exist_ok=True)
+    (tw / "twinny-providers.json").write_text(json.dumps({"apiKey": TWINNY_API_KEY}), encoding="utf-8")
+
+
+PEARAI_SESSION = "9b1c2d3e-0000-4000-8000-000000000001"
+PEARAI_SEARCH_SESSION = "9b1c2d3e-0000-4000-8000-000000000002"
+PEARAI_TASK = "1791036000000"
+PEARAI_UI_TASK = "1791039600000"
+PEARAI_GS = ".config/PearAI/User/globalStorage/"
+PEARAI_ROO = PEARAI_GS + "pearai.pearai-roo-cline/"
+
+
+def pearai_session():
+    return {"history": [
+        {"message": {"role": "user", "content": "why does build.sh fail"},
+         "contextItems": [{"content": "set -e\nmake all", "name": "build.sh", "description": "/srv/proj/build.sh",
+                           "id": {"providerTitle": "file", "itemId": "build.sh"}}]},
+        {"message": {"role": "assistant", "content": "The make target is missing."}, "contextItems": [],
+         "promptLogs": [{"completionOptions": {"model": "pearai_model"}, "prompt": "<user>why does build.sh fail",
+                         "completion": "The make target is missing."}]}],
+        "perplexityHistory": [], "title": "why does build.sh fail", "sessionId": PEARAI_SESSION,
+        "workspaceDirectory": "/srv/proj"}
+
+
+def pearai_search_session():
+    return {"history": [], "perplexityHistory": [
+        {"message": {"role": "user", "content": [{"type": "text", "text": "latest make release"}]},
+         "contextItems": []},
+        {"message": {"role": "assistant", "content": "GNU make 4.4.1."}, "contextItems": [],
+         "citations": [{"url": "https://www.gnu.org/software/make/", "title": "GNU Make"}]}],
+        "title": "latest make release", "sessionId": PEARAI_SEARCH_SESSION, "workspaceDirectory": "/srv/proj"}
+
+
+def pearai_index():
+    return [{"sessionId": PEARAI_SESSION, "title": "why does build.sh fail", "dateCreated": "1791032400000",
+             "workspaceDirectory": "/srv/proj", "integrationType": "continue"},
+            {"sessionId": PEARAI_SEARCH_SESSION, "title": "latest make release", "dateCreated": "1791032500000",
+             "workspaceDirectory": "/srv/proj", "integrationType": "perplexity"}]
+
+
+def pearai_api_records(t0=1791036000000):
+    return [
+        {"role": "user", "content": [{"type": "text", "text": "<task>\nrun the tests\n</task>"},
+                                     {"type": "text", "text": "<environment_details>\n# Current Working Directory "
+                                                              "(/srv/proj)\n</environment_details>"}], "ts": t0},
+        {"role": "assistant", "content": [{"type": "text", "text":
+            "<thinking>use npm</thinking>\nI will run them.\n<execute_command>\n<command>npm test</command>\n"
+            "</execute_command>"}], "ts": t0 + 3000},
+        {"role": "user", "content": [{"type": "text", "text": "[execute_command for 'npm test'] Result:"},
+                                     {"type": "text", "text": "12 passing"}], "ts": t0 + 9000},
+        {"role": "assistant", "content": [{"type": "text", "text":
+            "<attempt_completion>\n<result>All 12 tests pass.</result>\n</attempt_completion>"}], "ts": t0 + 10000},
+    ]
+
+
+def build_pearai(home: Path) -> None:
+    sessions = home / ".pearai/sessions"
+    _json(sessions / (PEARAI_SESSION + ".json"), pearai_session())
+    _json(sessions / (PEARAI_SEARCH_SESSION + ".json"), pearai_search_session())
+    _json(sessions / "sessions.json", pearai_index())
+    (home / ".pearai/config.json").write_text('{"models": []}', encoding="utf-8")
+    roo = home / PEARAI_ROO
+    _json(roo / "tasks" / PEARAI_TASK / "api_conversation_history.json", pearai_api_records())
+    _json(roo / "tasks" / PEARAI_TASK / "task_metadata.json", {"files_in_context": []})
+    _json(roo / "tasks" / PEARAI_UI_TASK / "ui_messages.json", roo_ui_records(int(PEARAI_UI_TASK)))
+    _json(roo / "tasks" / PEARAI_UI_TASK / "api_conversation_history.json", pearai_api_records(int(PEARAI_UI_TASK)))
+    _vscdb(home / PEARAI_GS / "state.vscdb", {"pearai.pearai-roo-cline": {"taskHistory": [
+        {"id": PEARAI_TASK, "number": 1, "ts": 1791036010000, "task": "run the tests", "tokensIn": 900,
+         "tokensOut": 40, "totalCost": 0.002, "workspace": "/srv/proj"}]}})

@@ -268,6 +268,12 @@ class LegacyTaskParser(Parser):
             self._cache[key] = load_json(path)
         return self._cache[key]
 
+    # Subclass hook: rows for one API history message. The default reads
+    # native content blocks; PearAI's Roo fork overrides it for XML tool calls.
+    def api_content_rows(self, msg: dict, n: int, base_turn: str,
+                         include_thinking: bool) -> Iterator[Tuple[str, str, str, str]]:
+        return content_rows(msg.get("content"), base_turn, include_thinking)
+
     def task_match(self, artifact: Artifact):
         return self._task_rx.match(artifact.rel)
 
@@ -375,7 +381,7 @@ class LegacyTaskParser(Parser):
                 row.turn_type = "thinking"
                 row.text = compact(msg["reasoning_content"], opts.max_text_length)
                 yield row
-            for turn, text, name, tid in content_rows(msg.get("content"), base_turn, opts.include_thinking):
+            for turn, text, name, tid in self.api_content_rows(msg, n, base_turn, opts.include_thinking):
                 row = self._row(artifact, ctx, n, ts, model)
                 row.turn_type = turn
                 row.tool_name = name
