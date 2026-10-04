@@ -162,11 +162,11 @@ class TimelineTests(ParserBase):
             rows = list(csv.DictReader(fh))
         ts = [r["timestamp_utc"] for r in rows if r["timestamp_utc"]]
         self.assertEqual(ts, sorted(ts))
-        self.assertEqual({r["agent"] for r in rows}, {"claude-code", "codex-cli", "antigravity"})
+        self.assertLessEqual({"claude-code", "codex-cli", "antigravity"}, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
         with open(out / "sessions.csv", encoding="utf-8", newline="") as fh:
             sessions = {r["session_id"]: r for r in csv.DictReader(fh)}
-        self.assertEqual(set(sessions), {CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000"})
+        self.assertLessEqual({CLAUDE_SESSION, CODEX_SESSION, AGY_CONVERSATION, "99999999-0000-4000-8000-000000000000"}, set(sessions))
         c = sessions[CLAUDE_SESSION]
         self.assertEqual(c["models"], "claude-fable-5-1")
         self.assertEqual(c["tool_calls"], "1")
@@ -301,3 +301,212 @@ class AntigravityTests(ParserBase):
         self.assertEqual(tool_args_summary('{"CommandLine":"ls","Cwd":"/x"}'), "ls")
         self.assertEqual(tool_args_summary('{"Other":1}'), '{"Other":1}')
         self.assertEqual(tool_args_summary("not json"), "not json")
+
+
+from agent_analyzer.parsers.opencode import OpenCodeParser, tool_summary as opencode_tool_summary
+from agent_analyzer.parsers.kilo_code import KiloCodeParser, iter_json_array
+from fixtures import (KILO_SESSION, KILO_TASK, OPENCODE_LEGACY_SESSION, OPENCODE_SESSION,
+                      OPENCODE_V2_SESSION)
+
+
+class OpenCodeTests(ParserBase):
+    DB = ".local/share/opencode/opencode.db"
+    STORAGE = ".local/share/opencode/storage/"
+
+    def test_rows(self):
+        rows = self.rows_for(OpenCodeParser(), self.DB)
+        self.assertEqual([(r.session_id, r.turn_type) for r in rows], [
+            (OPENCODE_SESSION, "system"), (OPENCODE_V2_SESSION, "system"),
+            (OPENCODE_SESSION, "user"), (OPENCODE_SESSION, "system"), (OPENCODE_SESSION, "tool_use"),
+            (OPENCODE_SESSION, "tool_result"), (OPENCODE_SESSION, "assistant"), (OPENCODE_SESSION, "system"),
+            (OPENCODE_V2_SESSION, "user"), (OPENCODE_V2_SESSION, "assistant"), (OPENCODE_V2_SESSION, "tool_use"),
+            (OPENCODE_V2_SESSION, "tool_result")])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.project_path, r.git_branch),
+                             ("h1", "alice", "opencode", "/srv/proj", ""))
+            self.assertEqual(r.source_file, "/alice/" + self.DB)
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        start, _, user, synth, use, res, asst, finish, v2user, v2asst, v2use, v2res = rows
+        self.assertIn("session start: Fix bug", start.text)
+        self.assertEqual((user.text, user.timestamp_utc, user.model),
+                         ("list files", "2026-10-03T09:00:01.000Z", "anthropic/claude-sonnet-4"))
+        self.assertTrue(synth.text.startswith("synthetic: <system-reminder>"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text, use.timestamp_utc),
+                         ("bash", "call_x1", "ls", "2026-10-03T09:00:02.500Z"))
+        self.assertEqual((res.tool_name, res.tool_use_id, res.text, res.timestamp_utc),
+                         ("bash", "call_x1", "a.txt", "2026-10-03T09:00:03.000Z"))
+        self.assertEqual(asst.text, "There is one file, a.txt.")
+        self.assertEqual(finish.text, "step-finish reason=stop cost=0.01 tokens_in=10 tokens_out=5")
+        self.assertEqual(v2user.text, "run the tests")
+        self.assertEqual((v2asst.text, v2asst.model), ("Running them.", "openai/gpt-5"))
+        self.assertEqual((v2use.tool_use_id, v2use.text, v2res.text), ("call_v2", "pytest -q", "3 passed"))
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(OpenCodeParser(), self.DB, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["user wants a listing"])
+
+    def test_legacy_json_tree(self):
+        p = OpenCodeParser()
+        rows = self.rows_for(p, self.STORAGE + "session/proj_a1/%s.json" % OPENCODE_LEGACY_SESSION)
+        self.assertEqual([(r.turn_type, r.session_id, r.project_path) for r in rows],
+                         [("system", OPENCODE_LEGACY_SESSION, "/srv/proj")])
+        self.assertIn("Old session", rows[0].text)
+        rows = self.rows_for(p, self.STORAGE + "message/%s/msg_a.json" % OPENCODE_LEGACY_SESSION)
+        self.assertEqual([(r.turn_type, r.text) for r in rows], [("user", "cat the secrets file")])
+        self.assertEqual(rows[0].source_file, "/alice/" + self.STORAGE + "part/msg_a/prt_a1.json")
+        self.assertEqual(rows[0].timestamp_utc, "2026-10-02T09:00:01.000Z")
+        rows = self.rows_for(p, self.STORAGE + "message/%s/msg_b.json" % OPENCODE_LEGACY_SESSION)
+        self.assertEqual([r.turn_type for r in rows], ["tool_use", "tool_result", "assistant", "system"])
+        use, res, asst, err = rows
+        self.assertEqual((use.tool_name, use.text), ("read", "/srv/proj/.env"))
+        self.assertEqual(res.text, "[error] permission denied")
+        self.assertEqual(err.text, "error: APIError overloaded")
+        self.assertEqual(err.source_file, "/alice/" + self.STORAGE + "message/%s/msg_b.json" % OPENCODE_LEGACY_SESSION)
+        self.assertTrue(all(r.session_id == OPENCODE_LEGACY_SESSION for r in rows))
+
+    def test_old_per_project_layout(self):
+        base = self.home / ".local/share/opencode/project/srv-proj/storage/session"
+        (base / "info").mkdir(parents=True)
+        (base / "info/ses_old.json").write_text('{"id":"ses_old","title":"Older","time":{"created":1790000000000}}')
+        (base / "message/ses_old").mkdir(parents=True)
+        (base / "message/ses_old/msg_o.json").write_text(
+            '{"id":"msg_o","sessionID":"ses_old","role":"user","time":{"created":1790000001000},'
+            '"path":{"cwd":"/srv/proj","root":"/srv/proj"}}')
+        (base / "part/ses_old/msg_o").mkdir(parents=True)
+        (base / "part/ses_old/msg_o/prt_o.json").write_text('{"id":"prt_o","type":"text","text":"hello"}')
+        self.col = open_input(self.tmp / "home", self.cat, host="h1")
+        rows = self.rows_for(OpenCodeParser(), ".local/share/opencode/project/srv-proj/storage/session/message/ses_old/msg_o.json")
+        self.assertEqual([(r.turn_type, r.text, r.session_id, r.project_path) for r in rows],
+                         [("user", "hello", "ses_old", "/srv/proj")])
+        rows = self.rows_for(OpenCodeParser(), ".local/share/opencode/project/srv-proj/storage/session/info/ses_old.json")
+        self.assertEqual([r.turn_type for r in rows], ["system"])
+
+    def test_config_parts_and_credentials_not_wanted(self):
+        p = OpenCodeParser()
+        wanted = sorted(a.rel for a in self.col.artifacts if a.agent == "opencode" and p.wants(a))
+        self.assertEqual(wanted, [
+            self.DB,
+            self.STORAGE + "message/%s/msg_a.json" % OPENCODE_LEGACY_SESSION,
+            self.STORAGE + "message/%s/msg_b.json" % OPENCODE_LEGACY_SESSION,
+            self.STORAGE + "session/proj_a1/%s.json" % OPENCODE_LEGACY_SESSION,
+        ])
+
+    def test_truncated_part_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.STORAGE / "part/msg_b/prt_b2.json")
+        rows = self.rows_for(OpenCodeParser(), self.STORAGE + "message/%s/msg_b.json" % OPENCODE_LEGACY_SESSION)
+        self.assertEqual([r.turn_type for r in rows], ["tool_use", "tool_result", "system", "system"])
+        self.assertIn("1 part(s) of message msg_b could not be decoded", rows[-1].text)
+
+    def test_truncated_message_file(self):
+        write_bad_line(self.home / self.STORAGE / "message" / OPENCODE_LEGACY_SESSION / "msg_a.json")
+        rows = self.rows_for(OpenCodeParser(), self.STORAGE + "message/%s/msg_a.json" % OPENCODE_LEGACY_SESSION)
+        self.assertEqual([(r.turn_type, r.session_id) for r in rows], [("system", OPENCODE_LEGACY_SESSION)])
+        self.assertIn("could not be decoded", rows[0].text)
+
+    def test_bad_data_column_is_reported_not_fatal(self):
+        import sqlite3
+        con = sqlite3.connect(str(self.home / self.DB))
+        con.execute("INSERT INTO part VALUES ('prt_09','msg_02',?,1791018005000,1791018005000,'{\"type\":\"te')",
+                    (OPENCODE_SESSION,))
+        con.execute("INSERT INTO message VALUES ('msg_09',?,1791018006000,1791018006000,'{bad')", (OPENCODE_SESSION,))
+        con.commit()
+        con.close()
+        rows = self.rows_for(OpenCodeParser(), self.DB)
+        self.assertEqual(len([r for r in rows if r.turn_type == "tool_use"]), 2)
+        texts = [r.text for r in rows if r.text.startswith("parser:")]
+        self.assertEqual(texts, ["parser: 1 part(s) of message msg_02 could not be decoded",
+                                 "parser: 1 record(s) with undecodable data"])
+
+    def test_tool_summary(self):
+        self.assertEqual(opencode_tool_summary({"command": "ls", "description": "list"}), "ls")
+        self.assertEqual(opencode_tool_summary({"filePath": "/a"}), "/a")
+        self.assertEqual(opencode_tool_summary({"pattern": "foo", "path": "/src"}), "foo | /src")
+        self.assertEqual(opencode_tool_summary({"z": 1, "a": 2}), '{"a":2,"z":1}')
+        self.assertEqual(opencode_tool_summary(None), "")
+
+    def test_timeline_includes_opencode_and_kilo(self):
+        out = self.tmp / "out"
+        import contextlib
+        with contextlib.redirect_stdout(io.StringIO()):
+            cli.main(["timeline", str(self.tmp / "home"), "-o", str(out), "--agent", "opencode", "--agent", "kilo-code"])
+        with open(out / "sessions.csv", encoding="utf-8", newline="") as fh:
+            sessions = {r["session_id"]: r for r in csv.DictReader(fh)}
+        self.assertEqual(set(sessions), {OPENCODE_SESSION, OPENCODE_V2_SESSION, OPENCODE_LEGACY_SESSION,
+                                         KILO_SESSION, KILO_TASK})
+        self.assertEqual(sessions[OPENCODE_SESSION]["models"], "anthropic/claude-sonnet-4")
+        self.assertEqual(sessions[OPENCODE_SESSION]["tool_calls"], "1")
+        self.assertEqual(sessions[KILO_SESSION]["agent"], "kilo-code")
+        self.assertEqual({s["project_path"] for s in sessions.values()}, {"/srv/proj"})
+
+
+class KiloCodeTests(ParserBase):
+    DB = ".local/share/kilo/kilo.db"
+    TASK = ".config/Code/User/globalStorage/kilocode.kilo-code/tasks/%s/api_conversation_history.json" % KILO_TASK
+
+    def test_rows(self):
+        rows = self.rows_for(KiloCodeParser(), self.DB)
+        # The V2 session_message copy of the tool call is not repeated.
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id, r.project_path),
+                             ("h1", "alice", "kilo-code", KILO_SESSION, "/srv/proj"))
+        start, user, use, res = rows
+        self.assertIn("session start: fix tests", start.text)
+        self.assertEqual((user.text, user.model), ("fix the tests", "anthropic/claude-sonnet-4-5"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("bash", "call_1", "pytest -q"))
+        self.assertEqual((res.tool_use_id, res.text, res.timestamp_utc), ("call_1", "3 passed", "2026-10-03T10:00:03.000Z"))
+
+    def test_legacy_task(self):
+        rows = self.rows_for(KiloCodeParser(), self.TASK)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "user", "system", "assistant", "tool_use", "tool_result", "assistant"])
+        for r in rows:
+            self.assertEqual((r.agent, r.session_id, r.project_path, r.model), ("kilo-code", KILO_TASK, "/srv/proj", ""))
+        start, user, env, asst, use, res, final = rows
+        self.assertEqual(start.text, "task: fix tests mode=code status=completed")
+        self.assertEqual((user.text, user.timestamp_utc, user.source_line), ("<task>fix tests</task>", "2026-10-02T10:00:01.000Z", 1))
+        self.assertTrue(env.text.startswith("<environment_details>"))
+        self.assertEqual(asst.text, "Running the suite.")
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("execute_command", "toolu_01A", "pytest -q"))
+        self.assertEqual((res.tool_use_id, res.text), ("toolu_01A", "3 passed"))
+        self.assertEqual((final.text, final.source_line), ("All three tests pass.", 5))
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(KiloCodeParser(), self.TASK, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["tests pass"])
+
+    def test_history_item_preferred_over_index(self):
+        task_dir = (self.home / self.TASK).parent
+        (task_dir / "history_item.json").write_text('{"id":"%s","task":"from item","workspace":"/srv/other","ts":1}' % KILO_TASK)
+        rows = self.rows_for(KiloCodeParser(), self.TASK)
+        self.assertEqual(rows[0].text, "task: from item")
+        self.assertEqual({r.project_path for r in rows}, {"/srv/other"})
+
+    def test_credentials_and_ui_messages_not_wanted(self):
+        p = KiloCodeParser()
+        wanted = sorted(a.rel for a in self.col.artifacts if a.agent == "kilo-code" and p.wants(a))
+        self.assertEqual(wanted, [self.TASK, self.DB])
+
+    def test_truncated_task_file_keeps_earlier_records(self):
+        path = self.home / self.TASK
+        raw = path.read_bytes()
+        path.write_bytes(raw[: raw.index(b'{"type": "reasoning"') + 10])
+        rows = self.rows_for(KiloCodeParser(), self.TASK)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "user", "system", "assistant", "tool_use", "tool_result", "system"])
+        self.assertIn("record 4", rows[-1].text)
+        self.assertIn("3 earlier record(s) kept", rows[-1].text)
+        self.assertEqual(rows[-1].source_line, 4)
+
+    def test_bad_line_appended(self):
+        write_bad_line(self.home / self.TASK)
+        rows = self.rows_for(KiloCodeParser(), self.TASK)
+        self.assertEqual(len(rows), 8)
+        self.assertIn("unexpected data after the array", rows[-1].text)
+
+    def test_iter_json_array(self):
+        self.assertEqual(iter_json_array('[1, {"a": 2} ,3]'), ([1, {"a": 2}, 3], None))
+        self.assertEqual(iter_json_array("[]"), ([], None))
+        self.assertEqual(iter_json_array('[1, {"a"')[0], [1])
+        self.assertEqual(iter_json_array("[1, 2")[1], "record 3: unexpected end of file")
+        self.assertEqual(iter_json_array('{"a":1}'), ([], "not a JSON array"))
