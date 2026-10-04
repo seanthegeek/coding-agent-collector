@@ -174,6 +174,7 @@ class TimelineTests(ParserBase):
             "kiro",
             "gemini-cli",
             "crush", "goose",
+            "zed", "vscode",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -185,6 +186,7 @@ class TimelineTests(ParserBase):
             KIRO_SESSION, KIRO_EXPORT_SESSION, KIRO_SHELL_SESSION,
             GEMINI_SESSION, GEMINI_RESUMED, GEMINI_LEGACY, GEMINI_SUBAGENT,
             CRUSH_SESSION, GOOSE_SESSION, "20260301_090000",
+            ZED_THREAD, ZED_EXTERNAL, VSCODE_SESSION, VSCODE_LEGACY_SESSION,
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -852,3 +854,170 @@ class AiderTests(ParserBase):
                          {"/srv/proj/.aider.chat.history.md#2026-10-02 12:00:00",
                           "/srv/proj/.aider.chat.history.md#2026-10-02 13:00:00"})
         self.assertFalse(AiderProjectParser().wants(next(a for a in col.artifacts if a.rel == ".aider.conf.yml")))
+import importlib.util  # noqa: E402
+import json  # noqa: E402
+import sqlite3  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+from unittest import mock  # noqa: E402
+
+from agent_analyzer.parsers import zed as zed_mod  # noqa: E402
+from agent_analyzer.parsers.vscode import VsCodeParser, apply_mutation  # noqa: E402
+from agent_analyzer.parsers.zed import ZedParser  # noqa: E402
+
+from fixtures import (VSCODE_LEGACY_SESSION, VSCODE_SESSION, VSCODE_WS, ZED_EXTERNAL,  # noqa: E402
+                      ZED_THREAD)
+
+HAVE_ZSTD = importlib.util.find_spec("zstandard") is not None
+
+
+@unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
+class ZedTests(ParserBase):
+    REL = ".local/share/zed/threads/threads.db"
+    SIDEBAR = ".local/share/zed/db/0-stable/db.sqlite"
+
+    def _insert(self, thread_id, data_type, data, updated="2026-10-03T12:00:00+00:00"):
+        con = sqlite3.connect(str(self.home / self.REL))
+        con.execute("INSERT INTO threads(id,summary,updated_at,data_type,data,folder_paths) VALUES (?,?,?,?,?,?)",
+                    (thread_id, "extra", updated, data_type, data, "/srv/other"))
+        con.commit()
+        con.close()
+
+    def test_rows(self):
+        rows = self.rows_for(ZedParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows],
+                         ["system", "user", "tool_use", "tool_result", "assistant", "system", "system"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "zed", ZED_THREAD))
+            self.assertEqual((r.project_path, r.git_branch, r.model), ("/srv/proj", "main", "anthropic/claude-sonnet-4-5"))
+            self.assertEqual(r.source_line, 1)
+        start, user, use, result, asst, resume, compaction = rows
+        self.assertEqual(start.timestamp_utc, "2026-10-03T09:00:00.000Z")       # project snapshot time
+        self.assertEqual(start.text, "thread start: Fix flaky test version=0.3.0")
+        self.assertEqual(user.timestamp_utc, "2026-10-03T09:01:05.000Z")        # thread updated_at, approximate
+        self.assertEqual(user.text, "run the tests [mention] file:///srv/proj/README.md")
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("terminal", "toolu_01", '{"command":"pytest -q"}'))
+        self.assertEqual((result.tool_name, result.tool_use_id, result.text), ("terminal", "toolu_01", "3 passed"))
+        self.assertEqual(asst.text, "All 3 tests pass.")
+        self.assertEqual((resume.text, compaction.text), ("resume", "compaction: ran the tests"))
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(ZedParser(), self.REL, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["use pytest"])
+
+    def test_sidebar_external_threads(self):
+        rows = self.rows_for(ZedParser(), self.SIDEBAR)
+        self.assertEqual(len(rows), 1)                                          # the native thread is skipped
+        r = rows[0]
+        self.assertEqual((r.turn_type, r.session_id, r.project_path), ("system", ZED_EXTERNAL, "/srv/proj"))
+        self.assertEqual(r.timestamp_utc, "2026-10-03T10:00:00.000Z")
+        self.assertIn("agent=claude-code", r.text)
+
+    def test_settings_not_wanted(self):
+        art = next(a for a in self.col.artifacts if a.rel == ".config/zed/settings.json")
+        self.assertFalse(ZedParser().wants(art))
+        for rel in ("AppData/Local/Zed/threads/threads.db", "Library/Application Support/Zed/db/0-preview/db.sqlite",
+                    ".var/app/dev.zed.Zed/data/zed/threads/threads.db"):
+            self.assertTrue(ZedParser().wants(SimpleNamespace(rel=rel)), rel)
+        for rel in (self.REL + "-journal", self.SIDEBAR + "-wal"):
+            self.assertFalse(ZedParser().wants(SimpleNamespace(rel=rel)), rel)
+
+    def test_corrupt_blob_is_reported_not_fatal(self):
+        import zstandard
+        blob = zstandard.ZstdCompressor().compress(b'{"version":"0.3.0","messages":[]}' * 50)
+        self._insert("bad-thread", "zstd", blob[: len(blob) // 2])
+        rows = self.rows_for(ZedParser(), self.REL)
+        self.assertEqual(len([r for r in rows if r.session_id == ZED_THREAD]), 7)
+        bad = [r for r in rows if r.session_id == "bad-thread"]
+        self.assertEqual(len(bad), 1)
+        self.assertEqual((bad[0].turn_type, bad[0].project_path, bad[0].source_line), ("system", "/srv/other", 2))
+        self.assertIn("could not be decoded", bad[0].text)
+
+    def test_missing_zstandard_is_one_row_per_thread(self):
+        with mock.patch.object(zed_mod, "_zstd_module", return_value=None):
+            rows = self.rows_for(ZedParser(), self.REL)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0].turn_type, rows[0].session_id), ("system", ZED_THREAD))
+        self.assertIn("zstandard package not installed", rows[0].text)
+
+    def test_json_and_legacy_versions(self):
+        legacy = {"version": "0.2.0", "summary": "old", "updated_at": "2026-01-01T00:00:00Z", "messages": [
+            {"id": 0, "role": "user", "segments": [{"type": "text", "text": "hello"}], "tool_uses": [], "tool_results": []},
+            {"id": 1, "role": "assistant", "segments": [{"type": "thinking", "text": "hmm"}, {"type": "text", "text": "hi"}],
+             "tool_uses": [{"id": "t1", "name": "grep", "input": {"regex": "x"}}],
+             "tool_results": [{"tool_use_id": "t1", "is_error": True, "content": "no match"}]}]}
+        self._insert("legacy-thread", "json", json.dumps(legacy).encode("utf-8"))
+        rows = [r for r in self.rows_for(ZedParser(), self.REL) if r.session_id == "legacy-thread"]
+        self.assertEqual([(r.turn_type, r.text) for r in rows],
+                         [("system", "thread start: extra version=0.2.0"), ("user", "hello"), ("assistant", "hi"),
+                          ("tool_use", '{"regex":"x"}'), ("tool_result", "[error] no match")])
+        self.assertEqual(rows[1].timestamp_utc, "2026-10-03T12:00:00.000Z")
+
+
+class VsCodeTests(ParserBase):
+    REL = VSCODE_WS + "/chatSessions/%s.jsonl" % VSCODE_SESSION
+    LEGACY = ".vscode-server/data/User/globalStorage/emptyWindowChatSessions/%s.json" % VSCODE_LEGACY_SESSION
+
+    def test_rows(self):
+        rows = self.rows_for(VsCodeParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result", "assistant", "user", "assistant"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "vscode", VSCODE_SESSION))
+            self.assertEqual((r.project_path, r.git_branch), ("/srv/proj", ""))
+            self.assertTrue(r.timestamp_utc.endswith("Z"), r)
+        start, user, use, result, asst, user2, asst2 = rows
+        self.assertEqual(start.text, "session start: responder=GitHub Copilot location=panel title=Run tests")
+        self.assertEqual(start.timestamp_utc, "2026-10-03T11:00:00.000Z")
+        self.assertEqual((user.text, user.model, user.timestamp_utc),
+                         ("run tests [attached: test_a.py]", "copilot/gpt-4.1", "2026-10-03T11:00:01.000Z"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("run_in_terminal", "call_a", "pytest"))
+        self.assertEqual((result.tool_use_id, result.text, result.timestamp_utc), ("call_a", "3 passed", "2026-10-03T11:00:02.000Z"))
+        self.assertEqual(asst.text, "All tests pass in test_a.py.")             # markdown run with an inline reference
+        self.assertEqual((user2.text, user2.source_line), ("thanks", 2))       # pushed by the second log line
+        self.assertEqual((asst2.text, asst2.timestamp_utc), ("You're welcome.", "2026-10-03T11:00:11.000Z"))
+        self.assertEqual([r.source_line for r in rows], [1, 1, 1, 1, 1, 2, 2])
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(VsCodeParser(), self.REL, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["Need pytest"])
+
+    def test_legacy_json_session(self):
+        rows = self.rows_for(VsCodeParser(), self.LEGACY)
+        self.assertEqual([(r.turn_type, r.text) for r in rows],
+                         [("system", "session start: responder=GitHub Copilot location=panel"),
+                          ("user", "where is the config?"), ("assistant", "It is in config.toml."),
+                          ("system", "error: Rate limited")])
+        self.assertTrue(all(r.session_id == VSCODE_LEGACY_SESSION and r.project_path == "/srv/proj" for r in rows))
+        self.assertEqual(rows[1].model, "copilot/gpt-4o")
+
+    def test_not_wanted(self):
+        for rel in (VSCODE_WS + "/workspace.json", ".config/Code/User/settings.json"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(VsCodeParser().wants(art), rel)
+        for rel in ("Library/Application Support/Code - Insiders/User/workspaceStorage/x/chatSessions/s.json",
+                    "AppData/Roaming/VSCodium/User/globalStorage/transferredChatSessions/s.json",
+                    ".config/Positron/User/globalStorage/emptyWindowChatSessions/s.jsonl",
+                    ".config/Trae CN/User/workspaceStorage/x/chatSessions/s.jsonl",
+                    ".vscodium-server-insiders/data/User/workspaceStorage/x/chatSessions/s.jsonl",
+                    ".positron-server/data/User/globalStorage/emptyWindowChatSessions/s.json"):
+            self.assertTrue(VsCodeParser().wants(SimpleNamespace(rel=rel)), rel)
+        for rel in (".config/Cursor/User/workspaceStorage/x/chatSessions/s.jsonl",
+                    ".config/Code/User/globalStorage/transferredChatSessions/s.jsonl"):
+            self.assertFalse(VsCodeParser().wants(SimpleNamespace(rel=rel)), rel)
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.REL)
+        rows = self.rows_for(VsCodeParser(), self.REL)
+        self.assertEqual(len(rows), 8)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("1 unparseable line", rows[-1].text)
+        self.assertEqual(rows[-1].source_line, 6)
+
+    def test_mutation_log(self):
+        s = apply_mutation(None, {"kind": 0, "v": {"a": [1, 2, 3], "b": {"c": 1}}})
+        s = apply_mutation(s, {"kind": 2, "k": ["a"], "v": [9], "i": 1})
+        s = apply_mutation(s, {"kind": 1, "k": ["b", "c"], "v": 2})
+        s = apply_mutation(s, {"kind": 3, "k": ["b"]})
+        s = apply_mutation(s, {"kind": 2, "k": ["new"], "v": [1]})
+        self.assertEqual(s, {"a": [1, 9], "new": [1]})
+        with self.assertRaises(ValueError):
+            apply_mutation(s, {"kind": 1, "k": ["missing", "x"], "v": 1})

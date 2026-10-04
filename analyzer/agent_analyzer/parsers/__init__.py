@@ -14,6 +14,8 @@ from .crush import CrushParser
 from .goose import GooseParser
 from .continue_dev import ContinueParser
 from .aider import AiderParser, AiderProjectParser
+from .zed import ZedParser
+from .vscode import VsCodeParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -27,6 +29,8 @@ ALL: List[Parser] = [
     ContinueParser(),
     AiderParser(),
     AiderProjectParser(),
+    ZedParser(),
+    VsCodeParser(),
 ]
 
 
