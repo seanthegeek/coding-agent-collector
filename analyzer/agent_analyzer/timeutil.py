@@ -11,7 +11,7 @@ OUT_FMT = "%Y-%m-%dT%H:%M:%S.%f"
 _FRACTION_RX = re.compile(r"(\.\d{7,})")
 
 
-def to_utc(value: str | int | float | None) -> str:
+def to_utc(value: object) -> str:
     """Return a canonical UTC string for an ISO 8601 string or an epoch number.
 
     Epoch values above 1e11 are taken as milliseconds (Claude Code's

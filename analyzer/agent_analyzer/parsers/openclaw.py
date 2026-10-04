@@ -230,7 +230,9 @@ class OpenClawParser(Parser):
         self, artifact: Artifact, s: _Session, line: int, rec: dict, created_at, opts: Options
     ) -> Iterator[Row]:
         etype = rec.get("type")
-        msg = rec.get("message") if isinstance(rec.get("message"), dict) else {}
+        msg = rec.get("message")
+        if not isinstance(msg, dict):
+            msg = {}
         ts = to_utc(rec.get("timestamp")) or to_utc(msg.get("timestamp")) or to_utc(created_at)
         if etype == "session":
             yield self._start(artifact, s, line, ts, rec, opts)

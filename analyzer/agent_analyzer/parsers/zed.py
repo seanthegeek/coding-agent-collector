@@ -64,7 +64,7 @@ SIDEBAR_RX = re.compile(r"^" + DATA_DIR + r"/db/0-[^/]+/db\.sqlite$")
 def _zstd_module():
     """The `zstandard` module, or None when it is not installed."""
     try:
-        import zstandard
+        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
     except ImportError:
         return None
     return zstandard
@@ -216,11 +216,9 @@ class ZedParser(Parser):
             )
             return
 
-        snap = (
-            thread.get("initial_project_snapshot")
-            if isinstance(thread.get("initial_project_snapshot"), dict)
-            else {}
-        )
+        snap = thread.get("initial_project_snapshot")
+        if not isinstance(snap, dict):
+            snap = {}
         worktrees = [w for w in (snap.get("worktree_snapshots") or []) if isinstance(w, dict)]
         if not project and worktrees:
             project = str(worktrees[0].get("worktree_path") or "")
@@ -230,7 +228,9 @@ class ZedParser(Parser):
             if isinstance(w.get("git_state"), dict) and w["git_state"].get("current_branch")
         ]
         branch = max(branches, key=lambda b: b[0])[1] if branches else ""
-        m = thread.get("model") if isinstance(thread.get("model"), dict) else {}
+        m = thread.get("model")
+        if not isinstance(m, dict):
+            m = {}
         model = "/".join(str(x) for x in (m.get("provider"), m.get("model")) if x)
         if not updated:
             updated = to_utc(thread.get("updated_at"))
@@ -335,7 +335,9 @@ class ZedParser(Parser):
     def _agent(a) -> Iterator[tuple[str, str, str, str]]:
         if not isinstance(a, dict):
             return
-        results = a.get("tool_results") if isinstance(a.get("tool_results"), dict) else {}
+        results = a.get("tool_results")
+        if not isinstance(results, dict):
+            results = {}
         done = set()
 
         def result(key, res):

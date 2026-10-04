@@ -201,7 +201,9 @@ class AgentZeroParser(Parser):
             return
 
         base.session_id = str(chat.get("id") or fallback_id)
-        data = chat.get("data") if isinstance(chat.get("data"), dict) else {}
+        data = chat.get("data")
+        if not isinstance(data, dict):
+            data = {}
         if data.get("project"):
             base.project_path = "/a0/usr/projects/%s" % data["project"]
         start = self._row(
@@ -223,7 +225,9 @@ class AgentZeroParser(Parser):
         start.timestamp_utc = to_utc(chat.get("created_at"))
         yield start
 
-        log = chat.get("log") if isinstance(chat.get("log"), dict) else {}
+        log = chat.get("log")
+        if not isinstance(log, dict):
+            log = {}
         logs = [i for i in (log.get("logs") or []) if isinstance(i, dict)]
         trimmed = len(logs) >= LOG_SIZE
 
@@ -348,10 +352,13 @@ class AgentZeroParser(Parser):
     ) -> Iterator[Row]:
         for item in logs:
             kind = str(item.get("type") or "")
-            line = item.get("no") if isinstance(item.get("no"), int) else 0
+            no = item.get("no")
+            line: int = no if isinstance(no, int) else 0
             ts = to_utc(item.get("timestamp"))
             agentno = item.get("agentno", 0)
-            kvps = item.get("kvps") if isinstance(item.get("kvps"), dict) else {}
+            kvps = item.get("kvps")
+            if not isinstance(kvps, dict):
+                kvps = {}
             content = item.get("content") or ""
             item_id = str(item.get("id") or "")
             hist = history.get(item_id, (None, None))[1] if item_id else None

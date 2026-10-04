@@ -425,7 +425,7 @@ class OpenCodeParser(Parser):
 
     def _db_rows(self, con: sqlite3.Connection, artifact: Artifact, opts: Options) -> Iterator[Row]:
         tables = table_names(con)
-        projects: dict[str, dict] = {}
+        projects: dict[object, dict] = {}  # keyed by the raw id column value
         if "project" in tables:
             for r in con.execute("select * from project"):
                 projects[r["id"]] = dict(r)

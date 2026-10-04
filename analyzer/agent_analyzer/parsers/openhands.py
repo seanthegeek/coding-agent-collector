@@ -423,6 +423,7 @@ class OpenHandsParser(Parser):
     # -- legacy 0.x ---------------------------------------------------------------------
     def _parse_legacy(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         m = LEGACY_RX.match(artifact.rel)
+        assert m is not None  # parse() routes only matching paths here
         mine = int(m.group(2))
         numbers = []
         try:

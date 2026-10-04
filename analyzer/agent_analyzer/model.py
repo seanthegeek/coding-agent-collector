@@ -86,7 +86,7 @@ class SessionSummary:
         # transcript wins over the one-line-per-prompt history file.
         if row.source_file:
             self._sources[row.source_file] = self._sources.get(row.source_file, 0) + 1
-            self.source_file = max(self._sources, key=self._sources.get)
+            self.source_file = max(self._sources, key=self._sources.__getitem__)
         if row.timestamp_utc:
             if not self.first_timestamp_utc or row.timestamp_utc < self.first_timestamp_utc:
                 self.first_timestamp_utc = row.timestamp_utc

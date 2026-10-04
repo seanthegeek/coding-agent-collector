@@ -92,7 +92,9 @@ class NanobotParser(Parser):
     @staticmethod
     def _workspace(artifact: Artifact) -> str:
         marker = artifact.disk_path.parent / ".workspace"
-        if not SESSION_RX.match(artifact.rel).group("ws"):
+        m = SESSION_RX.match(artifact.rel)
+        assert m is not None  # parse() routes only matching paths here
+        if not m.group("ws"):
             return ""
         if artifact.disk_path.parent.name == ".migration-conflicts":
             marker = artifact.disk_path.parent.parent / ".workspace"
@@ -105,6 +107,7 @@ class NanobotParser(Parser):
 
     def _parse_session(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         m = SESSION_RX.match(artifact.rel)
+        assert m is not None  # parse() routes only matching paths here
         session_id = decode_stem(m.group("stem"))
         project = self._workspace(artifact)
         model = ""
@@ -131,7 +134,9 @@ class NanobotParser(Parser):
             if rtype == "metadata":
                 if rec.get("key"):
                     session_id = str(rec["key"])
-                meta = rec.get("metadata") if isinstance(rec.get("metadata"), dict) else {}
+                meta = rec.get("metadata")
+                if not isinstance(meta, dict):
+                    meta = {}
                 model = str(meta.get("_nanobot_model_preset") or "")
                 last_ts = to_utc(rec.get("created_at")) or to_utc(rec.get("updated_at"))
                 yield row(
@@ -170,7 +175,9 @@ class NanobotParser(Parser):
                 for tc in rec.get("tool_calls") or []:
                     if not isinstance(tc, dict):
                         continue
-                    fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+                    fn = tc.get("function")
+                    if not isinstance(fn, dict):
+                        fn = {}
                     yield row(
                         n,
                         "tool_use",

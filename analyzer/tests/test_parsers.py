@@ -4,10 +4,10 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, cast
 
 from agent_analyzer import catalog, cli, protobuf, sqlite_util
-from agent_analyzer.inputs import open_input
+from agent_analyzer.inputs import Artifact, open_input
 from agent_analyzer.model import summarise
 from agent_analyzer.parsers import Options, by_agent
 from agent_analyzer.parsers.antigravity import AntigravityParser, tool_args_summary, uri_to_path
@@ -1386,6 +1386,11 @@ from fixtures import (
 HAVE_ZSTD = importlib.util.find_spec("zstandard") is not None
 
 
+def rel_only(rel: str) -> Artifact:
+    """A stand-in artifact carrying only `rel`, the one attribute wants() reads."""
+    return cast(Artifact, SimpleNamespace(rel=rel))
+
+
 @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
 class ZedTests(ParserBase):
     REL = ".local/share/zed/threads/threads.db"
@@ -1455,12 +1460,12 @@ class ZedTests(ParserBase):
             "Library/Application Support/Zed/db/0-preview/db.sqlite",
             ".var/app/dev.zed.Zed/data/zed/threads/threads.db",
         ):
-            self.assertTrue(ZedParser().wants(SimpleNamespace(rel=rel)), rel)
+            self.assertTrue(ZedParser().wants(rel_only(rel)), rel)
         for rel in (self.REL + "-journal", self.SIDEBAR + "-wal"):
-            self.assertFalse(ZedParser().wants(SimpleNamespace(rel=rel)), rel)
+            self.assertFalse(ZedParser().wants(rel_only(rel)), rel)
 
     def test_corrupt_blob_is_reported_not_fatal(self):
-        import zstandard
+        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
 
         blob = zstandard.ZstdCompressor().compress(b'{"version":"0.3.0","messages":[]}' * 50)
         self._insert("bad-thread", "zstd", blob[: len(blob) // 2])
@@ -1603,12 +1608,12 @@ class VsCodeTests(ParserBase):
             ".vscodium-server-insiders/data/User/workspaceStorage/x/chatSessions/s.jsonl",
             ".positron-server/data/User/globalStorage/emptyWindowChatSessions/s.json",
         ):
-            self.assertTrue(VsCodeParser().wants(SimpleNamespace(rel=rel)), rel)
+            self.assertTrue(VsCodeParser().wants(rel_only(rel)), rel)
         for rel in (
             ".config/Cursor/User/workspaceStorage/x/chatSessions/s.jsonl",
             ".config/Code/User/globalStorage/transferredChatSessions/s.jsonl",
         ):
-            self.assertFalse(VsCodeParser().wants(SimpleNamespace(rel=rel)), rel)
+            self.assertFalse(VsCodeParser().wants(rel_only(rel)), rel)
 
     def test_truncated_line_is_reported_not_fatal(self):
         write_bad_line(self.home / self.REL)
@@ -3031,13 +3036,13 @@ class HermesTests(ParserBase):
             "AppData/Local/hermes/state.db",
             "AppData/Local/hermes/profiles/x/sessions/abc.jsonl",
         ):
-            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+            self.assertTrue(p.wants(rel_only(rel)), rel)
         for rel in (
             ".hermes/state-snapshots/1/state.db",
             ".hermes/response_store.db",
             ".hermes/sessions/abc.json",
         ):
-            self.assertFalse(p.wants(SimpleNamespace(rel=rel)), rel)
+            self.assertFalse(p.wants(rel_only(rel)), rel)
         for a in self.col.artifacts:
             if a.agent == "hermes" and a.rel.endswith(
                 (".yaml", "auth.json", "sessions.json", "-wal", "-shm")
@@ -3198,7 +3203,7 @@ class AgentZeroTests(ParserBase):
             "agent-zero/usr/chats/Zz.json",
             "agent-zero/tmp/chats/Zz/chat.json",
         ):
-            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+            self.assertTrue(p.wants(rel_only(rel)), rel)
         for a in self.col.artifacts:
             if a.agent == "agent-zero" and a.rel != self.REL:
                 self.assertFalse(p.wants(a), a.rel)
@@ -3275,7 +3280,7 @@ class CodexArchiveAndZstdTests(ParserBase):
             ".codex/archived_sessions/rollout-x.jsonl",
             ".codex/sessions/rollout-x.jsonl.zst",
         ):
-            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+            self.assertTrue(p.wants(rel_only(rel)), rel)
         for rel in (
             ".codex/sessions/rollout-x.jsonl.tmp",
             ".codex/session_index.jsonl",
@@ -3283,11 +3288,11 @@ class CodexArchiveAndZstdTests(ParserBase):
             ".codex/external_agent_session_imports.json",
             ".openinterpreter/history.jsonl",
         ):
-            self.assertFalse(p.wants(SimpleNamespace(rel=rel)), rel)
+            self.assertFalse(p.wants(rel_only(rel)), rel)
 
     @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
     def test_zst_rollout(self):
-        import zstandard
+        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
 
         rel = CodexTests.REL + ".zst"
         self._add(rel, zstandard.ZstdCompressor().compress(_rollout_bytes(codex_rollout_records())))
@@ -3298,7 +3303,7 @@ class CodexArchiveAndZstdTests(ParserBase):
 
     @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
     def test_truncated_zst_keeps_earlier_turns(self):
-        import zstandard
+        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
 
         rel = self.ARCHIVED + ".zst"
         cobj = zstandard.ZstdCompressor().compressobj()
@@ -3320,7 +3325,7 @@ class CodexArchiveAndZstdTests(ParserBase):
 
     @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
     def test_two_frames_are_read_across(self):
-        import zstandard
+        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
 
         rel = self.ARCHIVED + ".zst"
         recs = codex_rollout_records()
@@ -3431,7 +3436,7 @@ class OpenInterpreterTests(ParserBase):
         self.assertFalse(p.wants(arts[CodexTests.REL]))
         self.assertFalse(CodexParser().wants(arts[OI_ROLLOUT]))
         self.assertFalse(CodexParser().wants(arts[self.LEDGER]))
-        self.assertTrue(p.wants(SimpleNamespace(rel=OI_ARCHIVED + ".zst")))
+        self.assertTrue(p.wants(rel_only(OI_ARCHIVED + ".zst")))
 
     def test_truncated_line_is_reported_not_fatal(self):
         write_bad_line(self.home / OI_ROLLOUT)
@@ -3445,7 +3450,7 @@ class OpenInterpreterTests(ParserBase):
 
     @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
     def test_zst_rollout(self):
-        import zstandard
+        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
 
         rel = OI_ROLLOUT + ".zst"
         path = self.home / rel
@@ -3580,14 +3585,14 @@ class OpenClawTests(ParserBase):
             ".openclaw/agents/main/sessions/x.jsonl.reset.2026-10-01T09-30-00Z",
             ".openclaw/agents/main/sessions/cold/" + "a" * 64 + ".jsonl.zst",
         ):
-            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+            self.assertTrue(p.wants(rel_only(rel)), rel)
         for rel in (
             ".openclaw/agents/main/sessions/x.jsonl.migrated",
             ".openclaw/agents/main/sessions/x.jsonl.bak",
             ".openclaw/state/openclaw.sqlite",
             ".openclaw/logs/raw-stream.jsonl",
         ):
-            self.assertFalse(p.wants(SimpleNamespace(rel=rel)), rel)
+            self.assertFalse(p.wants(rel_only(rel)), rel)
 
     def test_credentials_never_emitted(self):
         rows = self.rows_for(OpenClawParser(), self.DB, include_thinking=True)
@@ -3745,9 +3750,9 @@ class NanobotTests(ParserBase):
             ".nanobot-work/sessions/0123456789abcdef0123456789abcdef/Y2xpOmRpcmVjdA.jsonl",
             ".nanobot/sessions/0123456789abcdef0123456789abcdef/.migration-conflicts/Y2xpOmRpcmVjdA.jsonl",
         ):
-            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+            self.assertTrue(p.wants(rel_only(rel)), rel)
         for rel in (".nanobot/webui/cli_direct.jsonl", ".nanobot/webui/x.segments/000001.jsonl"):
-            self.assertFalse(p.wants(SimpleNamespace(rel=rel)), rel)
+            self.assertFalse(p.wants(rel_only(rel)), rel)
 
     def test_truncated_line_is_reported_not_fatal(self):
         write_bad_line(self.home / NANOBOT_REL)

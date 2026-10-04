@@ -432,7 +432,7 @@ def _step(
     return {"metadata": md, kind: payload, "status": status}
 
 
-def antigravity_steps():
+def antigravity_steps() -> list[tuple[int, int, dict]]:
     """(step_type, status, Step dict) in the shapes seen on a real install:
     user_input, planner_response with tool calls, generic and typed tool steps."""
     tc1 = {
@@ -1781,7 +1781,7 @@ def zed_blob(record):
     writes it, otherwise the `json` form Zed also accepts."""
     raw = json.dumps(record).encode("utf-8")
     try:
-        import zstandard
+        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
     except ImportError:
         return "json", raw
     return "zstd", zstandard.ZstdCompressor(level=3).compress(raw)
@@ -4399,7 +4399,7 @@ def openclaw_legacy_records(session_id=OPENCLAW_LEGACY):
 def _openclaw_zstd(raw: bytes):
     """zstd-compressed bytes when zstandard is installed, else None."""
     try:
-        import zstandard
+        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
     except ImportError:
         return None
     return zstandard.ZstdCompressor(level=1, write_checksum=True).compress(raw)

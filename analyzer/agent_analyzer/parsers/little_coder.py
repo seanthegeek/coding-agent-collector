@@ -94,7 +94,9 @@ class LittleCoderParser(Parser):
             yield row
 
     def _parse_checkpoints(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
-        set_name = CHECKPOINT_RX.match(artifact.rel).group(1)
+        m = CHECKPOINT_RX.match(artifact.rel)
+        assert m is not None  # wants() accepted only matching paths
+        set_name = m.group(1)
         files = _regular_files(artifact.disk_path.parent)
         if not files or files[0].name != artifact.disk_path.name:
             return  # the set's row comes from its first file

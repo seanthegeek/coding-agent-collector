@@ -200,7 +200,9 @@ class CrushParser(Parser):
             if not isinstance(p, dict):
                 continue
             kind = p.get("type")
-            d = p.get("data") if isinstance(p.get("data"), dict) else {}
+            d = p.get("data")
+            if not isinstance(d, dict):
+                d = {}
             row = base()
             if kind == "text":
                 row.turn_type = text_type

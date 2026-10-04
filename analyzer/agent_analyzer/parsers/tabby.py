@@ -378,7 +378,9 @@ class TabbyParser(Parser):
         body = body if isinstance(body, dict) else {}
         cid = str(body.get("completion_id") or "")
         if tag == "completion":
-            seg = body.get("segments") if isinstance(body.get("segments"), dict) else {}
+            seg = body.get("segments")
+            if not isinstance(seg, dict):
+                seg = {}
             project = str(seg.get("git_url") or "")
             yield self._row(
                 artifact,

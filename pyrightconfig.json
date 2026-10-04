@@ -1,0 +1,9 @@
+{
+  "include": ["analyzer/agent_analyzer", "analyzer/tests", "analyzer/tools", "tools"],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.10",
+  "executionEnvironments": [
+    {"root": "analyzer/tests", "extraPaths": ["analyzer"]},
+    {"root": "analyzer"}
+  ]
+}

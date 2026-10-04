@@ -192,11 +192,12 @@ class PearAiParser(LegacyTaskParser):
             if isinstance(text, str):
                 m = RESULT_RX.match(text.strip())
                 notice = NOTICE_RX.match(text.strip())
-                if m or notice:
+                hit = m or notice
+                if hit:
                     r = flush()
                     if r:
                         yield r
-                    name = (m or notice).group(1)
+                    name = hit.group(1)
                     result = [] if m else [text.strip()]
                     continue
                 if text.lstrip().startswith("<environment_details>"):
@@ -235,14 +236,21 @@ class PearAiParser(LegacyTaskParser):
             yield row
             return
         sess, problem = load_session(raw)
-        session_id = str(sess.get("sessionId") or SESSION_RX.match(artifact.rel).group(1))
+        session_id = sess.get("sessionId")
+        if not session_id:
+            m = SESSION_RX.match(artifact.rel)
+            assert m is not None  # wants() accepted only matching paths
+            session_id = m.group(1)
+        session_id = str(session_id)
         entry = self._continue._index(artifact.disk_path.parent).get(session_id, {})
         ts = to_utc(entry.get("dateCreated"))
         project = str(sess.get("workspaceDirectory") or entry.get("workspaceDirectory") or "")
-        history = sess.get("history") if isinstance(sess.get("history"), list) else []
-        search = (
-            sess.get("perplexityHistory") if isinstance(sess.get("perplexityHistory"), list) else []
-        )
+        history = sess.get("history")
+        if not isinstance(history, list):
+            history = []
+        search = sess.get("perplexityHistory")
+        if not isinstance(search, list):
+            search = []
 
         def base(n: int, turn: str, text, model: str = "") -> Row:
             row = self.base_row(artifact)

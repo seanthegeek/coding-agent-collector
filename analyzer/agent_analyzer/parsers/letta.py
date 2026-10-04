@@ -85,7 +85,9 @@ def _bare_messages(session: SessionFile) -> SessionFile:
     out = SessionFile()
     out.errors = session.errors
     for n, rec in session.entries:
-        meta = rec.get("metadata") if isinstance(rec.get("metadata"), dict) else {}
+        meta = rec.get("metadata")
+        if not isinstance(meta, dict):
+            meta = {}
         out.entries.append(
             (n, {"type": "message", "timestamp": meta.get("created_at"), "message": rec})
         )
@@ -129,6 +131,7 @@ class LettaParser(Parser):
             yield from self._parse_local(artifact, m.group(1), opts)
             return
         m = TRANSCRIPT_RX.match(artifact.rel)
+        assert m is not None  # wants() accepted only matching paths
         yield from self._parse_transcript(artifact, m.group(1), m.group(2), opts)
 
     # -- local backend ----------------------------------------------------
@@ -269,7 +272,9 @@ class LettaParser(Parser):
             row.project_path = str(rec.get("project") or "")
             row.model = str(rec.get("model") or "")
             row.turn_type = "system"
-            dur = rec.get("duration") if isinstance(rec.get("duration"), dict) else {}
+            dur = rec.get("duration")
+            if not isinstance(dur, dict):
+                dur = {}
             if "exit_reason" in rec or "message_count" in rec:
                 text = (
                     "letta session end: agent=%s exit_reason=%s messages=%s tool_calls=%s wall_ms=%s"

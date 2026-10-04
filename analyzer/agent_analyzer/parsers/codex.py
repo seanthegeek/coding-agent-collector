@@ -91,7 +91,7 @@ def call_name(payload: dict) -> str:
 def _zstd_module():
     """The `zstandard` module, or None when it is not installed."""
     try:
-        import zstandard
+        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
     except ImportError:
         return None
     return zstandard

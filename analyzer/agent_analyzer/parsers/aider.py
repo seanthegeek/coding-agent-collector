@@ -127,7 +127,9 @@ class AiderParser(Parser):
         return row
 
     def parse(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
-        kind = FILE_RX.match(artifact.rel).group(1)
+        m = FILE_RX.match(artifact.rel)
+        assert m is not None  # wants() accepted only matching paths
+        kind = m.group(1)
         if kind == CHAT:
             yield from self._parse_chat(artifact, opts)
         elif kind == INPUT:

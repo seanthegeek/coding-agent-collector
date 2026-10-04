@@ -182,7 +182,9 @@ class HermesParser(Parser):
         for c in calls:
             if not isinstance(c, dict):
                 continue
-            fn = c.get("function") if isinstance(c.get("function"), dict) else {}
+            fn = c.get("function")
+            if not isinstance(fn, dict):
+                fn = {}
             row = mk("tool_use", call_summary(fn.get("arguments")))
             row.tool_use_id = str(c.get("id") or c.get("call_id") or "")
             row.tool_name = str(fn.get("name") or "")

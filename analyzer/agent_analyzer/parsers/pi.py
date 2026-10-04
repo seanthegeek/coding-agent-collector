@@ -135,7 +135,8 @@ def entry_rows(
         if skip and (str(rec.get("id") or ""), str(rec.get("timestamp") or "")) in skip:
             continue
         etype = rec.get("type")
-        msg = rec.get("message") if isinstance(rec.get("message"), dict) else {}
+        raw_msg = rec.get("message")
+        msg: dict = raw_msg if isinstance(raw_msg, dict) else {}
 
         def base(model: str = "") -> Row:
             row = parser.base_row(artifact)

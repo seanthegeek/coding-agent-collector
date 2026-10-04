@@ -13,6 +13,7 @@ only needs the fields a parser reads.
 from __future__ import annotations
 
 import struct
+from collections.abc import Iterator
 from typing import Any
 
 from .timeutil import to_utc
@@ -38,10 +39,11 @@ def read_varint(b: bytes, i: int) -> tuple[int, int]:
             raise ValueError("varint too long")
 
 
-def iter_fields(b: bytes):
+def iter_fields(b: bytes) -> Iterator[tuple[int, int, Any]]:
     """Yield (field_number, wire_type, value) for each field on the wire.
     Length-delimited values are returned as bytes, varints as int, fixed
-    widths as raw bytes."""
+    widths as raw bytes. The value is typed Any because its type follows
+    the wire type, which a static annotation cannot express."""
     i = 0
     n = len(b)
     while i < n:

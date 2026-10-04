@@ -185,7 +185,8 @@ class GooseParser(Parser):
         opts: Options,
     ) -> Iterator[Row]:
         if isinstance(content, str):
-            content = [{"type": "text", "text": content}]
+            text_block: dict = {"type": "text", "text": content}
+            content = [text_block]
         if not isinstance(content, list):
             return
         text_type = role if role in ("user", "assistant") else "system"
@@ -371,7 +372,9 @@ class GooseParser(Parser):
                 )
                 yield row
                 continue
-            meta = rec.get("metadata") if isinstance(rec.get("metadata"), dict) else {}
+            meta = rec.get("metadata")
+            if not isinstance(meta, dict):
+                meta = {}
             base = self._row(artifact, n, session_id, project_path, ts=epoch(rec.get("created")))
             yield from self._block_rows(
                 artifact,
@@ -406,9 +409,13 @@ class GooseParser(Parser):
         for n, rec in iter_jsonl(artifact.disk_path, errors):
             if "input" in rec or "model_config" in rec:
                 cfg = rec.get("model_config") or {}
-                inp = rec.get("input") if isinstance(rec.get("input"), dict) else {}
+                inp = rec.get("input")
+                if not isinstance(inp, dict):
+                    inp = {}
                 model = str(cfg.get("model_name") or inp.get("model") or "")
-                msgs = inp.get("messages") if isinstance(inp.get("messages"), list) else []
+                msgs = inp.get("messages")
+                if not isinstance(msgs, list):
+                    msgs = []
                 last_user = next(
                     (
                         text_of(m.get("content"))

@@ -197,7 +197,12 @@ class ContinueParser(Parser):
             yield row
             return
         sess, problem = load_session(raw)
-        session_id = str(sess.get("sessionId") or SESSION_RX.match(artifact.rel).group(1))
+        session_id = sess.get("sessionId")
+        if not session_id:
+            m = SESSION_RX.match(artifact.rel)
+            assert m is not None  # wants() accepted only matching paths
+            session_id = m.group(1)
+        session_id = str(session_id)
         entry = self._index(artifact.disk_path.parent).get(session_id, {})
         ts = to_utc(entry.get("dateCreated"))
         project = str(sess.get("workspaceDirectory") or entry.get("workspaceDirectory") or "")
@@ -217,7 +222,9 @@ class ContinueParser(Parser):
 
         row = base(0, session_model)
         row.turn_type = "system"
-        usage = sess.get("usage") if isinstance(sess.get("usage"), dict) else {}
+        usage = sess.get("usage")
+        if not isinstance(usage, dict):
+            usage = {}
         bits = ["session start: %s" % (sess.get("title") or entry.get("title") or "")]
         if sess.get("mode"):
             bits.append("mode=%s" % sess["mode"])
@@ -281,7 +288,9 @@ class ContinueParser(Parser):
                 for call in calls:
                     if not isinstance(call, dict):
                         continue
-                    fn = call.get("function") if isinstance(call.get("function"), dict) else {}
+                    fn = call.get("function")
+                    if not isinstance(fn, dict):
+                        fn = {}
                     call_id = str(call.get("id") or "")
                     name = str(fn.get("name") or "")
                     names[call_id] = name

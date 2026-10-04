@@ -232,7 +232,9 @@ class CodyParser(Parser):
         model = str(msg.get("model") or "") if speaker == "assistant" else ""
         text = msg.get("text")
         text = text if isinstance(text, str) else text_of(text)
-        parts = msg.get("content") if isinstance(msg.get("content"), list) else []
+        parts = msg.get("content")
+        if not isinstance(parts, list):
+            parts = []
         if not text:
             text = "\n".join(
                 str(p.get("text"))

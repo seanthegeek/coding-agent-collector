@@ -284,7 +284,9 @@ class VsCodeParser(Parser):
                 state.get("creationDate"),
                 req_lines.get(-1, 0),
             )
-        requests = state.get("requests") if isinstance(state.get("requests"), list) else []
+        requests = state.get("requests")
+        if not isinstance(requests, list):
+            requests = []
         for i, req in enumerate(requests):
             if isinstance(req, dict):
                 yield from self._request_rows(req, req_lines.get(i, 0), base, opts)

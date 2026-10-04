@@ -129,7 +129,9 @@ class TwinnyParser(Parser):
         )
         for msg in messages:
             role = msg.get("role")
-            meta = msg.get("meta") if isinstance(msg.get("meta"), dict) else {}
+            meta = msg.get("meta")
+            if not isinstance(meta, dict):
+                meta = {}
             model = str(meta.get("model") or "")
             content = msg.get("content")
             text = content if isinstance(content, str) else text_of(content)
