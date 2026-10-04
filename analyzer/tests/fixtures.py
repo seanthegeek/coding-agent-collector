@@ -136,6 +136,8 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     build_goose(home)
     build_continue(home)
     build_aider(home)
+    build_opencode(home)
+    build_kilo(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -905,3 +907,202 @@ def build_vscode(home: Path) -> None:
     legacy.mkdir(parents=True, exist_ok=True)
     (legacy / (VSCODE_LEGACY_SESSION + ".json")).write_text(json.dumps(vscode_legacy_session(), indent=2),
                                                             encoding="utf-8")
+# ---- OpenCode and Kilo Code ---------------------------------------------------------
+# Shapes from analyzer/research/opencode.md and kilo-code.md (drizzle tables in
+# packages/core/src/session/sql.ts, JSON in packages/schema/src/v1/session.ts).
+
+OPENCODE_SESSION = "ses_01OC"
+OPENCODE_V2_SESSION = "ses_02OCV2"
+OPENCODE_LEGACY_SESSION = "ses_00LEGACY"
+OPENCODE_T0 = 1791018000000  # 2026-10-03T09:00:00Z, ms
+KILO_SESSION = "ses_01JAX"
+KILO_TASK = "8f1c2b7e-1"
+KILO_T0 = 1791021600000  # 2026-10-03T10:00:00Z, ms
+
+OPENCODE_SCHEMA = """
+CREATE TABLE project (id text PRIMARY KEY, worktree text NOT NULL, vcs text, name text, icon_url text, icon_color text,
+  time_created integer NOT NULL, time_updated integer NOT NULL, time_initialized integer, sandboxes text NOT NULL);
+CREATE TABLE session (id text PRIMARY KEY, project_id text NOT NULL, workspace_id text, parent_id text, slug text NOT NULL,
+  directory text NOT NULL, path text, title text NOT NULL, version text NOT NULL, share_url text, summary_additions integer,
+  summary_deletions integer, summary_files integer, summary_diffs text, metadata text, cost real, tokens_input integer,
+  tokens_output integer, tokens_reasoning integer, tokens_cache_read integer, tokens_cache_write integer, revert text,
+  permission text, agent text, model text, time_created integer NOT NULL, time_updated integer NOT NULL,
+  time_compacting integer, time_archived integer);
+CREATE TABLE message (id text PRIMARY KEY, session_id text NOT NULL, time_created integer NOT NULL,
+  time_updated integer NOT NULL, data text NOT NULL);
+CREATE TABLE part (id text PRIMARY KEY, message_id text NOT NULL, session_id text NOT NULL, time_created integer NOT NULL,
+  time_updated integer NOT NULL, data text NOT NULL);
+CREATE INDEX part_message_id_id_idx ON part (message_id, id);
+CREATE TABLE session_message (id text PRIMARY KEY, session_id text NOT NULL, type text NOT NULL, seq integer NOT NULL,
+  time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL);
+CREATE TABLE credential (id text PRIMARY KEY, provider_id text, type text, name text, value text NOT NULL, account_id text,
+  workspace_id text, active integer, time_created integer NOT NULL, time_updated integer NOT NULL);
+"""
+
+
+def _oc_session(con, sid, project_id, directory, title, t, parent=None, model=None):
+    con.execute("INSERT INTO session (id, project_id, parent_id, slug, directory, title, version, agent, model, "
+                "time_created, time_updated) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (sid, project_id, parent, title.lower().replace(" ", "-"), directory, title, "1.2.0", "build",
+                 json.dumps(model) if model else None, t, t + 5000))
+
+
+def _oc_message(con, mid, sid, t, data):
+    con.execute("INSERT INTO message VALUES (?,?,?,?,?)", (mid, sid, t, t, json.dumps(data)))
+
+
+def _oc_part(con, pid, mid, sid, t, data):
+    con.execute("INSERT INTO part VALUES (?,?,?,?,?,?)", (pid, mid, sid, t, t, json.dumps(data)))
+
+
+def opencode_assistant(t, cwd="/srv/proj", model="claude-sonnet-4", **extra):
+    d = {"role": "assistant", "time": {"created": t, "completed": t + 3000}, "parentID": "msg_01",
+         "modelID": model, "providerID": "anthropic", "mode": "build", "agent": "build",
+         "path": {"cwd": cwd, "root": cwd}, "cost": 0.01,
+         "tokens": {"input": 10, "output": 5, "reasoning": 0, "cache": {"read": 0, "write": 0}}}
+    d.update(extra)
+    return d
+
+
+def build_opencode_db(db: Path, t0: int = OPENCODE_T0) -> None:
+    db.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(db))
+    con.executescript(OPENCODE_SCHEMA)
+    con.execute("INSERT INTO project (id, worktree, vcs, time_created, time_updated, sandboxes) VALUES (?,?,?,?,?,?)",
+                ("proj_a1", "/srv/proj", "git", t0, t0, "[]"))
+    _oc_session(con, OPENCODE_SESSION, "proj_a1", "/srv/proj", "Fix bug", t0)
+    _oc_message(con, "msg_01", OPENCODE_SESSION, t0 + 1000,
+                {"role": "user", "time": {"created": t0 + 1000}, "agent": "build",
+                 "model": {"providerID": "anthropic", "modelID": "claude-sonnet-4"}})
+    _oc_part(con, "prt_01", "msg_01", OPENCODE_SESSION, t0 + 1000, {"type": "text", "text": "list files"})
+    _oc_part(con, "prt_01b", "msg_01", OPENCODE_SESSION, t0 + 1000,
+             {"type": "text", "text": "<system-reminder>plan mode</system-reminder>", "synthetic": True})
+    _oc_message(con, "msg_02", OPENCODE_SESSION, t0 + 2000, opencode_assistant(t0 + 2000))
+    _oc_part(con, "prt_02", "msg_02", OPENCODE_SESSION, t0 + 2000, {"type": "step-start", "snapshot": "abc123"})
+    _oc_part(con, "prt_03", "msg_02", OPENCODE_SESSION, t0 + 2100,
+             {"type": "reasoning", "text": "user wants a listing", "time": {"start": t0 + 2100, "end": t0 + 2200}})
+    _oc_part(con, "prt_04", "msg_02", OPENCODE_SESSION, t0 + 2500,
+             {"type": "tool", "callID": "call_x1", "tool": "bash",
+              "state": {"status": "completed", "input": {"command": "ls"}, "output": "a.txt", "title": "ls",
+                        "metadata": {}, "time": {"start": t0 + 2500, "end": t0 + 3000}}})
+    _oc_part(con, "prt_05", "msg_02", OPENCODE_SESSION, t0 + 3500,
+             {"type": "text", "text": "There is one file, a.txt.", "time": {"start": t0 + 3500, "end": t0 + 3600}})
+    _oc_part(con, "prt_06", "msg_02", OPENCODE_SESSION, t0 + 4000,
+             {"type": "step-finish", "reason": "stop", "cost": 0.01,
+              "tokens": {"input": 10, "output": 5, "reasoning": 0, "cache": {"read": 0, "write": 0}}})
+    # A session present only in the V2 session_message projection.
+    _oc_session(con, OPENCODE_V2_SESSION, "proj_a1", "/srv/proj", "Run tests", t0 + 10000)
+    con.execute("INSERT INTO session_message VALUES (?,?,?,?,?,?,?)",
+                ("msg_v2u", OPENCODE_V2_SESSION, "user", 1, t0 + 11000, t0 + 11000,
+                 json.dumps({"id": "msg_v2u", "time": {"created": t0 + 11000}, "text": "run the tests"})))
+    con.execute("INSERT INTO session_message VALUES (?,?,?,?,?,?,?)",
+                ("msg_v2a", OPENCODE_V2_SESSION, "assistant", 2, t0 + 12000, t0 + 14000, json.dumps(
+                    {"id": "msg_v2a", "agent": "build", "model": {"id": "gpt-5", "providerID": "openai"},
+                     "content": [{"type": "text", "id": "c1", "text": "Running them."},
+                                 {"type": "tool", "id": "call_v2", "name": "bash",
+                                  "state": {"status": "completed", "input": {"command": "pytest -q"},
+                                            "content": [{"type": "text", "text": "3 passed"}], "structured": {}},
+                                  "time": {"created": t0 + 12500, "completed": t0 + 13000}}],
+                     "time": {"created": t0 + 12000, "completed": t0 + 14000}})))
+    con.execute("INSERT INTO credential (id, provider_id, type, name, value, active, time_created, time_updated) "
+                "VALUES (?,?,?,?,?,?,?,?)", ("cred_01", "anthropic", "key", "my key",
+                                             '{"type":"key","key":"sk-ant-REDACT"}', 1, t0, t0))
+    con.commit()
+    con.close()
+
+
+def _json_file(path: Path, record) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2), encoding="utf-8")
+
+
+def build_opencode_storage(storage: Path, t0: int = OPENCODE_T0 - 86400000) -> None:
+    """The legacy JSON tree: ids inline, one file per record."""
+    sid = OPENCODE_LEGACY_SESSION
+    _json_file(storage / "project/proj_a1.json",
+               {"id": "proj_a1", "vcs": "git", "worktree": "/srv/proj", "time": {"created": t0}})
+    _json_file(storage / "session/proj_a1" / (sid + ".json"),
+               {"id": sid, "projectID": "proj_a1", "directory": "/srv/proj", "title": "Old session",
+                "version": "0.9.0", "time": {"created": t0, "updated": t0 + 5000}})
+    _json_file(storage / "message" / sid / "msg_a.json",
+               {"id": "msg_a", "sessionID": sid, "role": "user", "time": {"created": t0 + 1000},
+                "agent": "build", "model": {"providerID": "anthropic", "modelID": "claude-sonnet-4"}})
+    _json_file(storage / "part/msg_a/prt_a1.json",
+               {"id": "prt_a1", "sessionID": sid, "messageID": "msg_a", "type": "text", "text": "cat the secrets file"})
+    _json_file(storage / "message" / sid / "msg_b.json",
+               dict(opencode_assistant(t0 + 2000), id="msg_b", sessionID=sid,
+                    error={"name": "APIError", "data": {"message": "overloaded"}}))
+    _json_file(storage / "part/msg_b/prt_b1.json",
+               {"id": "prt_b1", "sessionID": sid, "messageID": "msg_b", "type": "tool", "callID": "call_r1",
+                "tool": "read", "state": {"status": "error", "input": {"filePath": "/srv/proj/.env"},
+                                          "error": "permission denied", "time": {"start": t0 + 2500, "end": t0 + 2600}}})
+    _json_file(storage / "part/msg_b/prt_b2.json",
+               {"id": "prt_b2", "sessionID": sid, "messageID": "msg_b", "type": "text", "text": "I could not read it.",
+                "time": {"start": t0 + 2700}})
+    (storage / "migration").write_text("2", encoding="utf-8")
+
+
+def build_opencode(home: Path) -> None:
+    data = home / ".local/share/opencode"
+    build_opencode_db(data / "opencode.db")
+    build_opencode_storage(data / "storage")
+    (data / "auth.json").write_text('{"anthropic":{"type":"api","key":"sk-ant-REDACT"}}', encoding="utf-8")
+    _json_file(home / ".config/opencode/opencode.json", {"$schema": "https://opencode.ai/config.json"})
+
+
+def kilo_task_records(t0: int = KILO_T0 - 86400000):
+    return [
+        {"role": "user", "content": [{"type": "text", "text": "<task>fix tests</task>"},
+                                     {"type": "text", "text": "<environment_details>cwd /srv/proj</environment_details>"}],
+         "ts": t0 + 1000},
+        {"role": "assistant", "content": [{"type": "text", "text": "Running the suite."},
+                                          {"type": "tool_use", "id": "toolu_01A", "name": "execute_command",
+                                           "input": {"command": "pytest -q"}}], "ts": t0 + 2000},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_01A", "content": "3 passed",
+                                      "is_error": False}], "ts": t0 + 3000},
+        {"type": "reasoning", "summary": [{"type": "summary_text", "text": "tests pass"}], "ts": t0 + 3500},
+        {"role": "assistant", "content": "All three tests pass.", "ts": t0 + 4000},
+    ]
+
+
+def build_kilo(home: Path) -> None:
+    data = home / ".local/share/kilo"
+    db = data / "kilo.db"
+    db.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(db))
+    con.executescript(OPENCODE_SCHEMA)
+    t0 = KILO_T0
+    con.execute("INSERT INTO project (id, worktree, vcs, time_created, time_updated, sandboxes) VALUES (?,?,?,?,?,?)",
+                ("prj_01JAX", "/srv/proj", "git", t0, t0, "[]"))
+    _oc_session(con, KILO_SESSION, "prj_01JAX", "/srv/proj", "fix tests", t0,
+                model={"id": "claude-sonnet-4-5", "providerID": "anthropic"})
+    _oc_message(con, "msg_01JAXU", KILO_SESSION, t0 + 1000,
+                {"role": "user", "time": {"created": t0 + 1000}, "agent": "build",
+                 "model": {"providerID": "anthropic", "modelID": "claude-sonnet-4-5"}})
+    _oc_part(con, "prt_01JAXP", "msg_01JAXU", KILO_SESSION, t0 + 1000, {"type": "text", "text": "fix the tests"})
+    _oc_message(con, "msg_01JAXA", KILO_SESSION, t0 + 2000, dict(
+        opencode_assistant(t0 + 2000, model="claude-sonnet-4-5"), parentID="msg_01JAXU"))
+    _oc_part(con, "prt_01JAXT", "msg_01JAXA", KILO_SESSION, t0 + 2500,
+             {"type": "tool", "callID": "call_1", "tool": "bash",
+              "state": {"status": "completed", "input": {"command": "pytest -q"}, "output": "3 passed",
+                        "title": "pytest -q", "metadata": {}, "time": {"start": t0 + 2500, "end": t0 + 3000}}})
+    # Kilo writes the V2 projection alongside V1; it must not duplicate the rows.
+    con.execute("INSERT INTO session_message VALUES (?,?,?,?,?,?,?)",
+                ("msg_01JAXB", KILO_SESSION, "assistant", 4, t0 + 2000, t0 + 3000, json.dumps(
+                    {"agent": "build", "model": {"providerID": "anthropic", "modelID": "claude-sonnet-4-5"},
+                     "content": [{"type": "tool", "id": "call_1", "name": "bash",
+                                  "state": {"status": "completed", "input": {"command": "pytest -q"},
+                                            "content": [{"type": "text", "text": "3 passed"}], "structured": {}},
+                                  "time": {"created": t0 + 2500, "completed": t0 + 3000}}],
+                     "time": {"created": t0 + 2000, "completed": t0 + 3000}})))
+    con.commit()
+    con.close()
+    (data / "auth.json").write_text('{"kilo":{"type":"oauth","access":"REDACT"}}', encoding="utf-8")
+    tasks = home / ".config/Code/User/globalStorage/kilocode.kilo-code/tasks"
+    task = tasks / KILO_TASK
+    task.mkdir(parents=True, exist_ok=True)
+    (task / "api_conversation_history.json").write_text(json.dumps(kilo_task_records()), encoding="utf-8")
+    (task / "ui_messages.json").write_text("[]", encoding="utf-8")
+    _json_file(tasks / "_index.json", {"version": 1, "updatedAt": KILO_T0 - 86395000, "entries": [
+        {"id": KILO_TASK, "number": 1, "ts": KILO_T0 - 86400000, "task": "fix tests", "tokensIn": 1200,
+         "tokensOut": 80, "totalCost": 0.0041, "workspace": "/srv/proj", "mode": "code", "status": "completed"}]})

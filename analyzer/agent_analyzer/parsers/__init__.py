@@ -16,6 +16,8 @@ from .continue_dev import ContinueParser
 from .aider import AiderParser, AiderProjectParser
 from .zed import ZedParser
 from .vscode import VsCodeParser
+from .opencode import OpenCodeParser
+from .kilo_code import KiloCodeParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -31,6 +33,8 @@ ALL: List[Parser] = [
     AiderProjectParser(),
     ZedParser(),
     VsCodeParser(),
+    OpenCodeParser(),
+    KiloCodeParser(),
 ]
 
 

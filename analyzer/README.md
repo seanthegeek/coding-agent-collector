@@ -88,6 +88,8 @@ agents and which have parsers.
 | `aider` | `.aider.chat.history.md`, `.aider.input.history`, `.aider.llm.history`, in a home or (as agent `project` in the manifest) a repository; times are host local time, emitted as if UTC | Source at 5dc9490, synthetic fixture |
 | `zed` | `threads/threads.db` (zstd-compressed JSON threads; needs `zstandard`) and `db/0-<channel>/db.sqlite` `sidebar_threads` (external-agent threads as `system` rows) under `.local/share/zed`, `Library/Application Support/Zed`, `AppData/Local/Zed` or the Flatpak data dir. No per-message timestamps: messages carry the thread's `updated_at` | Source at a846890, synthetic fixture |
 | `vscode` | `User/workspaceStorage/<hash>/chatSessions/*.jsonl` and `.json` (with the sibling `workspace.json` for the project), `User/globalStorage/emptyWindowChatSessions/*`, `User/globalStorage/transferredChatSessions/*.json`, for Code, Code - Insiders, VSCodium, Positron, Trae and the `.vscode-server*/data` remote layout. Covers Copilot Chat; its model and participant ids are opaque strings | Source at d7622a5, synthetic fixture |
+| `opencode` | `.local/share/opencode/opencode*.db` (SQLite with JSON columns, WAL sidecars; V1 `message`/`part`, V2 `session_message` for sessions without V1 rows), legacy JSON `storage/session/*/*.json` and `storage/message/*/*.json` with their `part/` files, and the older `project/<slug>/storage/session/` tree | Source at 907b3bc, synthetic fixture |
+| `kilo-code` | `.local/share/kilo/kilo*.db` and `opencode-*.db` plus the same JSON trees under `.local/share/kilo` (OpenCode parser, Kilo paths), and pre-migration VS Code tasks `<globalStorage>/kilocode.kilo-code/tasks/<id>/api_conversation_history.json` | Source at 76bcfd4, synthetic fixture |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
@@ -98,7 +100,7 @@ matching session transcript exists, because they survive session deletion;
 filter on `source_file` to drop them.
 
 Agents detected but not yet parsed: everything else in the catalog. The
-record schemas for Cline, Roo Code, Kilo Code and OpenCode are documented under `research/` and are next in line.
+record schemas for Cline and Roo Code are documented under `research/` and are next in line.
 Windsurf and Cursor need format work first.
 
 Protobuf stores are decoded by `agent_analyzer/protobuf.py`, a small
