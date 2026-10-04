@@ -13,7 +13,7 @@ from .gemini_cli import GeminiCliParser
 from .crush import CrushParser
 from .goose import GooseParser
 from .continue_dev import ContinueParser
-from .aider import AiderParser, AiderProjectParser
+from .aider import AiderParser
 from .zed import ZedParser
 from .vscode import VsCodeParser
 from .opencode import OpenCodeParser
@@ -32,7 +32,6 @@ ALL: List[Parser] = [
     GooseParser(),
     ContinueParser(),
     AiderParser(),
-    AiderProjectParser(),
     ZedParser(),
     VsCodeParser(),
     OpenCodeParser(),

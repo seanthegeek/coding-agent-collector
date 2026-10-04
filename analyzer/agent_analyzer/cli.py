@@ -153,21 +153,36 @@ def cmd_detect(args: argparse.Namespace, col: Collection) -> int:
 
 # ---- timeline -------------------------------------------------------------------
 
+# Agent name the collector gives to files found through PROJECT_CATALOG inside
+# a discovered repository. Such a file may belong to any agent (Crush's
+# .crush/crush.db, Aider's .aider.chat.history.md), so it is offered to every
+# parser instead of to the parsers of one agent.
+PROJECT_AGENT = "project"
+
+
+def parsers_for(artifact, parsers: Dict[str, list]) -> list:
+    if artifact.agent == PROJECT_AGENT:
+        return ALL
+    return parsers.get(artifact.agent, [])
+
+
 def collect_rows(col: Collection, opts: Options, agents: List[str]) -> Tuple[List[Row], Counter, List[str]]:
     parsers = by_agent()
     rows: List[Row] = []
     counts: Counter = Counter()
     problems: List[str] = []
     for a in col.artifacts:
-        if agents and a.agent not in agents:
-            continue
-        for p in parsers.get(a.agent, []):
+        for p in parsers_for(a, parsers):
+            # Filter on the parser's agent, so --agent aider also takes the
+            # repository-level Aider files the manifest calls `project`.
+            if agents and p.agent not in agents:
+                continue
             if not p.wants(a):
                 continue
             try:
                 for row in p.parse(a, opts):
                     rows.append(row)
-                    counts[(a.agent, row.turn_type)] += 1
+                    counts[(p.agent, row.turn_type)] += 1
             except OSError as e:
                 problems.append("%s: %s" % (a.original, e))
     rows.sort(key=lambda r: (r.timestamp_utc == "", r.timestamp_utc, r.source_file, r.source_line))

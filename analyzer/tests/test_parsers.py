@@ -8,7 +8,7 @@ from pathlib import Path
 from agent_analyzer import catalog, cli
 from agent_analyzer.inputs import open_input
 from agent_analyzer.model import summarise
-from agent_analyzer.parsers import Options
+from agent_analyzer.parsers import Options, by_agent
 from agent_analyzer.parsers.claude_code import ClaudeCodeParser, tool_summary
 from agent_analyzer.parsers.codex import CodexParser
 from agent_analyzer.timeutil import to_utc
@@ -205,6 +205,86 @@ class TimelineTests(ParserBase):
         with open(out / "timeline.csv", encoding="utf-8", newline="") as fh:
             rows = list(csv.DictReader(fh))
         self.assertEqual({r["agent"] for r in rows}, {"codex-cli"})
+
+
+class ProjectRoutingTests(unittest.TestCase):
+    """Round trip through the sh collector: files the collector finds inside a
+    discovered repository are recorded with agent `project`, and the CLI
+    offers them to every parser, so Crush and Aider rows come out of them."""
+
+    def setUp(self):
+        self.cat = catalog.load()
+        self.tmp = Path(tempfile.mkdtemp(prefix="cac-analyzer-test-"))
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _collect(self) -> Path:
+        import subprocess
+        collector = Path(__file__).resolve().parents[2] / "collectors" / "collect-agent-artifacts.sh"
+        if not collector.exists() or shutil.which("sh") is None or shutil.which("tar") is None:
+            self.skipTest("collector or sh/tar not available")
+        from fixtures import CRUSH_SCHEMA, _wal_db, build_aider, build_image, crush_records
+        root = build_image(self.tmp / "image")
+        # Claude Code's history names /srv/proj, so the collector discovers it.
+        proj = root / "srv/proj"
+        build_aider(proj)
+        _wal_db(proj / ".crush/crush.db", CRUSH_SCHEMA, crush_records())
+        out = self.tmp / "out"
+        out.mkdir()
+        r = subprocess.run(["sh", str(collector), "-r", str(root), "-o", str(out), "-q", "--no-live"],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        archives = list(out.glob("*.tar.gz"))
+        self.assertEqual(len(archives), 1, list(out.iterdir()))
+        return archives[0]
+
+    def _timeline(self, archive: Path, *extra: str):
+        import contextlib
+        out = self.tmp / ("tl%d" % len(list(self.tmp.glob("tl*"))))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cli.main(["timeline", str(archive), "-o", str(out)] + list(extra))
+        self.assertEqual(rc, 0, buf.getvalue())
+        with open(out / "timeline.csv", encoding="utf-8", newline="") as fh:
+            return list(csv.DictReader(fh)), buf.getvalue()
+
+    def test_project_artifacts_reach_their_parsers(self):
+        archive = self._collect()
+        col = open_input(archive, self.cat)
+        try:
+            project_rels = {a.rel for a in col.artifacts if a.agent == "project"}
+        finally:
+            col.cleanup()
+        self.assertIn(".crush/crush.db", project_rels)
+        self.assertIn(".aider.chat.history.md", project_rels)
+
+        rows, summary = self._timeline(archive)
+        from_project = [r for r in rows if "/srv/proj/" in r["source_file"]]
+        self.assertEqual({r["agent"] for r in from_project}, {"crush", "aider"})
+        self.assertTrue(any(r["source_file"].endswith("/srv/proj/.crush/crush.db") and r["turn_type"] == "user"
+                            for r in from_project))
+        self.assertTrue(any(r["source_file"].endswith("/srv/proj/.aider.chat.history.md") and r["turn_type"] == "user"
+                            for r in from_project))
+        self.assertNotIn("project", {r["agent"] for r in rows})
+        self.assertNotIn("parsed project", summary)
+
+        # --agent filters on the parser's agent, so repository files come along.
+        rows, _ = self._timeline(archive, "--agent", "aider")
+        self.assertEqual({r["agent"] for r in rows}, {"aider"})
+        self.assertTrue(any(r["source_file"].endswith("/srv/proj/.aider.chat.history.md") for r in rows))
+
+    def test_detect_does_not_call_project_parsed(self):
+        archive = self._collect()
+        col = open_input(archive, self.cat)
+        try:
+            table = cli.detect_table(col)
+        finally:
+            col.cleanup()
+        project = [r for r in table if r["agent"] == "project"]
+        self.assertTrue(project)
+        self.assertFalse(any(r["parser"] for r in project))
+        self.assertNotIn("project", by_agent())
 
 
 if __name__ == "__main__":
@@ -714,7 +794,7 @@ class GooseTests(ParserBase):
 
 
 from agent_analyzer.parsers.continue_dev import ContinueParser, load_session
-from agent_analyzer.parsers.aider import AiderParser, AiderProjectParser
+from agent_analyzer.parsers.aider import AiderParser
 from fixtures import CONTINUE_SESSION, build_aider
 
 
@@ -862,7 +942,7 @@ class AiderTests(ParserBase):
         self.assertEqual({r.session_id for r in rows},
                          {"/srv/proj/.aider.chat.history.md#2026-10-02 12:00:00",
                           "/srv/proj/.aider.chat.history.md#2026-10-02 13:00:00"})
-        self.assertFalse(AiderProjectParser().wants(next(a for a in col.artifacts if a.rel == ".aider.conf.yml")))
+        self.assertFalse(AiderParser().wants(next(a for a in col.artifacts if a.rel == ".aider.conf.yml")))
 
 
 import importlib.util  # noqa: E402
