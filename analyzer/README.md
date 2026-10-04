@@ -112,8 +112,11 @@ parser's agent, so `--agent aider` also includes a repository's
 
 Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
-`augment` and `ollama`, plus the `shared` and `shell-history` entries, which
-are not agents. Windsurf and Cursor need format work first.
+`augment`, `ollama`, `pearai`, `cody`, `twinny`, `tabby`,
+`open-interpreter`, `openhands`, `pi`, `little-coder`, `letta`, `hermes`,
+`openclaw`, `nanobot`, `agent-zero`, `shellgpt` and `local-deep-research`,
+plus the `shared` and `shell-history` entries, which are not agents.
+Windsurf and Cursor need format work first.
 
 Protobuf stores are decoded by `agent_analyzer/protobuf.py`, a small
 schema-driven wire decoder, from field tables written into each parser. For

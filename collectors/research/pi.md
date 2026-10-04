@@ -146,57 +146,7 @@ Exports land in the cwd by default: `/export` HTML as
 - `crashes.json`: `cwd` and `sessionFile` per record ([`crash-log.ts:6-15`](https://github.com/earendil-works/pi/blob/200387122ca450d6387f033949423114a270b96c/packages/coding-agent/src/core/crash-log.ts#L6-L15)).
 - `experimental/sessions/*/meta.json`: `cwd` ([`session-catalog.ts:6-13`](https://github.com/earendil-works/pi/blob/200387122ca450d6387f033949423114a270b96c/packages/coding-agent/src/experimental/session-catalog.ts#L6-L13)).
 
-## 7. Catalog proposal
-
-`pi|.pi` covers `~/.pi/agent` and `~/.pi/server` on every OS, Windows
-images included. little-coder's prompt-history line stays nested and claims
-its file.
-
-```
-# pi (earendil-works; same path on every OS; little-coder uses it too)
-pi|.pi
-```
-
-```
-project|.pi
-project|pi-session-*.html
-```
-
-```
-.pi/agent/bin
-.pi/agent/tools/fd*
-.pi/agent/tools/rg*
-.pi/agent/tmp
-.pi/agent/npm/node_modules
-.pi/agent/git/*/node_modules
-.pi/agent/git/*/.git
-.pi/npm/node_modules
-.pi/git/*/node_modules
-.pi/git/*/.git
-.pi/server/*.sock
-```
-
-```
-.pi/agent/auth.json
-.pi/agent/auth.json.*
-.pi/agent/mcp-auth.json
-.pi/agent/oauth.json*
-.pi/agent/models.json
-.pi/agent/mcp.json
-.pi/mcp.json
-```
-
-Discovery sources:
-
-```
-.pi/agent/sessions/*/*.jsonl                first line "cwd"
-.pi/agent/*.jsonl                           first line "cwd"   (v0.30.0 misplaced sessions)
-.pi/agent/trust.json                        object keys (absolute paths)
-.pi/agent/crashes.json                      cwd
-.pi/agent/experimental/sessions/*/meta.json cwd
-```
-
-## 8. Confidence
+## 7. Confidence
 
 High: the agent directory, its override, every file name above, the session
 directory encoding and file naming, credential file shapes, project `.pi`

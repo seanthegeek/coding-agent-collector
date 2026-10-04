@@ -132,44 +132,7 @@ instructions file of its own.
   `workspaceStorage/<id>/workspace.json` that holds Twinny's per-workspace
   state.
 
-## 7. Catalog proposal
-
-```
-twinny|.twinny
-twinny|.config/*/User/globalStorage/rjmacarthy.twinny
-twinny|Library/Application Support/*/User/globalStorage/rjmacarthy.twinny
-twinny|AppData/Roaming/*/User/globalStorage/rjmacarthy.twinny
-twinny|.*-server*/data/User/globalStorage/rjmacarthy.twinny
-```
-
-```
-# no project files
-```
-
-```
-.twinny/embeddings/*/chunks.lance
-.twinny/server/plugins/*/repos/*/checkout
-.twinny/server/plugins/*/repos/*/index
-```
-
-```
-*/User/globalStorage/rjmacarthy.twinny/twinny-providers.json
-.twinny/node/identity.json
-.twinny/server/license
-.twinny/server/plugins/*/settings.json
-```
-
-Discovery sources:
-
-```
-.twinny/embeddings/*/manifest.json  files{} keys (absolute file paths; root is their common prefix)
-```
-
-The nested `globalStorage` entries mirror Cline and Continue and exist for
-attribution and the secret flag; the chats stay in `state.vscdb` under
-`vscode`, so the analyzer must read that row for `twinny`.
-
-## 8. Confidence
+## 7. Confidence
 
 High: extension id, `globalState` keys, the provider file name and
 setting, `~/.twinny` subpaths, gateway data directory layout, secret storage

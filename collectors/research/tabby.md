@@ -121,38 +121,7 @@ Repositories to index are named in `config.toml` or in the database.
   ([crates/tabby-common/src/api/event.rs:81-98](https://github.com/TabbyML/tabby/blob/21b29048d7bcf6b94f9f482f2d0fd05efadfd19f/crates/tabby-common/src/api/event.rs#L81-L98)); these are repository
   identities, not local roots.
 
-## 7. Catalog proposal
-
-```
-tabby|.tabby
-tabby|.tabby-client
-tabby|.config/JetBrains/*/options/intellij-tabby*.xml
-tabby|Library/Application Support/JetBrains/*/options/intellij-tabby*.xml
-tabby|AppData/Roaming/JetBrains/*/options/intellij-tabby*.xml
-```
-
-```
-# no project files
-```
-
-```
-.tabby/models
-.tabby/index
-.tabby/repositories
-```
-
-```
-.tabby/config.toml
-.tabby-client/agent/config.toml
-```
-
-Discovery sources:
-
-```
-.tabby/config.toml  git_url = "file://..."
-```
-
-## 8. Confidence
+## 7. Confidence
 
 High: `~/.tabby` layout, env overrides, database file names, WAL,
 pre-migration backups, table columns, event file naming and fields,

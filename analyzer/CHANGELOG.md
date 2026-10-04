@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Detection of the fifteen agents added in collector 1.4.0: `pearai`,
+  `cody`, `twinny`, `tabby`, `open-interpreter`, `openhands`, `pi`,
+  `little-coder`, `letta`, `hermes`, `openclaw`, `nanobot`, `agent-zero`,
+  `shellgpt` and `local-deep-research`, from the regenerated catalog copy.
+
 ## [0.3.1] - 2026-10-04
 
 ### Fixed

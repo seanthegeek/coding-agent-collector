@@ -145,7 +145,7 @@ macOS, Linux, Windows and disk images of each. The tables are byte-identical
 between the sh single-quoted strings and the PowerShell `@'...'@`
 here-strings; `collectors/tests/catalog-sync.sh` fails on any drift, and `--list` and
 `-List` must print identical output. Glob semantics are shared: catalog
-globs do not cross `/`, exclusion and secret globs do, and `[...]` classes
+globs do not cross `/`, exclusion and secret globs do, and `[...]` and `[!...]` classes
 work in both (the PowerShell side converts globs to regexes). Exclusion and secret globs are matched
 relative to the collection base, a home directory or a discovered project,
 so one pattern such as `.claude/worktrees` applies in both places; write them

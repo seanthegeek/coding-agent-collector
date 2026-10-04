@@ -165,10 +165,12 @@ No keychain use found.
 
 ## 4. Exclusions
 
-`.openhands/cache` (git clones of skill and plugin sources). Candidate:
+`.openhands/cache` (git clones of skill and plugin sources), and
 `.openhands/agent-canvas/workspaces`, which can hold whole repositories the
-agent cloned, but is also the agent's work product for scratch
-conversations; exclude by default only if `--full` brings it back.
+agent cloned. It is also the agent's work product for scratch
+conversations, so it is excluded by default like `.claude/worktrees` and
+`.codex/worktrees`, recorded as `skipped_excluded` with its size, and
+collected with `--full`.
 `.openhands/agent-canvas/tmux` holds sockets only. Keep `bash_events`,
 `runtime-data` (container `HOME`, may hold shell history) and `logs`.
 
@@ -195,51 +197,7 @@ database.
   ([`locations.py:34-42`](https://github.com/OpenHands/OpenHands-CLI/blob/954f2ba646e8d749261a8f2b2b7e3031fa39be9f/openhands_cli/locations.py#L34-L42)); not reversible, but checkable
   against a candidate path.
 
-## 7. Catalog proposal
-
-```
-openhands|.openhands
-openhands|Library/Application Support/OpenHands Agent Canvas
-openhands|.config/OpenHands Agent Canvas
-openhands|AppData/Roaming/OpenHands Agent Canvas
-```
-
-```
-project|.openhands
-```
-
-```
-.openhands/cache
-.openhands/agent-canvas/workspaces
-.openhands/agent-canvas/tmux
-```
-
-```
-.openhands/agent-canvas/secret-key.txt
-.openhands/agent-canvas/api-key.txt
-.openhands/settings.json
-.openhands/secrets.json
-.openhands/profiles/*
-.openhands/provider-connections/*
-.openhands/auth/*
-.openhands/runtime-control/*
-.openhands/agent_settings.json
-.openhands/cloud/*
-.openhands/mcp.json
-.openhands/.jwt_secret
-.openhands/.keys
-```
-
-Discovery:
-
-```
-.openhands/workspaces.json  path
-.openhands/agent-canvas/dev_conversations/*/meta.json  working_dir
-.openhands/agent-canvas/conversations/*/meta.json  working_dir
-.openhands/conversations/*/base_state.json  working_dir
-```
-
-## 8. Confidence
+## 7. Confidence
 
 High: every path in sections 2-3 under `~/.openhands` (constants and env
 defaults in the cited files), the Fernet scheme, the Docker-runtime bind

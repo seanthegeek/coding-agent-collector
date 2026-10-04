@@ -12,8 +12,8 @@ claim rests on, is one document per agent under
 
 VS Code, VSCodium and their forks are collected through their `User`
 directories, which hold Copilot Chat sessions and extension state. The
-globalStorage of the Cline, Roo Code, Kilo Code and Continue extensions is
-claimed by nested catalog entries, so those files are attributed to the
+globalStorage of the Cline, Roo Code, Kilo Code, Continue, Sourcegraph Cody
+and Twinny extensions is claimed by nested catalog entries, so those files are attributed to the
 extension's agent rather than to the editor, whichever editor they sit in. Shell histories and shared cross-agent
 directories such as `~/.agents` and `~/.env` are collected too.
 
@@ -135,11 +135,28 @@ root markers, Antigravity's history, trusted workspaces and project cache,
 Crush's project list, Goose legacy session files and the desktop app's recent
 directories, OpenCode's legacy project store, Cursor CLI chat and ACP session
 metadata, Copilot CLI session workspaces, Amp history, Factory Droid sessions,
-Kiro CLI sessions and workspace roots, and VS Code family workspace storage
-including the remote server data directories. Each project is attributed to
-the user whose state referenced it. Agents that only record the project path
-inside SQLite (Zed, Goose, OpenCode, Kilo Code, Kiro CLI) are left to the
-analyst-side parser, as are Codex rollouts compressed with zstd.
+Kiro CLI sessions and workspace roots, VS Code family workspace storage
+including the remote server data directories, Hermes checkpoint project
+records, Letta session index and local-backend transcripts, pi session
+headers, trusted folders, crash log and experimental session metadata (which
+also cover little-coder), Open Interpreter rollouts, OpenHands workspaces and
+conversation metadata, PearAI sessions, OpenClaw workspace and agent
+directories from its JSON5 config, nanobot workspace markers and config,
+Tabby `file://` repositories, and the common directory of the files in each
+Twinny embeddings manifest. Each project is attributed to the user whose
+state referenced it. Agents that only record the project path inside SQLite
+(Zed, Goose, OpenCode, Kilo Code, Kiro CLI, Hermes `state.db` and
+`projects.db`, OpenClaw `openclaw.sqlite`, Tabby `ee/db.sqlite`, the PearAI
+Roo fork in `state.vscdb`) are left to the analyst-side parser, as are Codex
+and Open Interpreter rollouts compressed with zstd.
+
+Most agents keep their state in a dot directory, but a few do not: Agent
+Zero lives in its install directory (`~/agent-zero`, `~/Desktop/agent-zero`),
+and Local Deep Research writes reports under `~/Documents/LocalDeepResearch`.
+ShellGPT keeps its chat history in the system temp directory (`/tmp` on
+Linux, `/var/folders/.../T` on macOS), which no home-relative catalog entry
+can reach, so on Linux and macOS it is not collected and must be copied by
+hand; the Windows locations under `AppData/Local/Temp` are collected.
 
 Remote development state is collected too: `~/.vscode-server`,
 `~/.cursor-server`, `~/.windsurf-server`, `~/.devin-server` and
@@ -186,6 +203,15 @@ Exclusion and credential patterns are matched relative to the directory being
 collected, a home or a discovered project, and `*` in them crosses `/`. The
 same `.claude/worktrees` pattern therefore prunes both `~/.claude/worktrees`
 and a project's `.claude/worktrees`.
+
+An exclusion wins over a credential pattern. An excluded directory is pruned
+from the walk before any file in it is looked at, so a credential file inside
+it is never collected or flagged; it is covered only by the directory's
+`skipped_excluded` row. Exclusions are therefore written so that they do not
+cover credential files: Hermes' installer checkout is excluded entry by entry
+(`.hermes/hermes-agent/[!.]*` and `.hermes/hermes-agent/.[!e]*`) so that
+`hermes-agent/.env` is still collected. `[!...]` negated classes work in both
+collectors.
 
 ## Output
 

@@ -123,9 +123,16 @@ for discovery.
 `state-snapshots/` and `backups/` are large but hold older copies of
 `state.db`. Sessions are pruned after 90 days of inactivity by default
 ([`hermes_cli/config_defaults.py:2276-2285`](https://github.com/NousResearch/hermes-agent/blob/8b66a51036c1e20920a17cdd049fdf55c968d683/hermes_cli/config_defaults.py#L2276-L2285)), so these copies may be the only
-record of deleted sessions. The proposal excludes them by default; use
+record of deleted sessions. The catalog excludes them by default; use
 `--full` when deletion is suspected. They also contain `.env` and
 `auth.json`. `cache/` is not excluded: `cache/terminal` holds tool output.
+
+The installer checkout is excluded entry by entry rather than as one
+directory (`hermes-agent/[!.]*` and `hermes-agent/.[!e]*`), because an
+exclusion wins over a secret glob: pruning the whole tree would lose
+`hermes-agent/.env`, which is collected and flagged. The exclusion and
+secret globs are anchored to `.hermes*/` and `AppData/Local/hermes*/`, so
+they cover profiles and suffixed homes without matching unrelated paths.
 
 ## 5. Project-local files
 
@@ -151,109 +158,15 @@ record of deleted sessions. The proposal excludes them by default; use
 - `projects.db` tables `projects.primary_path` and `project_folders.path`
   ([`hermes_cli/projects_db.py:29-49`](https://github.com/NousResearch/hermes-agent/blob/8b66a51036c1e20920a17cdd049fdf55c968d683/hermes_cli/projects_db.py#L29-L49)). SQLite only.
 
-## 7. Catalog proposal
-
-```
-# Hermes Agent (Nous Research)
-hermes|.hermes
-hermes|.hermes_*
-hermes|AppData/Local/hermes
-hermes|AppData/Local/hermes_*
-hermes|.config/Hermes
-hermes|Library/Application Support/Hermes
-hermes|AppData/Roaming/Hermes
-```
-
-```
-project|.hermes.md
-project|HERMES.md
-project|.hermes
-project|trajectory_samples.jsonl
-project|failed_trajectories.jsonl
-```
-
-```
-.hermes/hermes-agent
-AppData/Local/hermes/hermes-agent
-*hermes*/models
-*hermes*/runtimes
-*hermes*/node
-*hermes*/installs
-*hermes*/tools
-*hermes*/sandboxes
-*hermes*/checkpoints/store/objects
-*hermes*/checkpoints/store/indexes
-*hermes*/checkpoints/legacy-*
-*hermes*/state-snapshots
-*hermes*/backups
-*hermes*/browser-profile
-*hermes*/browser-profiles
-*hermes*/browser_profiles
-*hermes*/chrome-debug
-*hermes*/bot-desktop/browser-profile
-*hermes*/plugins/*/node_modules
-*hermes*/plugins/*/.venv
-*/Hermes/Cache
-*/Hermes/Code Cache
-*/Hermes/GPUCache
-```
-
-```
-*hermes*/.env
-*hermes*/.env.bak*
-*hermes*/.op.env
-*hermes*/npmrc
-*hermes*/auth.json
-*hermes*/auth.json.*
-*hermes*/auth/*
-*hermes*/.anthropic_oauth.json
-*hermes*/.copilot_jwt.json
-*hermes*/google_*.json
-*hermes*/google_chat_user_tokens/*
-*hermes*/slack_tokens.json
-*hermes*/honcho.json
-*hermes*/mem0.json
-*hermes*/webhook_subscriptions.json
-*hermes*/teams_pipeline_store.json
-*hermes*/mcp-tokens/*
-*hermes*/vault/*
-*hermes*/browser_auth/*
-*hermes*/pairing/*
-*hermes*/platforms/pairing/*
-*hermes*/whatsapp/session/*
-*hermes*/platforms/whatsapp/session/*
-*hermes*/matrix/store/*
-*hermes*/platforms/matrix/store/*
-*hermes*/cache/bws_cache*.json
-*hermes*/weixin/accounts/*
-*hermes*/runtime/photon-sidecar.json
-*hermes*/proxy/*
-*hermes*/home/*
-```
-
-Discovery sources:
-
-```
-.hermes/checkpoints/store/projects/*.json                        workdir
-.hermes/profiles/*/checkpoints/store/projects/*.json             workdir
-AppData/Local/hermes/checkpoints/store/projects/*.json           workdir
-```
-
-The `*hermes*` prefix (exclusion and secret globs cross `/`) covers
-`.hermes`, `AppData/Local/hermes`, the suffixed variants and every
-`profiles/<name>/` home; tighten it if it over-matches. `hermes-agent/.env`
-sits inside an excluded tree; the integrator should check whether a secret
-glob can claim a file under an exclusion, otherwise it is lost without
-`--full`.
-
-## 8. Confidence
+## 7. Confidence
 
 High: home resolution, profile layout, `state.db` and every file named in
 sections 2 and 3 (source constants). High: backup exclusion list as a guide to
 size. Medium: the desktop `userData` path, which follows the Electron default
 from `productName` rather than an explicit `setPath` for stable builds
-([`apps/desktop/electron/product-identity.ts:26-47`](https://github.com/NousResearch/hermes-agent/blob/8b66a51036c1e20920a17cdd049fdf55c968d683/apps/desktop/electron/product-identity.ts#L26-L47)). Medium: whether the
-`*hermes*` exclusion prefix matches unrelated directories in practice. Not
+([`apps/desktop/electron/product-identity.ts:26-47`](https://github.com/NousResearch/hermes-agent/blob/8b66a51036c1e20920a17cdd049fdf55c968d683/apps/desktop/electron/product-identity.ts#L26-L47)). The `*hermes*`
+prefixes first proposed for the exclusion and secret globs were tightened to
+`.hermes*/` and `AppData/Local/hermes*/` at integration. Not
 determined: the exact sizes of `state-snapshots` and `cache/scratch` on a
 real install; the format of `auth.json` beyond "OAuth provider credentials"
 ([`configuration.md:25`](https://github.com/NousResearch/hermes-agent/blob/8b66a51036c1e20920a17cdd049fdf55c968d683/website/docs/user-guide/configuration.md#L25)); Termux installs, which come from APT

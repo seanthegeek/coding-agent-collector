@@ -54,47 +54,6 @@ With the default API backend, agents and messages live on the server (Letta Clou
 - `~/.letta/lc-local-backend/conversations/*/messages.jsonl` first line, key `cwd` ([local-transcript.ts:236-246](https://github.com/letta-ai/letta-code/blob/77faf36e34378946c8e69c0bfaa5595a7be4c326/src/backend/local/local-transcript.ts#L236-L246)).
 - `~/.letta/projects/<dir>/`: the cwd with the leading separator dropped and `/`, `\`, `:` and whitespace turned into `_` (lossy).
 
-## 7. Catalog proposal
+## 7. Confidence
 
-```
-letta|.letta
-letta|.config/letta
-letta|.memgpt
-```
-
-```
-project|.letta
-project|.skills
-```
-
-```
-.letta/bin
-.letta/mod-cache
-.letta/tool_execution_dir
-.letta/chroma
-.memgpt/chroma
-```
-
-```
-.letta/settings.json
-.letta/pg_uri
-.letta/credentials
-.letta/lc-local-backend/providers/auth.json
-.letta/channels/*/accounts.json
-.letta/channels/whatsapp/auth/*
-.letta/agents/*/memory/.git/config
-.letta/agents/*/memory/.git/letta-credential-helper.cmd
-.config/letta/settings.json
-.memgpt/credentials
-```
-
-Discovery:
-
-```
-.letta/sessions.jsonl  project
-.letta/lc-local-backend/conversations/*/messages.jsonl  cwd
-```
-
-## 8. Confidence
-
-High: every Letta Code path, the keychain fallback, the credential helper, the local-backend layout (source). High: V1 `~/.letta/sqlite.db` at 0.11.7 and `~/.memgpt` at 0.3.25. Medium: the release in which V1 dropped SQLite (between 0.11.7 and the archive head, not bisected). Not determined: the Letta Desktop app's Electron data directory (not in either repository); the contents of `workflows/executions` and `reflection-arena`; whether mods install `node_modules`; `.letta/settings.json` matching the secret glob also flags a project's `.letta/settings.json`, which holds hooks, not keys.
+High: every Letta Code path, the keychain fallback, the credential helper, the local-backend layout (source). High: V1 `~/.letta/sqlite.db` at 0.11.7 and `~/.memgpt` at 0.3.25. Medium: the release in which V1 dropped SQLite (between 0.11.7 and the archive head, not bisected). Not determined: the Letta Desktop app's Electron data directory (not in either repository); the contents of `workflows/executions` and `reflection-arena`; whether mods install `node_modules`. Accepted: the `.letta/settings.json` secret glob also flags a project's `.letta/settings.json`, which holds hooks, not keys; flagging it is harmless.

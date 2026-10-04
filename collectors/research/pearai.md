@@ -192,65 +192,7 @@ which the catalog already collects as `roo-code` and `cline`.
   SQLite only.
 - Editor: `User/workspaceStorage/*/workspace.json` as in VS Code.
 
-## 7. Catalog proposal
-
-```
-# PearAI (VS Code fork; ~/.pearai is both the editor's extension dir and the Continue fork's home)
-pearai|.pearai
-pearai|.config/PearAI/User
-pearai|.config/PearAI/logs
-pearai|.config/pearai/User
-pearai|Library/Application Support/PearAI/User
-pearai|Library/Application Support/PearAI/logs
-pearai|AppData/Roaming/PearAI/User
-pearai|AppData/Roaming/PearAI/logs
-pearai|.pearai-server/data/User
-```
-
-```
-project|.pearairc.json
-project|.pearaiignore
-project|.pearai-agent
-project|.pearai-agent-ignore
-project|.pearai-agent-modes
-```
-
-```
-.pearai/extensions
-.pearai/index/lancedb
-.pearai/index/*.sqlite
-.pearai/types
-.pearai/out
-.pearai/node_modules
-.pearai/.diffs
-.pearai/.migrations
-.pearai/dev_data/devdata.sqlite
-*/User/globalStorage/pearai.pearai-roo-cline/checkpoints
-*/User/globalStorage/pearai.pearai-roo-cline/tasks/*/checkpoints
-*/User/globalStorage/pearai.pearai-roo-cline/cache
-```
-
-```
-.pearai/config.json
-.pearai/config.ts
-.pearai/.env
-.pearai/.configs/*/config.js*
-*/globalStorage/pearai.pearai-roo-cline/settings/pearai_agent_mcp_settings.json
-.pearai-agent/mcp.json
-```
-
-Discovery sources:
-
-```
-.pearai/sessions/sessions.json  workspaceDirectory
-```
-
-No nested entries are needed: the `User` lines above are PearAI's own, and
-the globalStorage folders of real Continue, Cline or Roo Code installed into
-PearAI are already claimed by the existing `*/User/globalStorage/...`
-nested entries.
-
-## 8. Confidence
+## 7. Confidence
 
 High: editor directory names and remote server directory (product.json and
 the path resolver); `~/.pearai` layout of the Continue fork; Roo fork

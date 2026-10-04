@@ -51,43 +51,6 @@ None. LDR is not a coding agent and does not write into repositories.
 
 Nowhere. LDR has no project concept. The research query (`research_history.query`) is inside the encrypted database.
 
-## 7. Catalog proposal
-
-```
-local-deep-research|.local/share/local-deep-research
-local-deep-research|Library/Application Support/local-deep-research
-local-deep-research|AppData/Local/local-deep-research
-local-deep-research|Documents/LocalDeepResearch
-```
-
-```
-(none)
-```
-
-```
-.local/share/local-deep-research/cache
-.local/share/local-deep-research/models
-.local/share/local-deep-research/journal_data
-.local/share/local-deep-research/library
-Library/Application Support/local-deep-research/cache
-Library/Application Support/local-deep-research/models
-Library/Application Support/local-deep-research/journal_data
-Library/Application Support/local-deep-research/library
-AppData/Local/local-deep-research/local-deep-research/cache
-AppData/Local/local-deep-research/local-deep-research/models
-AppData/Local/local-deep-research/local-deep-research/journal_data
-AppData/Local/local-deep-research/local-deep-research/library
-Documents/LocalDeepResearch/Library
-```
-
-```
-.local/share/local-deep-research/.secret_key
-Library/Application Support/local-deep-research/.secret_key
-AppData/Local/local-deep-research/local-deep-research/.secret_key
-```
-
-Discovery: none.
-
-## 8. Confidence
+## 7. Confidence
 
 High: data directory resolution on all three OSes, every file name, encryption scheme and key storage (source). High: the Windows doubled `local-deep-research` segment, from platformdirs `_append_parts` (the pinned 4.5 line was not checked separately). Medium: the pre-1.0 `ldr.db` location (docs only, no older tag read). Not determined: contents of `config/config.toml`; whether `Documents` is redirected (OneDrive) on Windows, which would move the library; Docker volume paths, which no home-relative entry covers.

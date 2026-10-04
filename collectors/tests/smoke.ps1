@@ -104,6 +104,414 @@ Mk 'Users/alice/.local/share/amp/history.jsonl' '{"cwd":"C:\\ampproj","prompt":"
 Mk 'ampproj/.amp/settings.json' 'amp'
 Mk 'kiloproj/.kilo/worktrees/w1/f' 'wt'
 Mk 'Users/alice/.cline/data/sessions/s1/s2.json' '{"cwd":"C:\\kiloproj"}'
+# 1.4.0 catalog round (2026-10-04): sixteen agents from the October 2026 backlog.
+# Same case list as smoke.sh: kind|agent|path relative to alice's profile.
+$Cases14 = @'
+excl||.pearai/extensions
+excl||.pearai/index/lancedb
+excl||.pearai/types
+excl||.pearai/out
+excl||.pearai/node_modules
+excl||.pearai/.diffs
+excl||.pearai/.migrations
+excl||.config/pearai/User/globalStorage/pearai.pearai-roo-cline/checkpoints
+excl||.config/pearai/User/globalStorage/pearai.pearai-roo-cline/tasks/t1/checkpoints
+excl||.config/pearai/User/globalStorage/pearai.pearai-roo-cline/cache
+exclf||.pearai/index/codebase.sqlite
+exclf||.pearai/dev_data/devdata.sqlite
+secret||.pearai/config.json
+secret||.pearai/config.ts
+secret||.pearai/.env
+secret||.pearai/.configs/c1/config.json
+secret||.config/pearai/User/globalStorage/pearai.pearai-roo-cline/settings/pearai_agent_mcp_settings.json
+agent|pearai|.config/pearai/User/globalStorage/state.vscdb
+agent|pearai|.pearai/sessions/s1.json
+exclf||.config/Code/User/globalStorage/sourcegraph.cody-ai/symf/symf-v0.0.16
+exclf||.local/share/Cody-nodejs/symf/symf-v0.0.16
+exclf||Library/Application Support/Cody-nodejs/Data/symf/symf-v0.0.16
+excl||.local/share/Cody-nodejs/dist
+excl||AppData/Roaming/Cody-nodejs/Config/dist
+secret||.config/Cody-nodejs/user-settings.json
+secret||AppData/Roaming/Cody-nodejs/Config/user-settings.json
+agent|cody|.config/Code/User/globalStorage/sourcegraph.cody-ai/symf/indexroot/meta.json
+agent|cody|.vscode/cody.json
+agent|cody|.local/share/Cody-nodejs/JetBrains-globalState/cody-local-chatHistory-v2
+excl||.twinny/embeddings/ws/chunks.lance
+excl||.twinny/server/plugins/p1/repos/r1/checkout
+excl||.twinny/server/plugins/p1/repos/r1/index
+secret||.config/Code/User/globalStorage/rjmacarthy.twinny/twinny-providers.json
+secret||.twinny/node/identity.json
+secret||.twinny/server/license
+secret||.twinny/server/plugins/p1/settings.json
+agent|twinny|.config/Code/User/globalStorage/rjmacarthy.twinny/twinny-providers.json
+agent|twinny|.vscode-server/data/User/globalStorage/rjmacarthy.twinny/state.json
+excl||.tabby/models
+excl||.tabby/index
+excl||.tabby/repositories
+secret||.tabby/config.toml
+secret||.tabby-client/agent/config.toml
+agent|tabby|.tabby/ee/db.sqlite
+agent|tabby|.tabby/ee/db.sqlite-wal
+agent|tabby|.tabby/ee/db.sqlite-shm
+agent|tabby|.config/JetBrains/IntelliJIdea2025.2/options/intellij-tabby.xml
+excl||.openinterpreter/packages
+excl||.openinterpreter/cache
+excl||.openinterpreter/.tmp
+excl||.openinterpreter/tmp
+excl||.openinterpreter/plugins/cache
+excl||.openinterpreter/skills/.system
+excl||.openinterpreter/worktrees
+excl||.openinterpreter/.sandbox
+excl||.openinterpreter/.sandbox-bin
+excl||.openinterpreter/visualizations
+excl||.openinterpreter/models-cache
+secret||.openinterpreter/auth.json
+secret||.openinterpreter/.credentials.json
+secret||.openinterpreter/credentials/c1
+secret||.openinterpreter/device_id
+secret||.openinterpreter/secrets/s1
+secret||.openinterpreter/.sandbox-secrets/s1
+secret||.openinterpreter/.env
+secret||.openinterpreter/config.toml
+secret||.codex/.env
+agent|open-interpreter|.openinterpreter/history.jsonl
+excl||.openhands/cache
+excl||.openhands/agent-canvas/workspaces
+excl||.openhands/agent-canvas/tmux
+secret||.openhands/agent-canvas/secret-key.txt
+secret||.openhands/agent-canvas/api-key.txt
+secret||.openhands/settings.json
+secret||.openhands/secrets.json
+secret||.openhands/profiles/p1.json
+secret||.openhands/provider-connections/c1.json
+secret||.openhands/auth/a1.json
+secret||.openhands/runtime-control/r1
+secret||.openhands/agent_settings.json
+secret||.openhands/cloud/c1.json
+secret||.openhands/mcp.json
+secret||.openhands/.jwt_secret
+secret||.openhands/.keys
+agent|openhands|.config/OpenHands Agent Canvas/config.json
+agent|openhands|.openhands/conversations/c1/events/event-00000-e1.json
+excl||.pi/agent/bin
+excl||.pi/agent/tmp
+excl||.pi/agent/npm/node_modules
+excl||.pi/agent/git/g1/node_modules
+excl||.pi/agent/git/g1/.git
+excl||.pi/npm/node_modules
+excl||.pi/git/g1/node_modules
+excl||.pi/git/g1/.git
+exclf||.pi/agent/tools/fd
+exclf||.pi/agent/tools/rg.exe
+exclf||.pi/server/s1.sock
+secret||.pi/agent/auth.json
+secret||.pi/agent/auth.json.bak
+secret||.pi/agent/mcp-auth.json
+secret||.pi/agent/oauth.json
+secret||.pi/agent/models.json
+secret||.pi/agent/mcp.json
+secret||.pi/mcp.json
+secret||.config/little-coder/models.json
+agent|pi|.pi/agent/settings.json
+agent|little-coder|.pi/agent/little-coder-prompt-history.json
+agent|little-coder|.little-coder/state.json
+agent|little-coder|.cache/little-coder/log.txt
+excl||.letta/bin
+excl||.letta/mod-cache
+excl||.letta/tool_execution_dir
+excl||.letta/chroma
+excl||.memgpt/chroma
+secret||.letta/settings.json
+secret||.letta/pg_uri
+secret||.letta/credentials
+secret||.letta/lc-local-backend/providers/auth.json
+secret||.letta/channels/telegram/accounts.json
+secret||.letta/channels/whatsapp/auth/creds.json
+secret||.letta/agents/a1/memory/.git/config
+secret||.letta/agents/a1/memory/.git/letta-credential-helper.cmd
+secret||.config/letta/settings.json
+secret||.memgpt/credentials
+agent|letta|.letta/transcripts/a1/c1/transcript.jsonl
+excl||.hermes/hermes-agent/hermes_cli
+excl||.hermes/hermes-agent/.git
+excl||AppData/Local/hermes/hermes-agent/hermes_cli
+excl||AppData/Local/hermes/hermes-agent/.venv
+excl||.hermes/models
+excl||.hermes/runtimes
+excl||.hermes/node
+excl||.hermes/installs
+excl||.hermes/tools
+excl||.hermes/sandboxes
+excl||.hermes/checkpoints/store/objects
+excl||.hermes/checkpoints/store/indexes
+excl||.hermes/checkpoints/legacy-1
+excl||.hermes/state-snapshots
+excl||.hermes/backups
+excl||.hermes/browser-profile
+excl||.hermes/browser-profiles
+excl||.hermes/browser_profiles
+excl||.hermes/chrome-debug
+excl||.hermes/bot-desktop/browser-profile
+excl||.hermes/plugins/p1/node_modules
+excl||.hermes/plugins/p1/.venv
+excl||AppData/Local/hermes/models
+excl||AppData/Local/hermes/runtimes
+excl||AppData/Local/hermes/node
+excl||AppData/Local/hermes/installs
+excl||AppData/Local/hermes/tools
+excl||AppData/Local/hermes/sandboxes
+excl||AppData/Local/hermes/checkpoints/store/objects
+excl||AppData/Local/hermes/checkpoints/store/indexes
+excl||AppData/Local/hermes/checkpoints/legacy-1
+excl||AppData/Local/hermes/state-snapshots
+excl||AppData/Local/hermes/backups
+excl||AppData/Local/hermes/browser-profile
+excl||AppData/Local/hermes/browser-profiles
+excl||AppData/Local/hermes/browser_profiles
+excl||AppData/Local/hermes/chrome-debug
+excl||AppData/Local/hermes/bot-desktop/browser-profile
+excl||AppData/Local/hermes/plugins/p1/node_modules
+excl||AppData/Local/hermes/plugins/p1/.venv
+excl||.hermes/profiles/work/models
+excl||.hermes_dev/models
+excl||.config/Hermes/Cache
+excl||.config/Hermes/Code Cache
+excl||.config/Hermes/GPUCache
+excl||Library/Application Support/Hermes/Cache
+excl||Library/Application Support/Hermes/Code Cache
+excl||Library/Application Support/Hermes/GPUCache
+excl||AppData/Roaming/Hermes/Cache
+excl||AppData/Roaming/Hermes/Code Cache
+excl||AppData/Roaming/Hermes/GPUCache
+secret||.hermes/.env
+secret||.hermes/.env.bak1
+secret||.hermes/.op.env
+secret||.hermes/npmrc
+secret||.hermes/auth.json
+secret||.hermes/auth.json.1
+secret||.hermes/auth/google_oauth.json
+secret||.hermes/.anthropic_oauth.json
+secret||.hermes/.copilot_jwt.json
+secret||.hermes/google_token.json
+secret||.hermes/google_chat_user_tokens/u1.json
+secret||.hermes/slack_tokens.json
+secret||.hermes/honcho.json
+secret||.hermes/mem0.json
+secret||.hermes/webhook_subscriptions.json
+secret||.hermes/teams_pipeline_store.json
+secret||.hermes/mcp-tokens/t1.json
+secret||.hermes/vault/vault.key
+secret||.hermes/browser_auth/state.json
+secret||.hermes/pairing/p1.json
+secret||.hermes/platforms/pairing/p1.json
+secret||.hermes/whatsapp/session/creds.json
+secret||.hermes/platforms/whatsapp/session/creds.json
+secret||.hermes/matrix/store/s1
+secret||.hermes/platforms/matrix/store/s1
+secret||.hermes/cache/bws_cache1.json
+secret||.hermes/weixin/accounts/a1.json
+secret||.hermes/runtime/photon-sidecar.json
+secret||.hermes/proxy/ca.key
+secret||.hermes/home/.gitconfig
+secret||AppData/Local/hermes/.env
+secret||AppData/Local/hermes/.env.bak1
+secret||AppData/Local/hermes/.op.env
+secret||AppData/Local/hermes/npmrc
+secret||AppData/Local/hermes/auth.json
+secret||AppData/Local/hermes/auth.json.1
+secret||AppData/Local/hermes/auth/google_oauth.json
+secret||AppData/Local/hermes/.anthropic_oauth.json
+secret||AppData/Local/hermes/.copilot_jwt.json
+secret||AppData/Local/hermes/google_token.json
+secret||AppData/Local/hermes/google_chat_user_tokens/u1.json
+secret||AppData/Local/hermes/slack_tokens.json
+secret||AppData/Local/hermes/honcho.json
+secret||AppData/Local/hermes/mem0.json
+secret||AppData/Local/hermes/webhook_subscriptions.json
+secret||AppData/Local/hermes/teams_pipeline_store.json
+secret||AppData/Local/hermes/mcp-tokens/t1.json
+secret||AppData/Local/hermes/vault/vault.key
+secret||AppData/Local/hermes/browser_auth/state.json
+secret||AppData/Local/hermes/pairing/p1.json
+secret||AppData/Local/hermes/platforms/pairing/p1.json
+secret||AppData/Local/hermes/whatsapp/session/creds.json
+secret||AppData/Local/hermes/platforms/whatsapp/session/creds.json
+secret||AppData/Local/hermes/matrix/store/s1
+secret||AppData/Local/hermes/platforms/matrix/store/s1
+secret||AppData/Local/hermes/cache/bws_cache1.json
+secret||AppData/Local/hermes/weixin/accounts/a1.json
+secret||AppData/Local/hermes/runtime/photon-sidecar.json
+secret||AppData/Local/hermes/proxy/ca.key
+secret||AppData/Local/hermes/home/.gitconfig
+secret||.hermes/profiles/work/.env
+secret||.hermes_dev/auth.json
+secret||.hermes/hermes-agent/.env
+secret||AppData/Local/hermes/hermes-agent/.env
+agent|hermes|.hermes/state.db
+agent|hermes|.hermes/state.db-wal
+agent|hermes|.hermes/state.db-shm
+agent|hermes|.hermes/cache/terminal/out1.txt
+agent|hermes|.hermes/hermes-agent/.env.example
+agent|hermes|.hermes_dev/config.yaml
+agent|hermes|AppData/Local/hermes/cache/terminal/out1.txt
+agent|hermes|.config/Hermes/connection.json
+excl||.openclaw/dev
+excl||.openclaw/git
+excl||.openclaw/npm
+excl||.openclaw/npm-runtime
+excl||.openclaw/tmp
+excl||.openclaw/tools
+excl||.openclaw/worktrees
+excl||.openclaw/plugin-skills
+excl||.openclaw/extensions/e1/node_modules
+excl||.openclaw/sandbox/skills-workspaces
+excl||.openclaw/agents/main/agent/tmp
+excl||.openclaw/agents/main/agent/.tmp
+excl||.openclaw/browser/b1/user-data/Default/Cache
+excl||.openclaw/browser/b1/user-data/Default/Code Cache
+excl||.openclaw/browser/b1/user-data/Default/GPUCache
+excl||.openclaw/browser/b1/user-data/Default/Service Worker
+excl||.openclaw-work/tools
+excl||.clawdbot/tools
+excl||.clawdbot/npm
+secret||.openclaw/openclaw.json
+secret||.openclaw/clawdbot.json.bak
+secret||.openclaw-work/.env
+secret||.openclaw/credentials/c1.json
+secret||.openclaw/service-env/gateway.env
+secret||.openclaw/agents/main/agent/auth-profiles.json
+secret||.openclaw/agents/main/agent/models.json
+secret||.openclaw/browser/b1/user-data/Default/Cookies
+secret||.clawdbot/clawdbot.json
+secret||.clawdbot/.env
+secret||.clawdbot/credentials/c1
+secret||.moltbot/moltbot.json
+secret||.moltbot/.env
+secret||.moltbot/credentials/c1
+secret||.config/openclaw/gateway.env
+agent|openclaw|.openclaw/agents/main/agent/openclaw-agent.sqlite
+agent|openclaw|.openclaw/agents/main/agent/openclaw-agent.sqlite-wal
+agent|openclaw|.openclaw-work/openclaw.json
+agent|openclaw|.config/systemd/user/openclaw-gateway.service
+agent|openclaw|Library/LaunchAgents/ai.openclaw.gateway.plist
+excl||.nanobot/bin
+excl||.nanobot/run
+excl||.nanobot-work/cache
+secret||.nanobot/config.json
+secret||.nanobot/auth/a1
+secret||.nanobot-work/whatsapp-auth/a1
+secret||.nanobot/matrix-store/s1
+agent|nanobot|.nanobot-work/sessions/0123456789abcdef0123456789abcdef/Y2xpOmRpcmVjdA.jsonl
+agent|nanobot|Library/LaunchAgents/ai.nanobot.gateway.plist
+excl||agent-zero/.venv
+excl||Desktop/agent-zero/.conda
+excl||agent-zero/main/.git
+excl||agent-zero/main/tmp/playwright
+excl||agent-zero/main/tmp/memory/embeddings
+excl||agent-zero/main/usr/.time_travel
+excl||agent-zero/main/usr/workdir/w1/.venv
+excl||agent-zero/main/usr/workdir/w1/node_modules
+excl||.local/share/a0/browser-profiles
+excl||Library/Application Support/A0/Browser Profiles
+excl||AppData/Local/A0/Browser Profiles
+excl||.config/Agent Zero Launcher/Cache
+excl||.config/Agent Zero Launcher/Code Cache
+excl||.config/Agent Zero Launcher/GPUCache
+excl||.config/Agent Zero Launcher/docker_manager/cache
+secret||agent-zero/main/usr/.env
+secret||agent-zero/main/usr/secrets.env
+secret||Desktop/agent-zero/usr/settings.json
+secret||agent-zero/main/usr/projects/p1/.a0proj/secrets.env
+secret||agent-zero/.env
+secret||agent-zero/main/tmp/secrets.env
+secret||agent-zero/main/tmp/settings.json
+secret||agent-zero/main/usr/plugins/_desktop/profiles/d1/.ssh/id_ed25519
+secret||agent-zero/main/usr/plugins/_desktop/profiles/d1/.gnupg/k1
+secret||.agent-zero/.env
+secret||.agent-zero/session_cookies.json
+secret||.config/Agent Zero Launcher/docker_manager/state.json
+secret||.config/Agent Zero Launcher/Local State
+agent|agent-zero|agent-zero/main/usr/chats/c1/chat.json
+agent|agent-zero|Desktop/agent-zero/usr/chats/c1/chat.json
+agent|agent-zero|.local/share/a0/config.json
+secret||.config/shell_gpt/.sgptrc
+agent|shellgpt|AppData/Local/Temp/chat_cache/mychat
+agent|shellgpt|.config/shell_gpt/roles/default.json
+excl||.local/share/local-deep-research/cache
+excl||.local/share/local-deep-research/models
+excl||.local/share/local-deep-research/journal_data
+excl||.local/share/local-deep-research/library
+excl||Library/Application Support/local-deep-research/cache
+excl||Library/Application Support/local-deep-research/models
+excl||Library/Application Support/local-deep-research/journal_data
+excl||Library/Application Support/local-deep-research/library
+excl||AppData/Local/local-deep-research/local-deep-research/cache
+excl||AppData/Local/local-deep-research/local-deep-research/models
+excl||AppData/Local/local-deep-research/local-deep-research/journal_data
+excl||AppData/Local/local-deep-research/local-deep-research/library
+excl||Documents/LocalDeepResearch/Library
+secret||.local/share/local-deep-research/.secret_key
+secret||Library/Application Support/local-deep-research/.secret_key
+secret||AppData/Local/local-deep-research/local-deep-research/.secret_key
+agent|local-deep-research|.local/share/local-deep-research/encrypted_databases/u1.db
+agent|local-deep-research|Documents/LocalDeepResearch/report.md
+'@
+$Cases14 = @($Cases14 -split "`r?`n" | Where-Object { $_ -ne '' })
+foreach ($c in $Cases14) {
+  $f = @($c -split '\|', 3)
+  if ($f[0] -eq 'excl') { Mk "Users/alice/$($f[2])/f" 'x' } else { Mk "Users/alice/$($f[2])" 'x' }
+}
+Mk 'Users/alice/.hermes/checkpoints/store/projects/0123456789abcdef.json' '{"workdir":"C:\\hermesproj","created_at":1759536000}'
+Mk 'hermesproj/.hermes.md' '# hermes'
+Mk 'Users/alice/.letta/sessions.jsonl' '{"type":"start","project":"C:\\lettaproj","agentId":"a1"}'
+Mk 'lettaproj/.letta/settings.json' '{"hooks":{}}'
+Mk 'Users/alice/.letta/lc-local-backend/conversations/c1/messages.jsonl' '{"type":"session","id":"c1","cwd":"C:\\lettaproj2"}'
+Mk 'lettaproj2/AGENTS.md' '# letta'
+Mk 'Users/alice/.pi/agent/sessions/--C--piproj--/2026-10-04T00-00-00-000Z_u1.jsonl' '{"type":"session","version":3,"id":"u1","cwd":"C:\\piproj"}'
+Mk 'piproj/.pi/settings.json' '{}'
+Mk 'Users/alice/.pi/agent/2026-10-01T00-00-00-000Z_u2.jsonl' '{"type":"session","version":1,"id":"u2","cwd":"C:\\piproj2"}'
+Mk 'piproj2/AGENTS.md' '# pi'
+Mk 'Users/alice/.pi/agent/trust.json' '{"C:\\pitrust":true}'
+Mk 'pitrust/pi-session-2026-10-04.html' '<html></html>'
+Mk 'Users/alice/.pi/agent/crashes.json' '[{"cwd":"C:\\picrash","sessionFile":"x.jsonl"}]'
+Mk 'picrash/AGENTS.md' '# pi'
+Mk 'Users/alice/.pi/agent/experimental/sessions/s1/meta.json' '{"id":"s1","cwd":"C:\\piexp"}'
+Mk 'piexp/AGENTS.md' '# pi'
+Mk 'Users/alice/.openinterpreter/sessions/2026/10/04/rollout-2026-10-04T00-00-00-u1.jsonl' '{"type":"session_meta","payload":{"cwd":"C:\\oiproj"}}'
+Mk 'oiproj/.openinterpreter/rules/r.md' 'rule'
+Mk 'Users/alice/.openinterpreter/archived_sessions/rollout-2026-10-01T00-00-00-u2.jsonl' '{"type":"session_meta","payload":{"cwd":"C:\\oiarch"}}'
+Mk 'oiarch/.codewhale/notes.md' 'notes'
+Mk 'Users/alice/.openhands/workspaces.json' '{"workspaces":[{"id":"w1","path":"C:\\ohproj"}],"workspaceParents":[]}'
+Mk 'ohproj/.openhands/setup.sh' 'echo setup'
+Mk 'Users/alice/.openhands/agent-canvas/dev_conversations/a1/meta.json' '{"workspace":{"working_dir":"C:\\ohdev"}}'
+Mk 'Users/alice/.openhands/agent-canvas/conversations/a2/meta.json' '{"workspace":{"working_dir":"C:\\ohcanvas"}}'
+Mk 'Users/alice/.openhands/conversations/a3/base_state.json' '{"workspace":{"working_dir":"C:\\ohcli"}}'
+foreach ($d in @('ohdev', 'ohcanvas', 'ohcli')) { Mk "$d/AGENTS.md" '# oh' }
+Mk 'Users/alice/.pearai/sessions/sessions.json' '[{"sessionId":"s1","title":"t","workspaceDirectory":"C:\\pearproj"}]'
+Mk 'pearproj/.pearairc.json' '{}'
+Mk 'pearproj/.pearai-agent/mcp.json' '{"mcpServers":{}}'
+Mk 'Users/alice/.openclaw/openclaw.json' "{`n  // JSON5`n  agents: {`n    defaults: { workspace: 'C:\\clawws' },`n    entries: { main: { agentDir: `"C:\\clawagent`" } },`n  },`n}"
+Mk 'Users/alice/.clawdbot/clawdbot.json' '{"agents":{"defaults":{"workspace":"C:\\clawlegacy"}}}'
+Mk 'Users/alice/.openclaw-work/openclaw.json' '{agents:{defaults:{workspace:"C:\\clawprofile"}}}'
+Mk 'clawws/SOUL.md' '# soul'
+Mk 'clawagent/AGENTS.md' '# a'
+Mk 'clawlegacy/IDENTITY.md' '# id'
+Mk 'clawprofile/MEMORY.md' '# mem'
+Mk 'home/bob/.openclaw/openclaw.json' '{}'
+Mk 'Users/alice/.nanobot/sessions/0123456789abcdef0123456789abcdef/.workspace' 'C:\nanows'
+Mk 'nanows/HEARTBEAT.md' '# hb'
+Mk 'Users/alice/.nanobot-work/config.json' '{"agents":{"defaults":{"workspace":"C:\\nanocfg"}}}'
+Mk 'nanocfg/memory/MEMORY.md' '# mem'
+Mk 'Users/alice/.tabby/config.toml' "[[repositories]]`nname = `"p`"`ngit_url = `"file:///C:/tabbyproj`"`n[[repositories]]`nname = `"u`"`ngit_url = 'file:///srv/tabbyunix'`n"
+Mk 'tabbyproj/AGENTS.md' '# tabby'
+Mk 'srv/tabbyunix/AGENTS.md' '# tabby'
+Mk 'Users/alice/.twinny/embeddings/twinproj/manifest.json' '{"files":{"C:\\twinproj\\src\\a.ts":{"hash":"h1"},"C:\\twinproj\\b.ts":{"hash":"h2"}}}'
+Mk 'twinproj/AGENTS.md' '# twin'
+$clawLinkOk = $false
+try {
+  New-Item -ItemType SymbolicLink -Path (P 'home/bob/.clawdbot') -Target '.openclaw' -ErrorAction Stop | Out-Null
+  $clawLinkOk = $true
+} catch { Write-Output "note: symlink creation not permitted here, .clawdbot symlink check skipped" }
 $linkOk = $false
 try {
   New-Item -ItemType SymbolicLink -Path (P 'Users/alice/.gemini/antigravity-cli/cli.log') -Target (Join-Path 'log' 'cli-1.log') -ErrorAction Stop | Out-Null
@@ -210,6 +618,54 @@ Check 'amp history cwd discovers project' { (StatusOf 'ampproj/.amp/settings.jso
 Check 'project-level kilo worktrees excluded' { (StatusOf 'kiloproj/.kilo/worktrees') -eq 'skipped_excluded' }
 Check 'claude desktop mcp config flagged secret' { $r -and $r.secret -eq $true -and $r.status -eq 'collected' }
 Check 'claude desktop Cache excluded' { (StatusOf 'Roaming/Claude/Cache') -eq 'skipped_excluded' }
+# 1.4.0 catalog round (2026-10-04)
+foreach ($c in $Cases14) {
+  $f = @($c -split '\|', 3); $r = Row "alice/$($f[2])"
+  switch ($f[0]) {
+    'excl' { Check "excluded: $($f[2])" { $r -and $r.status -eq 'skipped_excluded' } }
+    'exclf' { Check "excluded: $($f[2])" { $r -and $r.status -eq 'skipped_excluded' } }
+    'secret' { Check "secret: $($f[2])" { $r -and $r.secret -eq $true -and $r.status -eq 'collected' } }
+    'agent' { Check "$($f[1]): $($f[2])" { $r -and $r.agent -eq $f[1] -and $r.status -eq 'collected' } }
+  }
+}
+# On a case-insensitive filesystem .config/PearAI/User matches the same directory, so only attribution is checked here
+$pr = @($script:Rows | Where-Object { ($_.path -replace '\\', '/') -like '*/.config/pearai/User/globalStorage/state.vscdb' })
+Check 'pearai lowercase .config/pearai collected as pearai' { $pr.Count -ge 1 -and @($pr | Where-Object { $_.agent -ne 'pearai' }).Count -eq 0 }
+Check 'cody nested globalStorage collected exactly once' { @($script:Rows | Where-Object { ($_.path -replace '\\', '/') -like '*sourcegraph.cody-ai/symf/indexroot/meta.json' }).Count -eq 1 }
+Check 'twinny nested globalStorage collected exactly once' { @($script:Rows | Where-Object { ($_.path -replace '\\', '/') -like '*globalStorage/rjmacarthy.twinny/twinny-providers.json' }).Count -eq 1 }
+Check 'little-coder history nested in .pi collected exactly once' { @($script:Rows | Where-Object { $_.path -like '*little-coder-prompt-history.json' }).Count -eq 1 }
+Check 'hermes installer checkout excluded but its .env kept' { (StatusOf 'alice/.hermes/hermes-agent/hermes_cli') -eq 'skipped_excluded' -and (StatusOf 'alice/.hermes/hermes-agent/.env') -eq 'collected' }
+if ($clawLinkOk) {
+  $r = Row 'home/bob/.clawdbot'
+  Check 'openclaw .clawdbot rename symlink recorded' { $r -and $r.agent -eq 'openclaw' -and $r.type -eq 'symlink' -and $r.status -eq 'symlink' -and $r.target -like '*.openclaw' }
+}
+Check 'hermes checkpoint workdir discovers project' { (StatusOf 'hermesproj/.hermes.md') -eq 'collected' -and (Row 'hermesproj/.hermes.md').user -eq 'alice' }
+Check 'letta sessions.jsonl project discovers project' { (StatusOf 'lettaproj/.letta/settings.json') -eq 'collected' }
+Check 'project .letta/settings.json flagged secret (accepted overmatch)' { (Row 'lettaproj/.letta/settings.json').secret -eq $true }
+Check 'letta local backend messages cwd discovers project' { (StatusOf 'lettaproj2/AGENTS.md') -eq 'collected' }
+Check 'pi session cwd discovers project' { (StatusOf 'piproj/.pi/settings.json') -eq 'collected' }
+Check 'pi misplaced session cwd discovers project' { (StatusOf 'piproj2/AGENTS.md') -eq 'collected' }
+Check 'pi trust.json keys discover project' { (StatusOf 'pitrust/pi-session-2026-10-04.html') -eq 'collected' }
+Check 'pi crashes.json cwd discovers project' { (StatusOf 'picrash/AGENTS.md') -eq 'collected' }
+Check 'pi experimental meta cwd discovers project' { (StatusOf 'piexp/AGENTS.md') -eq 'collected' }
+Check 'open-interpreter rollout cwd discovers project' { (StatusOf 'oiproj/.openinterpreter/rules/r.md') -eq 'collected' }
+Check 'open-interpreter archived rollout cwd discovers project' { (StatusOf 'oiarch/.codewhale/notes.md') -eq 'collected' }
+Check 'openhands workspaces.json path discovers project' { (StatusOf 'ohproj/.openhands/setup.sh') -eq 'collected' }
+Check 'openhands canvas dev conversation discovers project' { (StatusOf 'ohdev/AGENTS.md') -eq 'collected' }
+Check 'openhands canvas conversation discovers project' { (StatusOf 'ohcanvas/AGENTS.md') -eq 'collected' }
+Check 'openhands cli base_state discovers project' { (StatusOf 'ohcli/AGENTS.md') -eq 'collected' }
+Check 'pearai sessions.json discovers project' { (StatusOf 'pearproj/.pearairc.json') -eq 'collected' }
+$r = Row 'pearproj/.pearai-agent/mcp.json'
+Check 'project .pearai-agent/mcp.json flagged secret' { $r -and $r.secret -eq $true -and $r.status -eq 'collected' }
+Check 'openclaw JSON5 workspace discovers project' { (StatusOf 'clawws/SOUL.md') -eq 'collected' }
+Check 'openclaw JSON5 agentDir discovers project' { (StatusOf 'clawagent/AGENTS.md') -eq 'collected' }
+Check 'openclaw legacy clawdbot.json discovers project' { (StatusOf 'clawlegacy/IDENTITY.md') -eq 'collected' }
+Check 'openclaw profile config discovers project' { (StatusOf 'clawprofile/MEMORY.md') -eq 'collected' }
+Check 'nanobot .workspace marker discovers project' { (StatusOf 'nanows/HEARTBEAT.md') -eq 'collected' }
+Check 'nanobot instance config workspace discovers project' { (StatusOf 'nanocfg/memory/MEMORY.md') -eq 'collected' }
+Check 'tabby config.toml file:// git_url (drive) discovers project' { (StatusOf 'tabbyproj/AGENTS.md') -eq 'collected' }
+Check 'tabby config.toml file:// git_url (unix) discovers project' { (StatusOf 'srv/tabbyunix/AGENTS.md') -eq 'collected' }
+Check 'twinny manifest common prefix discovers project' { (StatusOf 'twinproj/AGENTS.md') -eq 'collected' }
 Check 'Public profile skipped' { $null -eq (Row 'Public/Desktop/readme.txt') }
 Check 'Default profile skipped' { $null -eq (Row 'Default/NTUSER.DAT') }
 $entries = ArchiveEntries

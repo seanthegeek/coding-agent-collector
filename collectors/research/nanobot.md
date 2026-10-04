@@ -101,46 +101,7 @@ one ([`agent/context.py:194-202`](https://github.com/HKUDS/nanobot/blob/acdae3d0
 - `config.json` `agents.defaults.workspace` ([`config/schema.py:117-120`](https://github.com/HKUDS/nanobot/blob/acdae3d0ae2714b6dde672428e921dbf705c096f/nanobot/config/schema.py#L117-L120),[`188-191`](https://github.com/HKUDS/nanobot/blob/acdae3d0ae2714b6dde672428e921dbf705c096f/nanobot/config/schema.py#L188-L191),[`428`](https://github.com/HKUDS/nanobot/blob/acdae3d0ae2714b6dde672428e921dbf705c096f/nanobot/config/schema.py#L428)).
 - `webui/workspace-state.json` (WebUI workspace list; keys not traced).
 
-## 7. Catalog proposal
-
-```
-nanobot|.nanobot
-nanobot|.nanobot-*
-nanobot|Library/LaunchAgents/ai.nanobot.*
-nanobot|.config/systemd/user/nanobot-*
-```
-
-```
-project|.nanobot
-project|SOUL.md
-project|USER.md
-project|HEARTBEAT.md
-project|memory/MEMORY.md
-project|memory/history.jsonl
-project|memory/HISTORY.md
-```
-
-```
-.nanobot*/bin
-.nanobot*/run
-.nanobot*/cache
-```
-
-```
-.nanobot*/config.json
-.nanobot*/auth/*
-.nanobot*/whatsapp-auth/*
-.nanobot*/matrix-store/*
-```
-
-Discovery sources:
-
-```
-.nanobot*/sessions/*/.workspace     (whole file is the path)
-.nanobot*/config.json               workspace
-```
-
-## 8. Confidence
+## 7. Confidence
 
 High: every path in sections 2 to 6, read from constants in the cited files.
 Medium: that `matrix-store/` holds credentials (inferred from its role; not

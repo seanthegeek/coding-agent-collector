@@ -89,38 +89,7 @@ The pi session header line: `{"type":"session",...,"cwd":...}`
 session directory name. Checkpoint file names encode absolute paths, but
 lossily (`/` becomes `_`).
 
-## 7. Catalog proposal
-
-pi's `~/.pi/agent` (sessions, `auth.json`) should be its own catalog entry;
-the lines below are what is specific to little-coder. The prompt history
-file is nested inside pi's directory and claims itself.
-
-```
-little-coder|.little-coder
-little-coder|.config/little-coder
-little-coder|.cache/little-coder
-little-coder|.pi/agent/little-coder-prompt-history.json
-```
-
-```
-project|.pi/approved-plan.md
-```
-
-```
-# none
-```
-
-```
-.config/little-coder/models.json
-```
-
-Discovery sources:
-
-```
-.pi/agent/sessions/*/*.jsonl  first line "cwd"   (pi's; covers little-coder sessions)
-```
-
-## 8. Confidence
+## 7. Confidence
 
 High: every path above, the env overrides, the checkpoint naming, the
 prompt history format, that sessions are pi's (source). High for pi paths

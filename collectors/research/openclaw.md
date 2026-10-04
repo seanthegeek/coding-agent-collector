@@ -151,78 +151,7 @@ No per-project database.
   ([`config/sessions/transcript-header.ts:20-29`](https://github.com/openclaw/openclaw/blob/3b16db73c0b5209aad2ee7c3fb5ddfb12fb208f9/src/config/sessions/transcript-header.ts#L20-L29)). Headers are short, so they are stored
   uncompressed and a byte grep of the database finds them.
 
-## 7. Catalog proposal
-
-```
-openclaw|.openclaw
-openclaw|.openclaw-*
-openclaw|.clawdbot
-openclaw|.moltbot
-openclaw|.config/openclaw
-openclaw|Library/Application Support/OpenClaw
-openclaw|Library/LaunchAgents/ai.openclaw.*
-openclaw|.config/systemd/user/openclaw-*
-openclaw|.config/systemd/user/clawdbot-*
-```
-
-```
-project|.openclaw
-project|SOUL.md
-project|IDENTITY.md
-project|USER.md
-project|TOOLS.md
-project|BOOTSTRAP.md
-project|MEMORY.md
-```
-
-```
-.openclaw*/dev
-.openclaw*/git
-.openclaw*/npm
-.openclaw*/npm-runtime
-.openclaw*/tmp
-.openclaw*/tools
-.openclaw*/worktrees
-.openclaw*/plugin-skills
-.openclaw*/extensions/*/node_modules
-.openclaw*/sandbox/skills-workspaces
-.openclaw*/agents/*/agent/tmp
-.openclaw*/agents/*/agent/.tmp
-.openclaw*/browser/*/user-data/*/Cache
-.openclaw*/browser/*/user-data/*/Code Cache
-.openclaw*/browser/*/user-data/*/GPUCache
-.openclaw*/browser/*/user-data/*/Service Worker
-.clawdbot/tools
-.clawdbot/npm
-```
-
-```
-.openclaw*/openclaw.json*
-.openclaw*/clawdbot.json*
-.openclaw*/.env
-.openclaw*/credentials/*
-.openclaw*/service-env/*
-.openclaw*/agents/*/agent/auth-profiles.json*
-.openclaw*/agents/*/agent/models.json
-.openclaw*/browser/*/user-data/*/Cookies*
-.clawdbot/clawdbot.json*
-.clawdbot/.env
-.clawdbot/credentials/*
-.moltbot/moltbot.json*
-.moltbot/.env
-.moltbot/credentials/*
-.config/openclaw/gateway.env
-```
-
-Discovery sources:
-
-```
-.openclaw*/openclaw.json        workspace
-.openclaw*/openclaw.json        agentDir
-.clawdbot/clawdbot.json         workspace
-```
-
-## 8. Confidence
+## 7. Confidence
 
 High: state directory resolution, profiles, legacy `.clawdbot` migration,
 database file names and schemas, workspace and agentDir defaults, archive
@@ -231,8 +160,8 @@ comes from the backup documentation rather than each writer; `models.json`
 holding literal keys (inferred from the doctor migration);
 `browser/*/user-data/*/Cache` assumes Chromium's usual `Default/` profile
 layout; `.moltbot` layout assumed identical to `.clawdbot` (current source
-no longer reads it). The `tmp` and `.tmp` exclusions only cover the agent
-directory itself, not nested runtime homes, because catalog globs cannot
-express `**`. Not determined: the Windows log location beyond `os.tmpdir()`;
+no longer reads it). Because `*` in exclusion globs crosses `/`, the
+`.openclaw*/tmp` exclusion also matches a `tmp` directory at any depth under
+the state directory, nested runtime homes included. Not determined: the Windows log location beyond `os.tmpdir()`;
 what the macOS transcript cache stores; whether the iOS and Android apps keep
 transcripts on the phone.

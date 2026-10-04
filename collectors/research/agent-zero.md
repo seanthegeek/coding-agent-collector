@@ -135,62 +135,7 @@ host's current directory ([`acp.py:314`](https://github.com/agent0ai/a0-connecto
 ([`projects.py:27`](https://github.com/agent0ai/agent-zero/blob/e3051fb584b1a36be2b0a0c90606f1c2c2d356ec/helpers/projects.py#L27),[`457`](https://github.com/agent0ai/agent-zero/blob/e3051fb584b1a36be2b0a0c90606f1c2c2d356ec/helpers/projects.py#L457)); the path is `usr/projects/<name>`. No host
 repository paths are recorded, so there is nothing for `discover_projects`.
 
-## 7. Catalog proposal
-
-```
-# Agent Zero (state is under the install dir, not the home; these cover the
-# installer and launcher default ~/agent-zero/<instance>/usr and a clone in
-# ~/agent-zero or ~/Desktop/agent-zero)
-agent-zero|agent-zero
-agent-zero|Desktop/agent-zero
-agent-zero|.agent-zero
-agent-zero|.local/share/a0
-agent-zero|Library/Application Support/A0
-agent-zero|AppData/Local/A0
-agent-zero|.config/Agent Zero Launcher
-agent-zero|Library/Application Support/Agent Zero Launcher
-agent-zero|AppData/Roaming/Agent Zero Launcher
-```
-
-No `project|` lines.
-
-```
-*agent-zero*/.venv
-*agent-zero*/.conda
-*agent-zero*/.git
-*agent-zero*/tmp/playwright
-*agent-zero*/tmp/memory/embeddings
-*agent-zero*/usr/.time_travel
-*agent-zero*/usr/workdir/*/.venv
-*agent-zero*/usr/workdir/*/node_modules
-.local/share/a0/browser-profiles
-Library/Application Support/A0/Browser Profiles
-AppData/Local/A0/Browser Profiles
-*/Agent Zero Launcher/Cache
-*/Agent Zero Launcher/Code Cache
-*/Agent Zero Launcher/GPUCache
-*/Agent Zero Launcher/docker_manager/cache
-```
-
-```
-*agent-zero*/usr/.env
-*agent-zero*/usr/secrets.env
-*agent-zero*/usr/settings.json
-*agent-zero*/usr/projects/*/.a0proj/secrets.env
-*agent-zero*/.env
-*agent-zero*/tmp/secrets.env
-*agent-zero*/tmp/settings.json
-*agent-zero*/usr/plugins/_desktop/profiles/*/.ssh/*
-*agent-zero*/usr/plugins/_desktop/profiles/*/.gnupg/*
-.agent-zero/.env
-.agent-zero/session_cookies.json
-*/Agent Zero Launcher/docker_manager/state.json
-*/Agent Zero Launcher/Local State
-```
-
-Discovery sources: none.
-
-## 8. Confidence
+## 7. Confidence
 
 High: every path under the install directory and its `usr/` layout
 (constants), the installer and launcher defaults, the connector files. Medium:

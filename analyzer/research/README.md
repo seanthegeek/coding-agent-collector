@@ -33,6 +33,20 @@ it.
 | `vscode` | [vscode.md](vscode.md) | VS Code chat sessions (Copilot Chat): JSONL mutation log, legacy JSON | planned |
 | `aider` | [aider.md](aider.md) | markdown and readline-style text in the repository | planned |
 | `kiro` | [kiro.md](kiro.md) | Amazon Q CLI SQLite, one JSON blob per working directory; Kiro CLI unverified | planned |
+| `pi` | [pi.md](pi.md) | JSONL session tree, header line with `cwd` | planned |
+| `little-coder` | [little-coder.md](little-coder.md) | pi session JSONL; prompt history as a JSON array | planned |
+| `open-interpreter` | [open-interpreter.md](open-interpreter.md) | Codex rollout JSONL under `~/.openinterpreter` | planned, reuses the Codex format |
+| `openhands` | [openhands.md](openhands.md) | one JSON file per event per conversation, naive local timestamps | planned |
+| `letta` | [letta.md](letta.md) | JSONL transcripts per agent and conversation, sessions index | planned |
+| `hermes` | [hermes.md](hermes.md) | SQLite (WAL) `state.db`, JSONL fallback transcripts | planned |
+| `openclaw` | [openclaw.md](openclaw.md) | SQLite (WAL) per agent with JSON or zstd events, legacy JSONL | planned |
+| `nanobot` | [nanobot.md](nanobot.md) | JSONL per session key under `sessions/<workspace-id>/` | planned |
+| `agent-zero` | [agent-zero.md](agent-zero.md) | JSON per chat context, rewritten whole | planned |
+| `pearai` | [pearai.md](pearai.md) | Continue-fork session JSON, Roo-fork task files | planned |
+| `cody` | [cody.md](cody.md) | rows in the editor `state.vscdb`; JetBrains global-state JSON | planned |
+| `twinny` | [twinny.md](twinny.md) | rows in the editor `state.vscdb` | planned |
+| `tabby` | [tabby.md](tabby.md) | server SQLite (WAL) `ee/db.sqlite`, event JSON logs | planned |
+| `shellgpt` | [shellgpt.md](shellgpt.md) | one JSON message array per chat id in the temp dir | planned |
 
 Claude Code and Codex CLI were validated directly against real installs and
 are documented in their parser modules.

@@ -139,50 +139,7 @@ As in Codex: `session_meta` first line of every rollout, `payload.cwd`
 over `sessions/**/*.jsonl`) applies unchanged with `.openinterpreter` in
 place of `.codex`; `.jsonl.zst` rollouts need zstd first.
 
-## 7. Catalog proposal
-
-```
-open-interpreter|.openinterpreter
-```
-
-```
-project|.openinterpreter
-project|.codewhale
-```
-
-```
-.openinterpreter/packages
-.openinterpreter/cache
-.openinterpreter/.tmp
-.openinterpreter/tmp
-.openinterpreter/plugins/cache
-.openinterpreter/skills/.system
-.openinterpreter/worktrees
-.openinterpreter/.sandbox
-.openinterpreter/.sandbox-bin
-.openinterpreter/visualizations
-.openinterpreter/models-cache
-```
-
-```
-.openinterpreter/auth.json
-.openinterpreter/.credentials.json
-.openinterpreter/credentials/*
-.openinterpreter/device_id
-.openinterpreter/secrets/*
-.openinterpreter/.sandbox-secrets/*
-.openinterpreter/.env
-.openinterpreter/config.toml
-```
-
-Discovery:
-
-```
-.openinterpreter/sessions/**/rollout-*.jsonl  cwd
-.openinterpreter/archived_sessions/**/rollout-*.jsonl  cwd
-```
-
-## 8. Confidence
+## 7. Confidence
 
 High: home resolution, `CODEX_HOME` being ignored, every file name in
 sections 2-3 (constants in the cited files, identical to upstream Codex),

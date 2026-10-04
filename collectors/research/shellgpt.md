@@ -131,43 +131,7 @@ history location rather than projects, `.sgptrc` keys `CHAT_CACHE_PATH`,
 `CACHE_PATH`, `ROLE_STORAGE_PATH` and `OPENAI_FUNCTIONS_PATH` hold absolute
 paths that may point outside the defaults.
 
-## 7. Catalog proposal
-
-```
-# ShellGPT (~/.config on every OS; chats default to the temp directory)
-shellgpt|.config/shell_gpt
-shellgpt|AppData/Local/Temp/chat_cache
-shellgpt|AppData/Local/Temp/shell_gpt
-```
-
-```
-# project: none
-```
-
-```
-# exclusions: none
-```
-
-```
-.config/shell_gpt/.sgptrc
-```
-
-Discovery sources (paths, not projects; the collector would need to collect
-the named directory, which `discover_projects` does not do today):
-
-```
-.config/shell_gpt/.sgptrc  CHAT_CACHE_PATH
-.config/shell_gpt/.sgptrc  CACHE_PATH
-```
-
-The Linux and macOS chat caches (`/tmp/chat_cache`, `/tmp/shell_gpt`,
-`/var/folders/*/*/T/chat_cache`) are outside any home and cannot be
-expressed as catalog lines. The integration agent should either add a
-system-path collection for them or document that a responder must copy
-them by hand. `AppData/Local/Temp/cache` (the current Windows response
-cache) is left out because the name is too generic to attribute.
-
-## 8. Confidence
+## 7. Confidence
 
 High: config folder, `.sgptrc` format and key, roles, function store, chat
 and cache layout, the 0.9.0 change of temp path (source and history).

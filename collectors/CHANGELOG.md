@@ -10,6 +10,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-04
+
+### Added
+
+- Fifteen catalog agents from the October 2026 backlog, each with an
+  evidence document under `research/`: `pearai`, `cody`, `twinny`, `tabby`,
+  `open-interpreter`, `openhands`, `pi`, `little-coder`, `letta`, `hermes`,
+  `openclaw`, `nanobot`, `agent-zero`, `shellgpt` and `local-deep-research`.
+  Several of them are general-purpose or chat-channel agents rather than
+  coding agents. Sourcegraph Cody and Twinny have nested entries inside
+  every VS Code family editor's globalStorage, like Cline and Continue, and
+  little-coder's prompt history is a nested entry inside pi's `~/.pi`.
+- 82 home catalog entries, 33 project catalog entries, 151 exclusions and
+  150 secret globs, among them Codex CLI's `.codex/.env`, which was not
+  flagged before.
+- Twenty-one more project discovery sources in both collectors: Hermes
+  checkpoint project records; Letta's session index and local-backend
+  transcripts; pi session headers (also little-coder's), misplaced
+  sessions, trusted folders, crash log and experimental session metadata;
+  Open Interpreter live and archived rollouts; OpenHands workspaces, Agent
+  Canvas conversation metadata and CLI conversation state; PearAI
+  sessions; OpenClaw `workspace` and `agentDir` from its JSON5 config,
+  legacy `clawdbot.json` included; nanobot workspace markers and instance
+  config; Tabby `file://` repositories; and the common directory of the
+  files in each Twinny embeddings manifest.
+- `[!...]` negated classes in exclusion and secret globs now work in the
+  PowerShell collector as they do in the sh collector.
+
+### Fixed
+
+- The PowerShell collector dropped `file:///` URIs of POSIX paths found in
+  agent state; they now map to the path.
+
 ## [1.3.0] - 2026-10-03
 
 ### Added
@@ -107,7 +140,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.3.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.4.0...HEAD
+[1.4.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.3.0...collector-v1.4.0
 [1.3.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.2.0...collector-v1.3.0
 [1.2.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.1.0...collector-v1.2.0
 [1.1.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.0.0...collector-v1.1.0
