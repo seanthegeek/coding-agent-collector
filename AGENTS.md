@@ -149,7 +149,17 @@ globs do not cross `/`, exclusion and secret globs do, and `[...]` and `[!...]` 
 work in both (the PowerShell side converts globs to regexes). Exclusion and secret globs are matched
 relative to the collection base, a home directory or a discovered project,
 so one pattern such as `.claude/worktrees` applies in both places; write them
-without a leading `*/`. An entry nested
+without a leading `*/`. Anchor every glob on a path component: `.hermes*/auth.json`
+and `agent-zero*/usr/.env`, never `*hermes*/auth.json`, which also matches
+any project path containing the name. The one accepted leading `*` is the
+editor data-directory form `*/User/globalStorage/...`. When an exclusion and
+a secret glob both match, the exclusion wins: the subtree is pruned before
+the secret test runs and its only manifest row is the directory's
+`skipped_excluded`, so a credential inside an excluded tree needs the
+exclusion narrowed (`hermes-agent/[!.]*` keeps `.env`). The PowerShell
+match is case-insensitive, so a glob that differs from a sibling only by
+case (`*/Hermes/Cache` beside `hermes/cache`) must name explicit bases
+instead. An entry nested
 inside another entry's match (`antigravity|.gemini/antigravity-cli` inside
 `gemini-cli|.gemini`) claims its subtree: both collectors expand every entry
 first and prune claimed paths from the enclosing walk, so each file is
@@ -285,11 +295,17 @@ find. The validation for every current entry is recorded in the table in
    fallback that only appears on headless hosts.
 3. Add `agent|path` lines to `CATALOG` in both scripts for every platform
    path the tool uses, including the Windows `AppData` location so images are
-   covered. Run `collectors/tests/catalog-sync.sh`.
+   covered. Regenerate `analyzer/agent_analyzer/catalog.txt` from `--list`,
+   run `collectors/tests/catalog-sync.sh`, and add an `Added` line under
+   `Unreleased` in `analyzer/CHANGELOG.md`, because the analyzer's detection
+   changes with the catalog copy.
 4. Add large or irrelevant subtrees to `EXCLUDES` and credential files to
    `SECRET_GLOBS`.
 5. If the tool records project paths, add extraction to `discover_projects`
-   and any per-project files to `PROJECT_CATALOG`.
+   in the sh collector and `Find-Projects` in the PowerShell collector, and
+   any per-project files to `PROJECT_CATALOG`. Add the tool's process name
+   to `AGENT_PROC_RE` in both scripts so the live snapshot lists it; short
+   names get the whole-word form used for `zed` and `pi`.
 6. Add a fixture and assertions to `collectors/tests/smoke.sh` and
    `collectors/tests/smoke.ps1`. Both files build the fake image in labelled
    blocks (one per catalog revision) followed by `check "name" "expr"`
@@ -455,6 +471,30 @@ Things the first run taught us, to check for explicitly next time:
   collect it unflagged and document the keys to redact.
 - Forks drift: Kilo Code moved from the Roo layout to an OpenCode fork;
   Windsurf is rebranding to Devin. Check the current commit, not the name.
+
+And from the October 2026 round:
+
+- The named repository may no longer be the product. Letta's main branch is
+  a landing page and the shipped tool is Letta Code in another repository;
+  Open Interpreter is now a Rust fork of Codex CLI; two repositories had
+  moved organisations. A researcher confirms what the repository ships
+  before reading paths from it, and follows the move.
+- A wrapper around another agent needs that agent in the catalog. little-coder
+  writes its sessions into pi's directory and Letta Code uses pi's session
+  format; neither was collectable until pi got its own entry. Researchers
+  report every other agent whose state directory their tool reads or writes,
+  and the round adds it.
+- Entries that differ only by case (`.config/PearAI` and `.config/pearai`,
+  `.config/goose` and `.config/Goose`) collect the same directory twice on
+  macOS and Windows (issue 29). Add both only when they are distinct on
+  Linux, and make the smoke check for them test attribution, not count.
+- Counts in a brief are not evidence. The integration agent derives the
+  number of agents from the documents in the tree, not from the brief, and
+  says so when they differ.
+- Chat history outside the home (ShellGPT's temp directory, Docker named
+  volumes for Agent Zero) cannot become a catalog line. Record it in the
+  collectors README as a manual step and file an issue, rather than
+  stretching a glob.
 
 ## Validation and testing
 
