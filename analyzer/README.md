@@ -95,7 +95,7 @@ agents and which have parsers.
 | `antigravity` | `.gemini/antigravity-cli/conversations/*.db` (SQLite of protobuf steps, with WAL sidecars), `conversation_summaries.db`, `history.jsonl` | Protobuf descriptors extracted from the shipped `agy` binary plus a real install, October 2026; see [`research/antigravity.md`](research/antigravity.md) |
 | `claude-code` | `.claude/projects/<slug>/<session>.jsonl`, subagent transcripts under the session directory, `.claude/history.jsonl` | Real install, Claude Code 2.1.286 to 2.1.289, and the shipped 2.1.289 package strings, October 2026; see [`research/claude-code.md`](research/claude-code.md) |
 | `cline` | `<editor>/User/globalStorage/saoudrizwan.claude-dev/` and `.cline/data/`: `tasks/<id>/ui_messages.json` (preferred), `api_conversation_history.json` (only when `ui_messages.json` is absent; inherits the task start time), `task_metadata.json`, `state/taskHistory.json`; SDK `.cline/data/sessions/<id>/<id>.json` and `*.messages.json`, `.cline/data/db/sessions.db` | Source at 39ff2359, synthetic fixture; see [`research/cline.md`](research/cline.md) |
-| `codex-cli` | `.codex/sessions/**/rollout-*.jsonl` and `archived_sessions/`, also as `.jsonl.zst` (needs `zstandard`), `.codex/history.jsonl` | Real install, Codex CLI, October 2026; archived and `.zst` rollouts from source at 3e23877, synthetic fixture; see [`research/codex-cli.md`](research/codex-cli.md) |
+| `codex-cli` | `.codex/sessions/**/rollout-*.jsonl` and `archived_sessions/`, also as `.jsonl.zst` (needs `zstandard`), `.codex/history.jsonl` | Real install, Codex CLI, October 2026; archived and `.zst` rollouts, subagent and fork records from source at 3e23877, synthetic fixture. User-role context (environment, AGENTS.md, skills) is `system` by its content kind; a subagent row links each spawned thread to its parent; turn items that no response item carries become rows; see [`research/codex-cli.md`](research/codex-cli.md) |
 | `cody` | The `sourcegraph.cody-ai` row of a VS Code or fork `User/globalStorage/state.vscdb` (its `cody-local-chatHistory-v2` member) and the JetBrains file `Cody-nodejs/[Data/]JetBrains-globalState/cody-local-chatHistory-v2`. Every row of a chat carries the chat's creation time (its id); no project path is recorded | Source at 8e20ac6c, synthetic fixture; see [`research/cody.md`](research/cody.md) |
 | `continue` | `.continue/sessions/<sessionId>.json` (timestamped from `sessions/sessions.json` `dateCreated`; messages have no time of their own), `.continue/dev_data/<schema>/chatInteraction.jsonl` and `toolUsage.jsonl` | Source at 5522c6f, synthetic fixture; see [`research/continue.md`](research/continue.md) |
 | `crush` | `<project>/.crush/crush.db` (SQLite with WAL sidecars; reached as a project artifact, or under a home when Crush ran in `~`), `.local/share/crush/projects.json`, `AppData/Local/crush/projects.json` | Source at ca6ae26, synthetic fixture; see [`research/crush.md`](research/crush.md) |
@@ -213,8 +213,12 @@ in RFC 4180, with CRLF line ends, and start with a header row.
 
 Rows are sorted by timestamp, then by source file and line. Rows without a
 timestamp sort last. Injected context (`isMeta` user records in Claude Code,
-`developer` messages in Codex) is typed `system`, not `user`, so the `user`
-rows are what the person typed. A line a parser cannot decode, such as a
+`developer` messages in Codex, and Codex user-role blocks whose content kind
+names harness context rather than `user.*` input, labelled
+`context: <kind>:`) is typed `system`, not
+`user`, so the `user` rows are what the person typed. A Codex subagent's
+first prompt, the task its parent sent, is a `system` row
+`subagent task: ...`. A line a parser cannot decode, such as a
 transcript's last line cut off mid-write, is reported as a `system` row,
 and the rest of the file is still read.
 

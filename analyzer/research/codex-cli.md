@@ -355,34 +355,67 @@ and key names.
 `CodexParser` wants
 `^\.codex/(?:archived_)?sessions/(?:.*/)?rollout-[^/]*\.jsonl(?:\.zst)?$`
 and `.codex/history.jsonl`. Until `session_meta` is read, the session id is
-the last UUID in the file name.
+the thread id in the file name: the last UUID, or the first of a reverted
+rollout's `<thread id>_<rollout id>`. The parser reads the whole file before
+emitting rows, so that an `item_completed` line can be checked against every
+`response_item` id and `call_id` in the file.
 
 | Column | Source |
 | --- | --- |
-| timestamp_utc | line `timestamp`; `session_meta.payload.timestamp` for the start row; history `ts` (s) |
-| session_id | `session_meta.payload.id`, else `session_id`, else file-name UUID; history `session_id` |
-| project_path | `session_meta.payload.cwd`, replaced by each `turn_context.payload.cwd` |
-| git_branch | `session_meta.payload.git.branch` |
+| timestamp_utc | line `timestamp`; `session_meta.payload.timestamp` for the start, subagent and fork rows; `item_completed` `started_at_ms` / `completed_at_ms` for the rows built from a turn item; history `ts` (s) |
+| session_id | the file's first `session_meta.payload.id`, else its `session_id`, else the file-name thread id; a later `session_meta` never changes it; history `session_id` |
+| project_path | first `session_meta.payload.cwd`, replaced by each `turn_context.payload.cwd` |
+| git_branch | first `session_meta.payload.git.branch` |
 | model | `turn_context.payload.model` (empty before the first `turn_context`) |
 | turn_type | coverage table below |
-| tool_name | `name`; `shell` for `local_shell_call`, `web_search` for `web_search_call` |
-| tool_use_id | `call_id` (call falls back to `id`) |
-| text | message: `content[].text` joined, prefixed `<role>: ` when not user/assistant; tool_use: `arguments` or `input`, `action.command` joined, or `action.query`; tool_result: `output` string or `[].text` joined; thinking: `summary[].text`, else `content[].text` |
+| tool_name | `name`; `shell` for `local_shell_call` and `CommandExecution`, `web_search` for `web_search_call` and web-search turn items, `tool_search`, `<server>.<tool>` for `McpToolCall`, `apply_patch` for `FileChange` |
+| tool_use_id | `call_id` (call falls back to `id`); a turn item's `id` |
+| text | message: `content[].text` joined, prefixed `<role>: ` for developer; user-role context `context: <kind>: <text>`; tool_use: `arguments` or `input`, `action.command` joined, `action.query`, `arguments` JSON; tool_result: `output` string or `[].text` joined, prefixed `[exit N]` when the matching `CommandExecution` item has a non-zero `exit_code`; thinking: `summary[].text`, else `content[].text` |
 
 | Record | Row |
 | --- | --- |
-| `session_meta` | `system` ("session start: originator version provider cwd") |
+| first `session_meta` | `system` ("session start: originator version provider cwd"); plus `system` `subagent <id> of <parent> [agent_path= agent_role= agent_nickname=]` when `parent_thread_id`, `source.subagent.thread_spawn.parent_thread_id`, or a `session_id` other than `id` on a non-fork names a parent; plus `system` `forked from <id>` for `forked_from_id` |
+| later `session_meta` | `system` `copied from ancestor: session start ... id= cwd=` when its id differs; none when it repeats the file's own |
 | `turn_context` | none; sets project and model |
-| `response_item` `message` user / assistant / other | `user` / `assistant` / `system` (`developer: ...`); empty text skipped |
-| `response_item` `function_call`, `custom_tool_call`, `local_shell_call`, `web_search_call` | `tool_use` |
-| `response_item` `function_call_output`, `custom_tool_call_output`, `local_shell_call_output` | `tool_result` |
-| `response_item` `reasoning` | `thinking` with `--include-thinking`, else skipped |
-| `response_item` `agent_message`, `tool_search_call`, `tool_search_output`, `image_generation_call`, `additional_tools`, `compaction`, `context_compaction`, `configuration_update` | skipped |
+| `response_item` with `metadata.inherited_user_message` | none (copied from the parent thread) |
+| `response_item` `message` user | per `content_item_kinds` run: `user` for `user.*`, `unknown` or empty kinds; `system` `context: <kind>: ...` for any other kind; without a kinds list as long as `content`, `user`. In a subagent file the first prompt is `system` `subagent task: ...` |
+| `response_item` `message` assistant / developer | `assistant` / `system` (`developer: ...`); empty text skipped |
+| `response_item` `function_call`, `custom_tool_call`, `local_shell_call`, `web_search_call`, `tool_search_call` | `tool_use` |
+| `response_item` `function_call_output`, `custom_tool_call_output`, `local_shell_call_output`, `tool_search_output` (tool names) | `tool_result` |
+| `response_item` `agent_message`, `inter_agent_communication` | `system` `agent message <author> -> <recipients>: ...` (`subagent task:` for a subagent's first prompt); an `inter_agent_communication` whose `id` a response item carries is skipped |
+| `response_item` `image_generation_call` | `system` `image generation: <revised_prompt> status=...` |
+| `response_item` `reasoning` | `thinking` with `--include-thinking` when it has text, else skipped |
+| `response_item` `additional_tools`, `compaction`, `context_compaction`, `configuration_update` | skipped (no readable content) |
 | `event_msg` `task_started`, `task_complete` | `system` |
-| `event_msg` everything else (incl. `item_completed`, `turn_aborted`, `thread_rolled_back`, legacy `user_message`/`agent_message`) | skipped |
-| `compacted`, `inter_agent_communication`, `realtime_item`, `token_usage_record`, `world_state`, `retained_context`, `security_risk_score` | skipped |
+| `event_msg` `turn_aborted` | `system` `turn aborted: <reason> [error message]` |
+| `event_msg` `thread_rolled_back` | `system` `rolled back <n> turns`; earlier rows are not changed |
+| `event_msg` `item_completed` `UserMessage`, `AgentMessage`, `Reasoning`, `HookPrompt`, `ContextCompaction` | skipped (repeat a response item or `compacted`) |
+| `event_msg` `item_completed`, other items whose `id` a response item carries as `id` or `call_id` | skipped; a `CommandExecution` exit code still marks the call's `tool_result` |
+| `event_msg` `item_completed` `CommandExecution`, `McpToolCall`, `DynamicToolCall`, `FileChange`, `WebSearch`, `Extension` `web.search` not carried | `tool_use` + `tool_result` on the item `id` |
+| `event_msg` `item_completed` `FunctionCallOutput` not carried | `tool_result` |
+| `event_msg` `item_completed` `Plan`, `SubAgentActivity`, image generation, `clock.sleep`, others not carried | `system` (`plan: ...`, `subagent activity: ...`, `image generation: ...`, `sleep: N ms`, `item <type>: <JSON>`) |
+| `event_msg` legacy `user_message`, `agent_message`, `agent_reasoning`, and the rest | skipped |
+| `compacted` | `system` `compaction summary: <message>`, or `compaction: replacement history of N items` |
+| `realtime_item` `transcript_segment` | `user` or `assistant` by `role` |
+| `realtime_item` other types | `system` `realtime: <type> <JSON>` |
+| `token_usage_record`, `world_state`, `inter_agent_communication_metadata`, `retained_context`, `security_risk_score` | skipped |
 | bad line or cut zstd frame | one `system` row at the end |
 | `history.jsonl` line | `user` |
+
+A copied fork has no boundary beyond the ancestor's `session_meta` and the
+per-message `inherited_user_message` flag, so the other copied records stay
+in the fork's file under the fork's session id.
+
+Expected rows from the sample below: `system` session start, `system`
+`task_started`, `system` `developer: ...`, `system`
+`context: environments.environment_context: ...`, `user` "run the tests",
+`tool_use` `exec_command` (`call_1`), `tool_result` "[exit 1] 1 failing"
+(the `CommandExecution` item has id `call_1`, so it adds only the exit
+code), `thinking` "one test fails" with `--include-thinking`, `assistant`,
+`system` `task_complete`, `system`
+`agent message /root -> /root/tester: rerun only the failing test`, and
+one `system` row for the cut last line. The `UserMessage` item and the
+`token_usage_record` give no row.
 
 Sample rollout, paginated shape
 (`.codex/sessions/2026/10/02/rollout-2026-10-02T11-00-00-0199b2c3-1111-7aaa-8bbb-000000000001.jsonl`):

@@ -8,6 +8,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Open Interpreter rollouts are read by the same code as Codex CLI's, so
+  every Codex CLI change below applies to them too.
+- Codex CLI: a rollout that holds an ancestor's `session_meta` (a copied
+  fork) keeps the file's own session id, project and branch; the ancestor's
+  record is a `system` row `copied from ancestor: ...`, and a fork gets a
+  `forked from <id>` row.
+- Codex CLI: a non-zero exit code from a command's `item_completed` record
+  prefixes that call's `tool_result` text as `[exit N]`.
+- Codex CLI: a subagent rollout starts with a `system` row
+  `subagent <id> of <parent id>` (with its agent path and role), and its
+  first prompt, the task from the parent, is a `system` row
+  `subagent task: ...` instead of `user`. Messages copied from the parent
+  (`inherited_user_message`) are no longer repeated in the subagent's rows.
+
+### Fixed
+
+- Codex CLI: user-role messages the harness injects (environment context,
+  AGENTS.md and skill instructions, subagent notifications, user shell
+  commands) were `user` rows; with content kinds recorded (current
+  releases) they are `system` rows `context: <kind>: ...`, so `user`
+  rows and `user_turns` count only what the person typed.
+- Codex CLI: compaction summaries, messages between agents
+  (`inter_agent_communication`, `agent_message`), image generation
+  prompts, tool searches, realtime voice transcripts, aborted and
+  rolled-back turns, and `item_completed` turn items that no other record
+  carries (web searches inside code-mode calls, MCP and dynamic tool calls,
+  plans) were dropped; they now produce rows.
+- Codex CLI: a reverted thread's rollout
+  (`rollout-<time>-<thread id>_<rollout id>.jsonl`) cut before its
+  `session_meta` took the rollout id as session id; it now takes the
+  thread id.
+- Codex CLI: a reasoning item with no summary text was a `thinking` row
+  with empty text under `--include-thinking`; it is now skipped.
+
 ## [0.6.0] - 2026-10-04
 
 ### Added

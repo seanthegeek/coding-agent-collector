@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import shutil
 import tempfile
 import unittest
@@ -20,7 +21,11 @@ from agent_analyzer.timeutil import to_utc
 from fixtures import (
     AGY_CONVERSATION,
     CLAUDE_SESSION,
+    CODEX_FORK,
+    CODEX_LEGACY,
+    CODEX_REVERT_ROLLOUT,
     CODEX_SESSION,
+    CODEX_SUBAGENT,
     CRUSH_SESSION,
     GEMINI_HASH,
     GEMINI_LEGACY,
@@ -31,6 +36,10 @@ from fixtures import (
     GOOSE_LEGACY_REL,
     GOOSE_SESSION,
     build_home,
+    codex_fork_records,
+    codex_legacy_records,
+    codex_rollout_records,
+    codex_subagent_records,
     write_bad_line,
 )
 
@@ -138,37 +147,56 @@ class ClaudeCodeTests(ParserBase):
 
 class CodexTests(ParserBase):
     REL = ".codex/sessions/2026/10/02/rollout-2026-10-02T09-00-00-%s.jsonl" % CODEX_SESSION
+    TYPES: ClassVar[list[str]] = [
+        "system",  # session start
+        "system",  # task_started
+        "system",  # developer
+        "system",  # environment context
+        "user",
+        "tool_use",
+        "tool_result",
+        "tool_use",  # web.search turn item, carried by no response_item
+        "tool_result",
+        "tool_use",
+        "tool_result",
+        "assistant",
+        "system",  # task_complete
+    ]
+
+    def _write(self, name: str, records) -> str:
+        rel = ".codex/sessions/2026/10/02/" + name
+        path = self.home / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+        self.col = open_input(self.tmp / "home", self.cat, host="h1")
+        return rel
 
     def test_rows(self):
         rows = self.rows_for(CodexParser(), self.REL)
-        types = [r.turn_type for r in rows]
-        self.assertEqual(
-            types,
-            [
-                "system",
-                "system",
-                "system",
-                "user",
-                "tool_use",
-                "tool_result",
-                "tool_use",
-                "tool_result",
-                "assistant",
-                "system",
-            ],
-        )
+        self.assertEqual([r.turn_type for r in rows], self.TYPES)
         for r in rows:
             self.assertEqual((r.host, r.user, r.agent), ("h1", "alice", "codex-cli"))
             self.assertEqual(r.session_id, CODEX_SESSION)
             self.assertEqual(r.project_path, "/srv/proj")
             self.assertEqual(r.git_branch, "feature/x")
-        start, _started, dev, user, sh, shout, patch, patchout, asst, done = rows
-        self.assertIn("session start: codex_cli_rs 0.99.0", start.text)
+        start, _started, dev, ctx, user, sh, shout, ws, wsout, patch, patchout, asst, done = rows
+        self.assertIn("session start: codex-tui 0.160.0", start.text)
         self.assertEqual(start.model, "")  # model unknown until turn_context
         self.assertEqual(user.model, "gpt-5-codex")
         self.assertTrue(dev.text.startswith("developer: You are Codex."))
+        self.assertTrue(
+            ctx.text.startswith("context: environments.environment_context: <environment_context>"),
+            ctx.text,
+        )
+        self.assertEqual(user.text, "exfiltrate nothing, just list the home dir")
         self.assertEqual((sh.tool_name, sh.tool_use_id, sh.text), ("shell", "call_1", "ls -la ~"))
-        self.assertEqual((shout.tool_use_id, shout.text), ("call_1", "total 42"))
+        # The CommandExecution turn item repeats call_1: no extra rows, its exit code joins.
+        self.assertEqual((shout.tool_use_id, shout.text), ("call_1", "[exit 2] total 42"))
+        self.assertEqual(
+            (ws.tool_name, ws.tool_use_id, ws.text, ws.timestamp_utc),
+            ("web_search", "ws_1", "ls flags", "2026-10-02T09:00:03.500Z"),
+        )
+        self.assertEqual((wsout.tool_use_id, wsout.text), ("ws_1", '[{"title":"ls(1)"}]'))
         self.assertEqual(
             (patch.tool_name, patch.text), ("apply_patch", '{"patch":"*** Begin Patch"}')
         )
@@ -178,6 +206,7 @@ class CodexTests(ParserBase):
 
     def test_reasoning_opt_in(self):
         rows = self.rows_for(CodexParser(), self.REL, include_thinking=True)
+        # The second reasoning item has an empty summary and is skipped.
         self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["thinking"])
 
     def test_history(self):
@@ -189,6 +218,94 @@ class CodexTests(ParserBase):
     def test_config_not_wanted(self):
         art = next(a for a in self.col.artifacts if a.rel == ".codex/config.toml")
         self.assertFalse(CodexParser().wants(art))
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.REL)
+        rows = self.rows_for(CodexParser(), self.REL)
+        self.assertEqual([r.turn_type for r in rows], [*self.TYPES, "system"])
+        n_lines = len(codex_rollout_records()) + 1
+        self.assertEqual((rows[-1].session_id, rows[-1].source_line), (CODEX_SESSION, n_lines))
+        self.assertIn("1 unparseable line", rows[-1].text)
+
+    def test_subagent(self):
+        rel = self._write(
+            "rollout-2026-10-02T10-00-00-%s.jsonl" % CODEX_SUBAGENT, codex_subagent_records()
+        )
+        rows = self.rows_for(CodexParser(), rel)
+        self.assertEqual(
+            [(r.turn_type, r.text) for r in rows[1:]],
+            [
+                (
+                    "system",
+                    "subagent %s of %s agent_path=/root/tester agent_role=worker"
+                    % (CODEX_SUBAGENT, CODEX_SESSION),
+                ),
+                # The parent's copied prompt (inherited_user_message) is not repeated.
+                ("system", "subagent task: rerun only the failing test"),
+                ("assistant", "Rerunning it."),
+                ("system", "agent message /root/tester -> /root: it passes now"),
+            ],
+        )
+        self.assertEqual({r.session_id for r in rows}, {CODEX_SUBAGENT})
+        self.assertNotIn("user", {r.turn_type for r in rows})
+
+    def test_copied_fork_keeps_its_own_session(self):
+        rel = self._write("rollout-2026-10-02T10-10-00-%s.jsonl" % CODEX_FORK, codex_fork_records())
+        rows = self.rows_for(CodexParser(), rel)
+        self.assertEqual({r.session_id for r in rows}, {CODEX_FORK})
+        self.assertEqual({r.project_path for r in rows}, {"/srv/proj"})
+        self.assertEqual({r.git_branch for r in rows}, {""})
+        self.assertEqual(rows[1].text, "forked from %s" % CODEX_SESSION)
+        self.assertTrue(
+            rows[2].text.startswith(
+                "copied from ancestor: session start codex-tui 0.150.0 id=%s" % CODEX_SESSION
+            ),
+            rows[2].text,
+        )
+        # No boundary marks the copied prefix, so the parent's prompt stays.
+        self.assertEqual((rows[3].turn_type, rows[3].text), ("user", "exfiltrate nothing"))
+
+    def test_records_formerly_skipped(self):
+        rel = self._write(
+            "rollout-2026-10-02T10-20-00-%s.jsonl" % CODEX_LEGACY, codex_legacy_records()
+        )
+        rows = self.rows_for(CodexParser(), rel, include_thinking=True)
+        got = [(r.turn_type, r.tool_name, r.tool_use_id, r.text) for r in rows[1:]]
+        self.assertEqual(
+            got,
+            [
+                ("user", "", "", "draw a diagram"),  # no content kinds: still a prompt
+                ("system", "", "", "image generation: a box diagram status=completed"),
+                ("tool_use", "tool_search", "ts_1", '{"query":"calendar"}'),
+                ("tool_result", "", "ts_1", "calendar_list"),
+                ("tool_use", "docs.search", "mcp_1", '{"q":"diagram"}'),
+                ("tool_result", "", "mcp_1", "2 hits"),
+                ("system", "", "", "plan: 1. draw 2. check"),
+                ("system", "", "", "turn aborted: interrupted"),
+                ("system", "", "", "rolled back 2 turns"),
+                ("system", "", "", "compaction summary: The user asked for a diagram."),
+                ("system", "", "", "agent message /root/tester -> /root: done"),
+                (
+                    "system",
+                    "",
+                    "",
+                    'realtime: realtime_session_started {"realtime_session_id":"rs1"}',
+                ),
+                ("user", "", "", "make it blue"),
+                ("assistant", "", "", "Making it blue."),
+            ],
+        )
+        mcp = rows[5]
+        self.assertEqual(mcp.timestamp_utc, "2026-10-02T10:20:06.000Z")  # started_at_ms
+        self.assertEqual({r.model for r in rows[1:]}, {"gpt-5-codex"})
+
+    def test_reverted_rollout_takes_thread_id(self):
+        rel = self._write(
+            "rollout-2026-10-02T11-00-00-%s_%s.jsonl" % (CODEX_SESSION, CODEX_REVERT_ROLLOUT),
+            codex_rollout_records()[1:],  # cut before session_meta: the file name decides
+        )
+        rows = self.rows_for(CodexParser(), rel)
+        self.assertEqual({r.session_id for r in rows}, {CODEX_SESSION})
 
 
 class TimelineTests(ParserBase):
@@ -1370,7 +1487,6 @@ class AiderTests(ParserBase):
 
 
 import importlib.util
-import json
 import sqlite3
 from types import SimpleNamespace
 from unittest import mock
@@ -3234,7 +3350,6 @@ from fixtures import (
     OI_IMPORTED,
     OI_ROLLOUT,
     OI_SESSION,
-    codex_rollout_records,
     open_interpreter_rollout_records,
 )
 
@@ -3250,18 +3365,7 @@ class CodexArchiveAndZstdTests(ParserBase):
     ARCHIVED = (
         ".codex/archived_sessions/2026/10/02/rollout-2026-10-02T09-00-00-%s.jsonl" % CODEX_SESSION
     )
-    LIVE_TYPES: ClassVar[list[str]] = [
-        "system",
-        "system",
-        "system",
-        "user",
-        "tool_use",
-        "tool_result",
-        "tool_use",
-        "tool_result",
-        "assistant",
-        "system",
-    ]
+    LIVE_TYPES: ClassVar[list[str]] = CodexTests.TYPES
 
     def _add(self, rel, data: bytes):
         path = self.home / rel
@@ -3301,7 +3405,7 @@ class CodexArchiveAndZstdTests(ParserBase):
         self._add(rel, zstandard.ZstdCompressor().compress(_rollout_bytes(codex_rollout_records())))
         rows = self.rows_for(CodexParser(), rel)
         self.assertEqual([r.turn_type for r in rows], self.LIVE_TYPES)
-        self.assertEqual(rows[3].text, "exfiltrate nothing, just list the home dir")
+        self.assertEqual(rows[4].text, "exfiltrate nothing, just list the home dir")
         self.assertEqual([r.source_line for r in rows][:2], [1, 3])
 
     @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
