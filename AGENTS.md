@@ -498,8 +498,17 @@ collector itself.
   For the analyzer, bump `VERSION` in `agent_analyzer/__init__.py` and
   `pyproject.toml` together.
 - Every `VERSION` bump comes with an entry in the matching changelog,
-  `collectors/CHANGELOG.md` or `analyzer/CHANGELOG.md`, and any change to the
-  manifest or CSV interfaces is called out in that entry.
+  `collectors/CHANGELOG.md` or `analyzer/CHANGELOG.md`, in Keep a Changelog
+  form: a `## [x.y.z] - YYYY-MM-DD` heading with `Added`, `Changed`, `Fixed`
+  and `Removed` subsections, one line per item, written for the responder
+  or analyst who uses that part. Any change to the manifest or CSV
+  interfaces is called out in that entry. Work that lands between bumps
+  goes under `## [Unreleased]` and moves into the next version's heading
+  when it is bumped.
+- Once the bump commit is pushed, tag it `collector-vX.Y.Z` or
+  `analyzer-vX.Y.Z` with an annotated tag and push the tag. The prefix is
+  what distinguishes the two version sequences; never use a bare `vX.Y.Z`.
+  Add the version's comparison link at the bottom of the changelog.
 
 ## Things to avoid
 

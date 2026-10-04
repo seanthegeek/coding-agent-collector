@@ -73,3 +73,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Options `--host`, `--user`, `--work-dir`, `--keep-extracted`,
   `--summary-length` (default 400), `--include-thinking` and `--agent`;
   `detect --json` and `--files`; `catalog --agents`.
+
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.3.0...HEAD
+[0.3.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.2.0...analyzer-v0.3.0
+[0.2.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.1.0...analyzer-v0.2.0
+[0.1.0]: https://github.com/seanthegeek/coding-agent-collector/releases/tag/analyzer-v0.1.0

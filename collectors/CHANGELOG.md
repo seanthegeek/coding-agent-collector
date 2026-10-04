@@ -106,3 +106,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Default size exclusions for model weights, caches and extension binaries,
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
+
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.3.0...HEAD
+[1.3.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.2.0...collector-v1.3.0
+[1.2.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.1.0...collector-v1.2.0
+[1.1.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.0.0...collector-v1.1.0
+[1.0.0]: https://github.com/seanthegeek/coding-agent-collector/releases/tag/collector-v1.0.0
