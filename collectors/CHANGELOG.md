@@ -10,6 +10,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- PowerShell collector: the internal logging function is renamed from
+  `Write-Log` to `Write-CollectorLog` so it no longer shadows a Windows
+  built-in command name; output and behaviour are unchanged. Found by
+  PSScriptAnalyzer 1.25.0 with `collectors/PSScriptAnalyzerSettings.psd1`.
+
 ## [1.6.0] - 2026-10-04
 
 ### Added

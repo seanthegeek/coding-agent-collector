@@ -1603,7 +1603,7 @@ $script:Counts = @{ collected = 0; symlink = 0; skipped_excluded = 0; skipped_si
 $script:WalkErrors = 0
 $script:ClaimedPaths = @{}
 
-function Write-Log([string]$msg) {
+function Write-CollectorLog([string]$msg) {
   $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
   if ($script:LogWriter) { $script:LogWriter.WriteLine("$ts $msg") }
   if (-not $Quiet) { [Console]::Error.WriteLine($msg) }
@@ -1704,7 +1704,7 @@ function Add-File([string]$user, [string]$homeDir, [string]$agent, $item) {
       $sha = Get-FileSha256 $dest
     } catch {
       $status = 'error_copy'; $err = $_.Exception.Message
-      Write-Log "copy failed: ${full}: $err"
+      Write-CollectorLog "copy failed: ${full}: $err"
       try { if (Test-PathQuiet $dest 'Any') { Remove-Item -LiteralPath $dest -Force } } catch { }
     }
   }
@@ -1722,7 +1722,7 @@ function Add-Excluded([string]$user, [string]$homeDir, [string]$agent, $item) {
 function Add-Tree([string]$user, [string]$homeDir, [string]$agent, [string]$dir) {
   $children = @()
   try { $children = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop) }
-  catch { $script:WalkErrors++; Write-Log "list failed: ${dir}: $($_.Exception.Message)"; return }
+  catch { $script:WalkErrors++; Write-CollectorLog "list failed: ${dir}: $($_.Exception.Message)"; return }
   foreach ($child in $children) {
     # A path matched by another catalog entry is collected under that entry.
     if ($script:ClaimedPaths.ContainsKey($child.FullName)) { continue }
@@ -1736,7 +1736,7 @@ function Add-Tree([string]$user, [string]$homeDir, [string]$agent, [string]$dir)
 
 function Add-Path([string]$user, [string]$homeDir, [string]$agent, [string]$path) {
   $item = $null
-  try { $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop } catch { $script:WalkErrors++; Write-Log "stat failed: ${path}: $($_.Exception.Message)"; return }
+  try { $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop } catch { $script:WalkErrors++; Write-CollectorLog "stat failed: ${path}: $($_.Exception.Message)"; return }
   $hrel = Get-RelPath $homeDir $path
   if (Test-AnyMatch $hrel $script:ExcludeRegexes) { Add-Excluded $user $homeDir $agent $item; return }
   $isLink = (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
@@ -1767,7 +1767,7 @@ function Invoke-CatalogCollection([string]$user, [string]$base, [string]$table) 
       if ($agent -eq 'shared' -or $agent -eq 'shell-history') { continue }
       Add-InvEvidence $agent $pair[2]
     }
-    Write-Log "  [$agent] $m"
+    Write-CollectorLog "  [$agent] $m"
     Add-Path $user $base $agent $m
   }
   $script:ClaimedPaths = @{}
@@ -1815,21 +1815,21 @@ function Get-UserHomes {
 $script:InaccessibleHomes = @()
 $UserList = @(Get-UserHomes)
 
-Write-Log "$TOOL $ToolVersion starting on $HostName ($([Environment]::OSVersion.VersionString), PowerShell $($PSVersionTable.PSVersion)) mode=$Mode root=$(if ($Root) { $Root } else { '\' })"
-Write-Log "archive=$(if ($TarExe) { 'tar.gz via ' + $TarExe } else { 'zip (tar.exe not found)' }) max_file_size=${MaxFileSizeMB}MB full=$($Full.IsPresent) no_secrets=$($NoSecrets.IsPresent) no_docker=$($NoDocker.IsPresent)"
+Write-CollectorLog "$TOOL $ToolVersion starting on $HostName ($([Environment]::OSVersion.VersionString), PowerShell $($PSVersionTable.PSVersion)) mode=$Mode root=$(if ($Root) { $Root } else { '\' })"
+Write-CollectorLog "archive=$(if ($TarExe) { 'tar.gz via ' + $TarExe } else { 'zip (tar.exe not found)' }) max_file_size=${MaxFileSizeMB}MB full=$($Full.IsPresent) no_secrets=$($NoSecrets.IsPresent) no_docker=$($NoDocker.IsPresent)"
 $IsAdmin = $false
 try { $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) } catch { }
-if ($Inventory -and $PSBoundParameters.ContainsKey('OutputDir')) { Write-Log "NOTE: -Inventory writes nothing; -OutputDir $OutputDir ignored" }
-if ($Mode -eq 'live' -and -not $IsAdmin) { Write-Log "WARNING: not running as Administrator; other users' profiles will probably be unreadable" }
-if ($UserList.Count -eq 0) { Write-Log 'WARNING: no user profile directories found' }
-foreach ($ih in $script:InaccessibleHomes) { Write-Log "profile not accessible (skipped): $ih" }
+if ($Inventory -and $PSBoundParameters.ContainsKey('OutputDir')) { Write-CollectorLog "NOTE: -Inventory writes nothing; -OutputDir $OutputDir ignored" }
+if ($Mode -eq 'live' -and -not $IsAdmin) { Write-CollectorLog "WARNING: not running as Administrator; other users' profiles will probably be unreadable" }
+if ($UserList.Count -eq 0) { Write-CollectorLog 'WARNING: no user profile directories found' }
+foreach ($ih in $script:InaccessibleHomes) { Write-CollectorLog "profile not accessible (skipped): $ih" }
 
 # ---------------------------------------------------------------------------
 # Per-user collection
 # ---------------------------------------------------------------------------
 $script:InvUsers = @()
 foreach ($u in $UserList) {
-  Write-Log "User $($u.user) ($($u.home))"
+  Write-CollectorLog "User $($u.user) ($($u.home))"
   $script:Inv = [ordered]@{}
   Invoke-CatalogCollection $u.user $u.home $CATALOG
   if ($Inventory) { $script:InvUsers += , @($u, $script:Inv) }
@@ -1847,7 +1847,7 @@ foreach ($u in $UserList) {
 # ---------------------------------------------------------------------------
 $script:Notes = @()
 $script:Docker = @{ seen = $false; found = 0; collected = 0; unreadable = 0; desktop = $false }
-function Add-Note([string]$msg) { $script:Notes += $msg; Write-Log "NOTE: $msg" }
+function Add-Note([string]$msg) { $script:Notes += $msg; Write-CollectorLog "NOTE: $msg" }
 $script:DockerVolumeRules = @()
 foreach ($line in (Get-TableLines $DOCKER_VOLUMES)) {
   $parts = @($line -split '\|', 2)
@@ -1894,7 +1894,7 @@ function Invoke-VolumeDir([string]$base, [string]$rel) {
   }
   $script:Docker.seen = $true
   $children = @(Get-ChildItem -LiteralPath $vd -Force -ErrorAction SilentlyContinue)
-  Write-Log "Docker volumes in $vd"
+  Write-CollectorLog "Docker volumes in $vd"
   foreach ($v in $children) {
     if (-not $v.PSIsContainer) { continue }
     if (($v.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
@@ -1908,13 +1908,13 @@ function Invoke-VolumeDir([string]$base, [string]$rel) {
       $script:Docker.unreadable++
       Add-Note "docker: volume $name ($label) at $($v.FullName) is not readable; run as root to collect it"
     } elseif ((Test-IsLink $data) -or -not (Test-PathQuiet $data 'Container')) {
-      Write-Log "  volume $name has no _data directory, skipped"
+      Write-CollectorLog "  volume $name has no _data directory, skipped"
     } elseif (-not $agent -and $Inventory) {
     } elseif (-not $agent) {
       $attrs = ''; try { $attrs = [string](Get-Item -LiteralPath $data -Force -ErrorAction Stop).Attributes } catch { }
       Write-Row 'docker' $data '' $data '' 'dir' (Get-DirSize $data) 0 0 0 0 '' $attrs '' $false 'skipped_unmatched_volume' '' ''
     } else {
-      Write-Log "  [$agent] $data"
+      Write-CollectorLog "  [$agent] $data"
       $script:WalkErrors = 0
       $script:ClaimedPaths = @{}
       if ($Inventory) {
@@ -2139,7 +2139,7 @@ $ProjectList = @()
 if (-not $NoProjects) {
   $ProjectList = @(Find-Projects)
   if (-not $Inventory) { foreach ($pj in $ProjectList) {
-    Write-Log "Project $(if ($pj.user) { '[' + $pj.user + '] ' })$($pj.path)"
+    Write-CollectorLog "Project $(if ($pj.user) { '[' + $pj.user + '] ' })$($pj.path)"
     Invoke-CatalogCollection $pj.user $pj.path $PROJECT_CATALOG
   } }
 }
@@ -2156,7 +2156,7 @@ if ($Inventory) {
     $leaf = Split-Path -Leaf $_; $parent = Split-Path -Parent $_
     try { @([System.IO.Directory]::GetDirectories($parent, $leaf)).Count -gt 0 } catch { $false } })
   $unreadable = $denied.Count
-  foreach ($u in $UserList) { if (-not (Test-DirReadable $u.home)) { $unreadable++; Write-Log "WARNING: home of $($u.user) is not readable: $($u.home)" } }
+  foreach ($u in $UserList) { if (-not (Test-DirReadable $u.home)) { $unreadable++; Write-CollectorLog "WARNING: home of $($u.user) is not readable: $($u.home)" } }
   $hostLine = [ordered]@{ type = 'host'; host = $HostName; collector = $ToolVersion; mode = $Mode; at = $StartTs
     users_scanned = ($UserList.Count + $denied.Count); users_unreadable = $unreadable; docker_volumes = $script:Docker.found }
   Write-Output ($hostLine | ConvertTo-Json -Compress)
@@ -2192,7 +2192,7 @@ $summary = [ordered]@{
 }
 [System.IO.File]::WriteAllText($SummaryPath, ($summary | ConvertTo-Json -Depth 4), $Utf8NoBom)
 
-Write-Log 'Archiving'
+Write-CollectorLog 'Archiving'
 $script:ManifestWriter.Close()
 $script:LogWriter.Close()
 Copy-Item -LiteralPath $ManifestPath -Destination (Join-PathSafe $Stage 'manifest.jsonl') -Force
