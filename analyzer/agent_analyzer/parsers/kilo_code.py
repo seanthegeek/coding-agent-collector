@@ -42,8 +42,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, List, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -54,11 +54,11 @@ from .opencode import OpenCodeParser, tool_summary
 TASK_RX = re.compile(r"(?:^|/)User/globalStorage/kilocode\.kilo-code/tasks/([^/]+)/api_conversation_history\.json$")
 
 
-def iter_json_array(raw: str) -> Tuple[List[object], Optional[str]]:
+def iter_json_array(raw: str) -> tuple[list[object], str | None]:
     """Decode a JSON array element by element so a file truncated mid-write
     still yields its complete leading elements. Returns (items, error)."""
     dec = json.JSONDecoder()
-    items: List[object] = []
+    items: list[object] = []
     i = 0
     n = len(raw)
 
@@ -190,9 +190,9 @@ class KiloCodeParser(OpenCodeParser):
                 continue
             # The text blocks of one message become one row, placed where the
             # first of them was so it keeps its order relative to tool blocks.
-            texts: List[str] = []
+            texts: list[str] = []
             text_at = -1
-            out: List[Row] = []
+            out: list[Row] = []
             for block in content:
                 if not isinstance(block, dict):
                     continue

@@ -9,7 +9,6 @@ import unittest
 from pathlib import Path
 
 from agent_analyzer import cli, inventory
-
 from fixtures import build_image
 
 REPO = Path(__file__).resolve().parents[2]

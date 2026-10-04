@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Dict, Iterator, List, Tuple
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -78,7 +78,7 @@ def output_text(output) -> str:
     return "\n".join(p for p in parts if p)
 
 
-def load_session(text: str) -> Tuple[dict, str]:
+def load_session(text: str) -> tuple[dict, str]:
     """Parse a session file. On failure, recover the header keys and every
     `history[]` item that decodes before the damage, and say what went wrong."""
     try:
@@ -105,7 +105,7 @@ def load_session(text: str) -> Tuple[dict, str]:
                 out[key] = json.loads(m.group(1))
             except ValueError:
                 pass
-    history: List[dict] = []
+    history: list[dict] = []
     m = re.search(r'"history"\s*:\s*\[', text)
     if m:
         pos = m.end()
@@ -129,7 +129,7 @@ class ContinueParser(Parser):
     name = "continue"
 
     def __init__(self) -> None:
-        self._index_cache: Dict[str, Dict[str, dict]] = {}
+        self._index_cache: dict[str, dict[str, dict]] = {}
 
     def wants(self, artifact: Artifact) -> bool:
         m = SESSION_RX.match(artifact.rel)
@@ -148,14 +148,14 @@ class ContinueParser(Parser):
 
     # ---- sessions.json --------------------------------------------------------
 
-    def _index(self, sessions_dir) -> Dict[str, dict]:
+    def _index(self, sessions_dir) -> dict[str, dict]:
         """sessionId -> sessions.json entry for the index beside the session
         files; empty when it is absent or unreadable."""
         path = sessions_dir / INDEX_NAME
         key = str(path)
         if key in self._index_cache:
             return self._index_cache[key]
-        out: Dict[str, dict] = {}
+        out: dict[str, dict] = {}
         try:
             if path.is_file() and not path.is_symlink():
                 data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
@@ -221,7 +221,7 @@ class ContinueParser(Parser):
             msg = item.get("message") if isinstance(item, dict) else None
             if isinstance(msg, dict) and msg.get("role") == "tool" and msg.get("toolCallId"):
                 answered.add(str(msg["toolCallId"]))
-        names: Dict[str, str] = {}
+        names: dict[str, str] = {}
 
         for i, item in enumerate(history, 1):
             if not isinstance(item, dict):
@@ -309,7 +309,7 @@ class ContinueParser(Parser):
 
     # ---- dev_data -------------------------------------------------------------
 
-    def _dev_index(self, artifact: Artifact) -> Dict[str, dict]:
+    def _dev_index(self, artifact: Artifact) -> dict[str, dict]:
         # .continue/dev_data/<schema>/x.jsonl or .continue/dev_data/x.jsonl
         d = artifact.disk_path.parent
         base = d.parent if d.parent.name == ".continue" else d.parent.parent

@@ -5,13 +5,12 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
-from typing import Optional, Union
 
 OUT_FMT = "%Y-%m-%dT%H:%M:%S.%f"
 _FRACTION_RX = re.compile(r"(\.\d{7,})")
 
 
-def to_utc(value: Union[str, int, float, None]) -> str:
+def to_utc(value: str | int | float | None) -> str:
     """Return a canonical UTC string for an ISO 8601 string or an epoch number.
 
     Epoch values above 1e11 are taken as milliseconds (Claude Code's
@@ -54,7 +53,7 @@ def _fmt(dt: datetime) -> str:
     return dt.strftime(OUT_FMT)[:-3] + "Z"
 
 
-def first_nonempty(*values: Optional[str]) -> str:
+def first_nonempty(*values: str | None) -> str:
     for v in values:
         if v:
             return v

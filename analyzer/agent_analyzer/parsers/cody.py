@@ -43,8 +43,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from email.utils import parsedate_to_datetime
-from typing import Dict, Iterator, List, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -75,10 +75,10 @@ def chat_time(chat_id: str, fallback) -> str:
     return ""
 
 
-def recover_history(text: str) -> Tuple[dict, str]:
+def recover_history(text: str) -> tuple[dict, str]:
     """Rebuild what can be read from a damaged history text: each chat whose
     key is a `toUTCString()` date, with the interactions that decode."""
-    out: Dict[str, dict] = {}
+    out: dict[str, dict] = {}
     marks = [(m.start(), "account", m.group(1)) for m in re.finditer(_ACCOUNT_KEY, text)]
     marks += [(m.end(), "chat", m.group(1)) for m in re.finditer(_DATE_KEY, text)]
     marks.sort()
@@ -125,7 +125,7 @@ class CodyParser(Parser):
         return bool(STATE_DB_RX.search(artifact.rel) or JETBRAINS_RX.search(artifact.rel))
 
     def parse(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
-        problems: List[str] = []
+        problems: list[str] = []
         if JETBRAINS_RX.search(artifact.rel):
             line = 1
             text = read_text(artifact.disk_path)
@@ -152,7 +152,7 @@ class CodyParser(Parser):
             yield self._system(artifact, "parser: " + p, line)
 
     @staticmethod
-    def _decode(text: str, problems: List[str]):
+    def _decode(text: str, problems: list[str]):
         try:
             return json.loads(text)
         except ValueError as e:
@@ -168,7 +168,7 @@ class CodyParser(Parser):
         return row
 
     def _history_rows(self, artifact: Artifact, history: dict, line: int, opts: Options) -> Iterator[Row]:
-        seen: Dict[str, int] = {}
+        seen: dict[str, int] = {}
         for acct in history.values():
             chats = acct.get("chat") if isinstance(acct, dict) else None
             for cid in (chats if isinstance(chats, dict) else {}):
@@ -205,14 +205,14 @@ class CodyParser(Parser):
 
         yield row("system", "chat: %s | account=%s | interactions=%d" % (
             chat.get("chatTitle") or "", account, len(interactions)))
-        names: Dict[str, str] = {}
+        names: dict[str, str] = {}
         for it in interactions:
             for key in ("humanMessage", "assistantMessage"):
                 msg = it.get(key)
                 if isinstance(msg, dict):
                     yield from self._message_rows(msg, row, names)
 
-    def _message_rows(self, msg: dict, row, names: Dict[str, str]) -> Iterator[Row]:
+    def _message_rows(self, msg: dict, row, names: dict[str, str]) -> Iterator[Row]:
         speaker = msg.get("speaker")
         model = str(msg.get("model") or "") if speaker == "assistant" else ""
         text = msg.get("text")

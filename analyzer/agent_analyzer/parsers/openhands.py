@@ -69,10 +69,10 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -108,7 +108,7 @@ def _read_json(path: Path):
         return None
 
 
-def _aware(value) -> Optional[datetime]:
+def _aware(value) -> datetime | None:
     """A UTC datetime from a string `to_utc` accepts, else None."""
     s = to_utc(value) if isinstance(value, str) else ""
     if not s:
@@ -116,7 +116,7 @@ def _aware(value) -> Optional[datetime]:
     return datetime.fromisoformat(s[:-1]).replace(tzinfo=timezone.utc)
 
 
-def _naive(value) -> Optional[datetime]:
+def _naive(value) -> datetime | None:
     """A naive datetime when the timestamp has no zone, else None."""
     if not isinstance(value, str) or not value:
         return None
@@ -138,7 +138,7 @@ class _Conv:
     session_id: str
     project_path: str = ""
     model: str = ""
-    offset: Optional[int] = None     # seconds east of UTC, when anchored
+    offset: int | None = None     # seconds east of UTC, when anchored
     first_event: str = ""            # file name of the lowest-index event
     header: str = ""
     created: str = ""
@@ -149,7 +149,7 @@ class OpenHandsParser(Parser):
     name = "openhands"
 
     def __init__(self) -> None:
-        self._cache: Dict[Tuple, _Conv] = {}
+        self._cache: dict[tuple, _Conv] = {}
 
     def wants(self, artifact: Artifact) -> bool:
         return bool(EVENT_RX.match(artifact.rel) or LEGACY_RX.match(artifact.rel))
@@ -199,7 +199,7 @@ class OpenHandsParser(Parser):
                                 or _d(state.get("workspace")).get("working_dir") or "")
         conv.model = str(_d(_d(state.get("agent")).get("llm")).get("model") or "")
 
-        events: List[Tuple[int, str]] = []
+        events: list[tuple[int, str]] = []
         try:
             for p in (cdir / "events").iterdir():
                 m = EVENT_NAME_RX.match(p.name)

@@ -8,9 +8,10 @@ import os
 import sys
 from collections import Counter, OrderedDict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
-from . import VERSION, catalog as catalog_mod, inventory as inventory_mod
+from . import VERSION
+from . import catalog as catalog_mod
+from . import inventory as inventory_mod
 from .inputs import Collection, open_input
 from .model import SESSION_COLUMNS, TIMELINE_COLUMNS, Row, summarise
 from .parsers import ALL, Options, by_agent
@@ -61,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "catalog":
         return cmd_catalog(args)
@@ -109,7 +110,7 @@ def cmd_inventory(args: argparse.Namespace) -> int:
     except OSError as e:
         print("error: %s" % e, file=sys.stderr)
         return 2
-    rows: List[List[str]] = []
+    rows: list[list[str]] = []
     for f in files:
         try:
             got, junk = inventory_mod.read_file(f)
@@ -138,9 +139,9 @@ def cmd_inventory(args: argparse.Namespace) -> int:
 
 # ---- detect ---------------------------------------------------------------------
 
-def detect_table(col: Collection) -> List[dict]:
+def detect_table(col: Collection) -> list[dict]:
     parsers = by_agent()
-    rows: Dict[Tuple[str, str, str], dict] = OrderedDict()
+    rows: dict[tuple[str, str, str], dict] = OrderedDict()
     for a in col.artifacts:
         key = (a.home.user, a.home.original, a.agent)
         r = rows.get(key)
@@ -203,7 +204,7 @@ def cmd_detect(args: argparse.Namespace, col: Collection) -> int:
 PROJECT_AGENT = "project"
 
 
-def parsers_for(artifact, parsers: Dict[str, list]) -> list:
+def parsers_for(artifact, parsers: dict[str, list]) -> list:
     if artifact.agent == PROJECT_AGENT:
         return ALL
     own = parsers.get(artifact.agent, [])
@@ -212,11 +213,11 @@ def parsers_for(artifact, parsers: Dict[str, list]) -> list:
     return own + [p for p in ALL if artifact.agent in p.reads_agents and p not in own]
 
 
-def collect_rows(col: Collection, opts: Options, agents: List[str]) -> Tuple[List[Row], Counter, List[str]]:
+def collect_rows(col: Collection, opts: Options, agents: list[str]) -> tuple[list[Row], Counter, list[str]]:
     parsers = by_agent()
-    rows: List[Row] = []
+    rows: list[Row] = []
     counts: Counter = Counter()
-    problems: List[str] = []
+    problems: list[str] = []
     for a in col.artifacts:
         for p in parsers_for(a, parsers):
             # Filter on the parser's agent, so --agent aider also takes the
@@ -235,7 +236,7 @@ def collect_rows(col: Collection, opts: Options, agents: List[str]) -> Tuple[Lis
     return rows, counts, problems
 
 
-def write_csv(path: Path, header: List[str], rows) -> None:
+def write_csv(path: Path, header: list[str], rows) -> None:
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(header)

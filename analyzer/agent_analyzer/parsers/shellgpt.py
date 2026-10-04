@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Iterator, List, Tuple
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -53,7 +53,7 @@ def _d(value) -> dict:
     return value if isinstance(value, dict) else {}
 
 
-def load_messages(raw: str) -> Tuple[List[dict], str]:
+def load_messages(raw: str) -> tuple[list[dict], str]:
     """(messages, error). A whole array parses at once; a truncated one is
     decoded element by element so the messages before the cut survive."""
     try:
@@ -68,7 +68,7 @@ def load_messages(raw: str) -> Tuple[List[dict], str]:
     if not s.startswith("["):
         return [], err
     dec = json.JSONDecoder()
-    out: List[dict] = []
+    out: list[dict] = []
     i = 1
     while True:
         while i < len(s) and s[i] in " \t\r\n,":

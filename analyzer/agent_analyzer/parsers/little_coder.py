@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, List, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -42,14 +42,14 @@ CHECKPOINT_RX = re.compile(r"^\.little-coder/checkpoints/([^/]+)/[^/]+$")
 SESSION_FILE_RX = re.compile(r"_([^_/]+)\.jsonl$")
 
 
-def _regular_files(d: Path) -> List[os.DirEntry]:
+def _regular_files(d: Path) -> list[os.DirEntry]:
     try:
         return sorted((e for e in os.scandir(d) if e.is_file(follow_symlinks=False)), key=lambda e: e.name)
     except OSError:
         return []
 
 
-def _session_header(home: Path, name: str) -> Optional[dict]:
+def _session_header(home: Path, name: str) -> dict | None:
     sessions = home / ".pi/agent/sessions"
     if sessions.is_symlink() or not sessions.is_dir():
         return None
@@ -95,8 +95,8 @@ class LittleCoderParser(Parser):
         files = _regular_files(artifact.disk_path.parent)
         if not files or files[0].name != artifact.disk_path.name:
             return    # the set's row comes from its first file
-        mtimes: List[float] = []
-        names: List[Tuple[str, bool]] = []
+        mtimes: list[float] = []
+        names: list[tuple[str, bool]] = []
         for e in files:
             try:
                 mtimes.append(e.stat(follow_symlinks=False).st_mtime)

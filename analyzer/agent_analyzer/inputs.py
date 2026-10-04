@@ -26,9 +26,9 @@ import sys
 import tarfile
 import tempfile
 import zipfile
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Dict, Iterator, List, Optional, Tuple
 
 from .catalog import Catalog
 
@@ -56,7 +56,7 @@ class Artifact:
     rel: str                 # path relative to the home, posix
     agent: str
     home: Home
-    manifest: Optional[dict] = None
+    manifest: dict | None = None
 
 
 @dataclass
@@ -65,29 +65,29 @@ class Collection:
     kind: str                # archive | collected | loose
     root: Path               # directory that holds fs/ (collected) or the tree itself (loose)
     host: str = ""
-    manifest: Optional[List[dict]] = None
-    summary: Optional[dict] = None
-    homes: List[Home] = field(default_factory=list)
-    artifacts: List[Artifact] = field(default_factory=list)
-    notes: List[str] = field(default_factory=list)
-    _tmp: Optional[str] = None
+    manifest: list[dict] | None = None
+    summary: dict | None = None
+    homes: list[Home] = field(default_factory=list)
+    artifacts: list[Artifact] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    _tmp: str | None = None
 
     def cleanup(self) -> None:
         if self._tmp and os.path.isdir(self._tmp):
             shutil.rmtree(self._tmp, ignore_errors=True)
             self._tmp = None
 
-    def artifacts_for(self, agent: str) -> List[Artifact]:
+    def artifacts_for(self, agent: str) -> list[Artifact]:
         return [a for a in self.artifacts if a.agent == agent]
 
-    def agents(self) -> List[str]:
-        seen: Dict[str, None] = {}
+    def agents(self) -> list[str]:
+        seen: dict[str, None] = {}
         for a in self.artifacts:
             seen.setdefault(a.agent)
         return list(seen)
 
 
-def open_input(path: Path, catalog: Catalog, work_dir: Optional[Path] = None, host: str = "") -> Collection:
+def open_input(path: Path, catalog: Catalog, work_dir: Path | None = None, host: str = "") -> Collection:
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)
@@ -108,7 +108,7 @@ def open_input(path: Path, catalog: Catalog, work_dir: Optional[Path] = None, ho
 
 # ---- archives -----------------------------------------------------------------
 
-def _open_archive(path: Path, work_dir: Optional[Path]) -> Collection:
+def _open_archive(path: Path, work_dir: Path | None) -> Collection:
     if work_dir:
         work_dir.mkdir(parents=True, exist_ok=True)
         dest = Path(tempfile.mkdtemp(prefix="cac-", dir=str(work_dir)))
@@ -198,7 +198,7 @@ def _load_collected(col: Collection, catalog: Catalog) -> None:
             col.notes.append("collection.json unreadable: %s" % e)
     if not col.host and col.summary:
         col.host = str(col.summary.get("hostname") or "")
-    rows: List[dict] = []
+    rows: list[dict] = []
     bad = 0
     with open(root / "manifest.jsonl", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -212,7 +212,7 @@ def _load_collected(col: Collection, catalog: Catalog) -> None:
     if bad:
         col.notes.append("%d manifest rows did not parse" % bad)
     col.manifest = rows
-    homes: Dict[Tuple[str, str], Home] = {}
+    homes: dict[tuple[str, str], Home] = {}
     for r in rows:
         if r.get("status") not in PARSE_STATUSES or r.get("type") != "file":
             continue
@@ -260,7 +260,7 @@ def _discover_loose(col: Collection, catalog: Catalog) -> None:
     tree = root / "fs" if (root / "fs").is_dir() and not (root / "manifest.jsonl").exists() else root
     if tree is not root:
         col.notes.append("fs/ found without manifest.jsonl; treating fs/ as the root")
-    homes: List[Home] = []
+    homes: list[Home] = []
 
     # The analyst may have pointed at an agent directory itself (~/.claude,
     # ~/.codex copied out on its own). Its parent is then the home, restricted
@@ -321,7 +321,7 @@ def _add_hits(col: Collection, home: Home, hits) -> None:
     # before the enclosing .gemini entry sweeps the rest, matching the
     # collectors' nested-claim rule.
     hits = sorted(hits, key=lambda h: -len(h[0].segments))
-    seen: Dict[Path, None] = {}
+    seen: dict[Path, None] = {}
     for entry, hit in hits:
         for f in _walk_files(hit):
             if f in seen:

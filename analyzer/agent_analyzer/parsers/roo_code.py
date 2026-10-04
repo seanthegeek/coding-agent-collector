@@ -33,8 +33,8 @@ profile name), so `model` is always empty. No git branch is recorded.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional
 
 from ..inputs import Artifact
 from ..model import Row
@@ -56,7 +56,7 @@ class RooCodeParser(LegacyTaskParser):
     def wants(self, artifact: Artifact) -> bool:
         return bool(self.task_match(artifact) or ITEM_RX.match(artifact.rel) or INDEX_RX.match(artifact.rel))
 
-    def history_item(self, task_dir: Path, root: Path, task_id: str) -> Optional[dict]:
+    def history_item(self, task_dir: Path, root: Path, task_id: str) -> dict | None:
         item = load_json(task_dir / ITEM_FILE)
         if isinstance(item, dict):
             return item

@@ -56,8 +56,8 @@ recorded.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -83,7 +83,7 @@ NOTICE_RX = re.compile(r"^(?:Skipping tool|Tool) \[([a-z_]+)")
 TASK_RX = re.compile(r"^\s*<task>\s*(.*?)\s*</task>\s*$", re.S)
 
 
-def xml_blocks(text: str, include_thinking: bool) -> Iterator[Tuple[str, str, str]]:
+def xml_blocks(text: str, include_thinking: bool) -> Iterator[tuple[str, str, str]]:
     """(turn_type, text, tool_name) for Roo assistant text with XML tool tags."""
     pos = 0
     for m in BLOCK_RX.finditer(text):
@@ -112,7 +112,7 @@ class PearAiParser(LegacyTaskParser):
     def __init__(self) -> None:
         super().__init__()
         self._continue = ContinueParser()     # for its cached sessions.json reader
-        self._state: Dict[tuple, object] = {}
+        self._state: dict[tuple, object] = {}
 
     def wants(self, artifact: Artifact) -> bool:
         m = SESSION_RX.match(artifact.rel)
@@ -128,7 +128,7 @@ class PearAiParser(LegacyTaskParser):
 
     # ---- agent tasks (Roo fork) ------------------------------------------------
 
-    def history_item(self, task_dir: Path, root: Path, task_id: str) -> Optional[dict]:
+    def history_item(self, task_dir: Path, root: Path, task_id: str) -> dict | None:
         db = root.parent / "state.vscdb"
         try:
             st = db.lstat()
@@ -145,7 +145,7 @@ class PearAiParser(LegacyTaskParser):
         return None
 
     def api_content_rows(self, msg: dict, n: int, base_turn: str,
-                         include_thinking: bool) -> Iterator[Tuple[str, str, str, str]]:
+                         include_thinking: bool) -> Iterator[tuple[str, str, str, str]]:
         content = msg.get("content")
         if base_turn == "assistant":
             k = 0
@@ -162,7 +162,7 @@ class PearAiParser(LegacyTaskParser):
         if base_turn != "user" or not isinstance(content, list):
             yield from content_rows(content, base_turn, include_thinking)
             return
-        result: Optional[List[str]] = None
+        result: list[str] | None = None
         name = ""
 
         def flush():

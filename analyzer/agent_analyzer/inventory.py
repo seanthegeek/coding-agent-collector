@@ -17,8 +17,8 @@ PowerShell error record) is junk: skipped and counted, never fatal.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
 
 from .timeutil import to_utc
 
@@ -34,10 +34,10 @@ AGENT_FIELDS = ("user", "agent", "files", "bytes", "first", "last", "projects", 
 TIME_FIELDS = ("at", "first", "last")
 
 
-def input_files(paths: Iterable[Path]) -> List[Path]:
+def input_files(paths: Iterable[Path]) -> list[Path]:
     """Each INPUT as given, or for a directory its regular files (not
     recursive, symlinks not followed), sorted by name."""
-    out: List[Path] = []
+    out: list[Path] = []
     for p in paths:
         if p.is_symlink():
             raise FileNotFoundError("%s is a symlink; give its target" % p)
@@ -58,7 +58,7 @@ def _cell(field: str, value) -> str:
     return str(value)
 
 
-def _record(line: str) -> Optional[dict]:
+def _record(line: str) -> dict | None:
     line = line.strip().lstrip("﻿")
     if not line.startswith("{"):
         return None
@@ -71,11 +71,11 @@ def _record(line: str) -> Optional[dict]:
     return r
 
 
-def read_file(path: Path) -> Tuple[List[List[str]], int]:
+def read_file(path: Path) -> tuple[list[list[str]], int]:
     """Rows for one captured stdout, and the number of junk lines skipped."""
-    rows: List[List[str]] = []
+    rows: list[list[str]] = []
     junk = 0
-    host: Optional[Dict[str, str]] = None
+    host: dict[str, str] | None = None
     host_has_agents = False
 
     def close_host() -> None:
@@ -106,12 +106,12 @@ def read_file(path: Path) -> Tuple[List[List[str]], int]:
     return rows, junk
 
 
-def rollup(rows: List[List[str]]) -> List[Tuple[str, int, int, str]]:
+def rollup(rows: list[list[str]]) -> list[tuple[str, int, int, str]]:
     """(agent, hosts, users, latest last) per agent. users counts distinct
     (host, user) pairs. Sorted by hosts, then users, descending, then name."""
-    hosts: Dict[str, set] = {}
-    users: Dict[str, set] = {}
-    latest: Dict[str, str] = {}
+    hosts: dict[str, set] = {}
+    users: dict[str, set] = {}
+    latest: dict[str, str] = {}
     ih, iu, ia, il = (INVENTORY_COLUMNS.index(c) for c in ("host", "user", "agent", "last"))
     for r in rows:
         a = r[ia]

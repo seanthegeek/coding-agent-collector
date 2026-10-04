@@ -4,7 +4,6 @@ without a README note."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from typing import Dict, List, Optional
 
 TIMELINE_COLUMNS = [
     "timestamp_utc",
@@ -58,7 +57,7 @@ class Row:
     source_file: str = ""
     source_line: int = 0
 
-    def as_list(self) -> List[object]:
+    def as_list(self) -> list[object]:
         return [getattr(self, c) for c in TIMELINE_COLUMNS]
 
 
@@ -74,12 +73,12 @@ class SessionSummary:
     project_path: str = ""
     first_timestamp_utc: str = ""
     last_timestamp_utc: str = ""
-    models: Dict[str, None] = field(default_factory=dict)
+    models: dict[str, None] = field(default_factory=dict)
     user_turns: int = 0
     assistant_turns: int = 0
     tool_calls: int = 0
     source_file: str = ""
-    _sources: Dict[str, int] = field(default_factory=dict)
+    _sources: dict[str, int] = field(default_factory=dict)
 
     def add(self, row: Row) -> None:
         # The session's source is the file that contributed most rows, so a
@@ -103,7 +102,7 @@ class SessionSummary:
         elif row.turn_type == "tool_use":
             self.tool_calls += 1
 
-    def as_list(self) -> List[object]:
+    def as_list(self) -> list[object]:
         return [
             self.host, self.user, self.agent, self.session_id, self.project_path,
             self.first_timestamp_utc, self.last_timestamp_utc, " ".join(self.models),
@@ -111,8 +110,8 @@ class SessionSummary:
         ]
 
 
-def summarise(rows: List[Row]) -> List[SessionSummary]:
-    out: Dict[tuple, SessionSummary] = {}
+def summarise(rows: list[Row]) -> list[SessionSummary]:
+    out: dict[tuple, SessionSummary] = {}
     for r in rows:
         if not r.session_id:
             continue
@@ -125,7 +124,7 @@ def summarise(rows: List[Row]) -> List[SessionSummary]:
     return sorted(out.values(), key=lambda s: (s.first_timestamp_utc, s.agent, s.session_id))
 
 
-def compact(text: Optional[object], limit: int) -> str:
+def compact(text: object | None, limit: int) -> str:
     """One-line text, optionally length-capped. Whitespace runs collapse so the
     CSV stays one row per record; the full content is at source_file:line."""
     if text is None:

@@ -51,8 +51,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Dict, Iterator, List
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -216,8 +216,8 @@ class VsCodeParser(Parser):
         return bool(SESSION_RX.match(artifact.rel))
 
     def parse(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
-        req_lines: Dict[int, int] = {}
-        problems: List[str] = []
+        req_lines: dict[int, int] = {}
+        problems: list[str] = []
         first_bad = 0
         if artifact.rel.endswith(".jsonl"):
             errors: list = []
@@ -269,7 +269,7 @@ class VsCodeParser(Parser):
             yield base("system", p, None, first_bad)
 
     @staticmethod
-    def _track(rec: dict, state, n: int, req_lines: Dict[int, int]) -> None:
+    def _track(rec: dict, state, n: int, req_lines: dict[int, int]) -> None:
         """Remember the log line that created each request."""
         kind, path = rec.get("kind"), rec.get("k") or []
         if kind == 0:
@@ -330,7 +330,7 @@ class VsCodeParser(Parser):
         response = req.get("response")
         if isinstance(response, (str, dict)):
             response = [response]
-        run: List[str] = []
+        run: list[str] = []
 
         def flush():
             joined = "".join(run).strip()

@@ -53,8 +53,8 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -75,7 +75,7 @@ class SessionFile:
     def __init__(self) -> None:
         self.header: dict = {}
         self.header_line = 0
-        self.entries: List[Tuple[int, dict]] = []
+        self.entries: list[tuple[int, dict]] = []
         self.errors: list = []
 
 
@@ -92,9 +92,9 @@ def read_session(path) -> SessionFile:
     return s
 
 
-def entry_keys(path) -> Set[Tuple[str, str]]:
+def entry_keys(path) -> set[tuple[str, str]]:
     """(id, timestamp) of every entry, for fork deduplication."""
-    out: Set[Tuple[str, str]] = set()
+    out: set[tuple[str, str]] = set()
     for _, rec in read_session(path).entries:
         if rec.get("id"):
             out.add((str(rec.get("id")), str(rec.get("timestamp") or "")))
@@ -120,7 +120,7 @@ def _label(prefix: str, text: str) -> str:
 
 def entry_rows(parser: Parser, artifact: Artifact, session: SessionFile, opts: Options,
                session_id: str = "", project_path: str = "",
-               skip: Optional[Set[Tuple[str, str]]] = None) -> Iterator[Row]:
+               skip: set[tuple[str, str]] | None = None) -> Iterator[Row]:
     """Timeline rows for the entries of a pi-format session. `skip` holds
     (id, timestamp) keys to drop (entries a fork copied from its parent)."""
     skip = skip or set()
@@ -240,7 +240,7 @@ def error_row(parser: Parser, artifact: Artifact, errors: list, session_id: str 
     return row
 
 
-def home_file(artifact: Artifact, original: str, marker: str) -> Optional[Path]:
+def home_file(artifact: Artifact, original: str, marker: str) -> Path | None:
     """The collected copy of `original` (a path on the source host) inside
     the artifact's home, or None. Tried relative to the home's original path,
     then from the last `marker` segment (loose input whose home path is not
@@ -275,7 +275,7 @@ class PiParser(Parser):
     name = "pi"
 
     def __init__(self) -> None:
-        self._parent_cache: Dict[Path, Set[Tuple[str, str]]] = {}
+        self._parent_cache: dict[Path, set[tuple[str, str]]] = {}
 
     def wants(self, artifact: Artifact) -> bool:
         return bool(SESSION_RX.match(artifact.rel) or META_RX.match(artifact.rel))
@@ -305,7 +305,7 @@ class PiParser(Parser):
         row.text = compact(text, opts.max_text_length)
         yield row
 
-        skip: Set[Tuple[str, str]] = set()
+        skip: set[tuple[str, str]] = set()
         if parent:
             pf = home_file(artifact, parent, ".pi/")
             if pf is not None and pf != artifact.disk_path:
@@ -358,9 +358,9 @@ class PiParser(Parser):
         yield row
 
 
-def little_coder_markers(artifact: Artifact, session: SessionFile) -> List[str]:
+def little_coder_markers(artifact: Artifact, session: SessionFile) -> list[str]:
     """Why a pi session looks driven by little-coder, empty when it does not."""
-    types: Dict[str, None] = {}
+    types: dict[str, None] = {}
     llamacpp = False
     for _, rec in session.entries:
         if rec.get("type") == "custom_message":

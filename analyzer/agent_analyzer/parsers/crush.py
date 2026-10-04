@@ -44,7 +44,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from typing import Iterator
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact

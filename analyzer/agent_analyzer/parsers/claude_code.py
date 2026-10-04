@@ -24,7 +24,7 @@ Validated against a real install (Claude Code 2.x, October 2026). Files:
 from __future__ import annotations
 
 import re
-from typing import Iterator
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact

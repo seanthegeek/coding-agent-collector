@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Iterator, Optional, Tuple
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -92,7 +92,7 @@ def _zstd_module():
     return zstandard
 
 
-def _decode_line(n: int, raw: bytes, errors: list) -> Optional[dict]:
+def _decode_line(n: int, raw: bytes, errors: list) -> dict | None:
     raw = raw.strip()
     if not raw:
         return None
@@ -134,7 +134,7 @@ def iter_zst_chunks(fh, zstd) -> Iterator[bytes]:
         raise TruncatedFrame("file ends inside a zstd frame")
 
 
-def iter_zst_jsonl(path, errors: list, zstd) -> Iterator[Tuple[int, dict]]:
+def iter_zst_jsonl(path, errors: list, zstd) -> Iterator[tuple[int, dict]]:
     """`iter_jsonl` over a zstd-compressed file, streamed. A corrupt or
     truncated frame becomes one entry in `errors`; the lines decoded before
     it are still yielded, and a line cut by the damage is a bad line."""

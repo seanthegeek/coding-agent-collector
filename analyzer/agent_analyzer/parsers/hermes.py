@@ -45,7 +45,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from typing import Dict, Iterator, List
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -135,7 +135,7 @@ class HermesParser(Parser):
         return row
 
     def _message_rows(self, artifact: Artifact, m: dict, session: dict, line: int,
-                      tool_names: Dict[str, str], opts: Options) -> Iterator[Row]:
+                      tool_names: dict[str, str], opts: Options) -> Iterator[Row]:
         ts = to_utc(m.get("timestamp"))
         role = str(m.get("role") or "")
         marker = "[rewound] " if m.get("active", 1) in (0, "0", False) else ""
@@ -187,7 +187,7 @@ class HermesParser(Parser):
                 tables = table_names(con)
                 if "messages" not in tables:
                     return
-                sessions: Dict[str, dict] = {}
+                sessions: dict[str, dict] = {}
                 if "sessions" in tables:
                     for s in con.execute("select rowid as _rowid, * from sessions order by started_at, rowid"):
                         s = dict(s)
@@ -200,7 +200,7 @@ class HermesParser(Parser):
                         ), opts.max_text_length))
                         row.timestamp_utc = to_utc(s.get("started_at"))
                         yield row
-                tool_names: Dict[str, str] = {}
+                tool_names: dict[str, str] = {}
                 for m in con.execute("select * from messages order by timestamp, id"):
                     m = dict(m)
                     sid = str(m.get("session_id") or "")
@@ -211,9 +211,9 @@ class HermesParser(Parser):
 
     # -- sessions/<id>.jsonl -------------------------------------------------------------
     def _parse_jsonl(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
-        errors: List[tuple] = []
+        errors: list[tuple] = []
         session = {"id": artifact.disk_path.name[: -len(".jsonl")]}
-        tool_names: Dict[str, str] = {}
+        tool_names: dict[str, str] = {}
         for n, rec in iter_jsonl(artifact.disk_path, errors):
             yield from self._message_rows(artifact, rec, session, n, tool_names, opts)
         if errors:

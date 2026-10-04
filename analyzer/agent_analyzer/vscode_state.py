@@ -18,8 +18,8 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
 
 from . import sqlite_util
 
@@ -40,15 +40,15 @@ def _text(value) -> str:
     return "" if value is None else str(value)
 
 
-def read_items(path: Path, keys: Iterable[str]) -> Tuple[Dict[str, object], List[str]]:
+def read_items(path: Path, keys: Iterable[str]) -> tuple[dict[str, object], list[str]]:
     """(key -> decoded JSON value, problems) for the requested `ItemTable`
     keys present in the database. A value that is not valid JSON is returned
     as its text and noted in problems, so a caller can still try to recover
     from it."""
     wanted = [k for k in keys if isinstance(k, str) and not k.startswith(SECRET_PREFIX)]
     path = Path(path)
-    out: Dict[str, object] = {}
-    problems: List[str] = []
+    out: dict[str, object] = {}
+    problems: list[str] = []
     if not wanted or path.is_symlink() or not sqlite_util.is_sqlite(path):
         return out, problems
     try:
@@ -71,7 +71,7 @@ def read_items(path: Path, keys: Iterable[str]) -> Tuple[Dict[str, object], List
     return out, problems
 
 
-def read_item(path: Path, key: str) -> Tuple[object, List[str]]:
+def read_item(path: Path, key: str) -> tuple[object, list[str]]:
     """The decoded JSON value of one `ItemTable` key, or None, and problems."""
     values, problems = read_items(path, [key])
     return values.get(key), problems

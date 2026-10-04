@@ -62,7 +62,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Dict, Iterator, List, Optional, Tuple
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -80,7 +80,7 @@ ICON_RX = re.compile(r"icon://\S+\s*")
 LOGS_RX = re.compile(r'"logs"\s*:\s*\[')
 
 
-def walk_history(node, summaries: bool) -> Iterator[Tuple[str, dict]]:
+def walk_history(node, summaries: bool) -> Iterator[tuple[str, dict]]:
     """Yield ("message", Message) and, with `summaries`, ("summary", text) in
     chronological order: bulks, then topics, then the current topic."""
     if isinstance(node, list):
@@ -101,7 +101,7 @@ def walk_history(node, summaries: bool) -> Iterator[Tuple[str, dict]]:
         yield from walk_history(node.get("messages") or node.get("records") or [], summaries)
 
 
-def parse_ai(content) -> Optional[dict]:
+def parse_ai(content) -> dict | None:
     """The assistant's raw output parsed as the agent's JSON response."""
     if isinstance(content, dict):
         return content
@@ -138,7 +138,7 @@ def args_summary(args) -> str:
     return args if isinstance(args, str) else compact_json(args)
 
 
-def model_of(message: Optional[dict]) -> str:
+def model_of(message: dict | None) -> str:
     if not message:
         return ""
     meta = message.get("metadata")
@@ -152,7 +152,7 @@ def _content_text(value) -> str:
     return text_of(value)
 
 
-def recover_logs(raw: str) -> List[dict]:
+def recover_logs(raw: str) -> list[dict]:
     """Complete log items before the point where a damaged file breaks off."""
     m = LOGS_RX.search(raw)
     if not m:
@@ -213,8 +213,8 @@ class AgentZeroParser(Parser):
         logs = [i for i in (log.get("logs") or []) if isinstance(i, dict)]
         trimmed = len(logs) >= LOG_SIZE
 
-        history: Dict[str, Tuple[int, dict]] = {}
-        ordered: List[Tuple[int, str, dict]] = []
+        history: dict[str, tuple[int, dict]] = {}
+        ordered: list[tuple[int, str, dict]] = []
         for i, ag in enumerate(chat.get("agents") or []):
             if not isinstance(ag, dict):
                 continue
@@ -290,7 +290,7 @@ class AgentZeroParser(Parser):
         else:
             yield self._row(base, "system", self._prefix(agentno, _content_text(content)), opts)
 
-    def _log_rows(self, base: Row, logs: List[dict], history: Dict[str, Tuple[int, dict]], msg_dir,
+    def _log_rows(self, base: Row, logs: list[dict], history: dict[str, tuple[int, dict]], msg_dir,
                   opts: Options) -> Iterator[Row]:
         for item in logs:
             kind = str(item.get("type") or "")

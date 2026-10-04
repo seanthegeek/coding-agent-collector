@@ -49,15 +49,23 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional
 
 from ..inputs import Artifact
 from ..model import Row, compact
 from ..sqlite_util import is_sqlite, open_copy, table_names
 from ..timeutil import to_utc
 from .base import Options
-from .cline_legacy import LegacyTaskParser, content_rows, error_row, iter_array_at, iter_json_array, load_json, read_text
+from .cline_legacy import (
+    LegacyTaskParser,
+    content_rows,
+    error_row,
+    iter_array_at,
+    iter_json_array,
+    load_json,
+    read_text,
+)
 
 ROOT = r"(?:(?:.*/)?User/globalStorage/saoudrizwan\.claude-dev|\.cline/data)"
 STATE_RX = re.compile(r"^%s/state/taskHistory\.json$" % ROOT, re.I)
@@ -78,7 +86,7 @@ class ClineParser(LegacyTaskParser):
         return bool(self.task_match(artifact) or STATE_RX.match(rel) or MANIFEST_RX.match(rel)
                     or MESSAGES_RX.match(rel)) or rel == SESSIONS_DB_REL
 
-    def history_item(self, task_dir: Path, root: Path, task_id: str) -> Optional[dict]:
+    def history_item(self, task_dir: Path, root: Path, task_id: str) -> dict | None:
         items = self.cached_json(root / "state" / "taskHistory.json")
         if isinstance(items, list):
             for item in items:

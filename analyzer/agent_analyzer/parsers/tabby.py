@@ -60,7 +60,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from typing import Dict, Iterator, List, Optional
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -122,9 +122,9 @@ def _loc(filepath, start_line) -> str:
     return "%s:%s" % (fp, start_line) if fp and start_line not in (None, "") else fp
 
 
-def attachment_parts(att: dict) -> List[str]:
+def attachment_parts(att: dict) -> list[str]:
     """Short descriptions of what was attached to a message."""
-    parts: List[str] = []
+    parts: list[str] = []
     for c in _list(att.get("code")):
         if isinstance(c, dict):
             repo = str(c.get("git_url") or "")
@@ -177,7 +177,7 @@ class TabbyParser(Parser):
             yield from self._parse_db(artifact, opts, bool(BACKUP_RX.match(artifact.rel)))
 
     def _row(self, artifact: Artifact, line: int, session_id: str = "", project_path: str = "",
-             ts: str = "", turn_type: str = "system", text: str = "", opts: Optional[Options] = None) -> Row:
+             ts: str = "", turn_type: str = "system", text: str = "", opts: Options | None = None) -> Row:
         row = self.base_row(artifact)
         row.source_line = line
         row.session_id = session_id
@@ -199,7 +199,7 @@ class TabbyParser(Parser):
         try:
             with open_copy(artifact.disk_path) as con:
                 tables = table_names(con)
-                users: Dict[str, str] = {}
+                users: dict[str, str] = {}
                 if "users" in tables:
                     for u in _select(con, "users", "id"):
                         label = str(u.get("email") or "")
@@ -213,9 +213,9 @@ class TabbyParser(Parser):
         except sqlite3.DatabaseError as e:
             yield self._row(artifact, 0, text="parser: SQLite error: %s" % e)
 
-    def _threads(self, artifact: Artifact, con: sqlite3.Connection, tables: set, users: Dict[str, str],
+    def _threads(self, artifact: Artifact, con: sqlite3.Connection, tables: set, users: dict[str, str],
                  opts: Options) -> Iterator[Row]:
-        messages: Dict[str, List[dict]] = {}
+        messages: dict[str, list[dict]] = {}
         if "thread_messages" in tables:
             for m in _select(con, "thread_messages", "thread_id,created_at,id"):
                 messages.setdefault(str(m.get("thread_id")), []).append(m)
@@ -251,7 +251,7 @@ class TabbyParser(Parser):
                 yield self._row(artifact, m.get("id") or 0, tid, project, to_utc(m.get("created_at")),
                                 role if role in ("user", "assistant") else "system", text, opts)
 
-    def _user_events(self, artifact: Artifact, con: sqlite3.Connection, users: Dict[str, str],
+    def _user_events(self, artifact: Artifact, con: sqlite3.Connection, users: dict[str, str],
                      opts: Options) -> Iterator[Row]:
         for e in _select(con, "user_events", "created_at,id"):
             line = e.get("id") or 0

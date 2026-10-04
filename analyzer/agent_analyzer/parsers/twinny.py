@@ -37,7 +37,7 @@ project path, git branch or line number: `source_line` is 0.
 from __future__ import annotations
 
 import re
-from typing import Iterator, List
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -53,7 +53,7 @@ THINK_RX = re.compile(r"<(think|thinking)>(.*?)(?:</\1>|$)", re.S)
 
 def split_think(content: str):
     """(text without reasoning blocks, [reasoning texts])."""
-    thoughts: List[str] = []
+    thoughts: list[str] = []
 
     def keep(m):
         if m.group(2).strip():

@@ -3,8 +3,8 @@ of that agent's artifacts it reads, and yields timeline rows from each."""
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator, Tuple
 
 from ..inputs import Artifact
 from ..model import Row
@@ -23,7 +23,7 @@ class Parser:
     # extension whose chats are rows of the editor's own state.vscdb, which
     # the catalog attributes to `vscode` or to a fork such as `cursor`, lists
     # those editors here (`vscode_state.EDITOR_AGENTS`).
-    reads_agents: Tuple[str, ...] = ()
+    reads_agents: tuple[str, ...] = ()
 
     def wants(self, artifact: Artifact) -> bool:
         raise NotImplementedError
@@ -35,7 +35,7 @@ class Parser:
         return Row(host=artifact.home.host, user=artifact.home.user, agent=self.agent, source_file=artifact.original)
 
 
-def iter_jsonl(path, errors: list) -> Iterator[Tuple[int, dict]]:
+def iter_jsonl(path, errors: list) -> Iterator[tuple[int, dict]]:
     """Yield (line_number, record) for each JSON object line. Bad lines are
     counted in `errors` as (line_number, message) and skipped: a transcript
     truncated mid-write by a running agent must not lose its earlier turns."""

@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterator, List, Tuple
 
 CATALOG_FILE = Path(__file__).with_name("catalog.txt")
 
@@ -26,8 +26,8 @@ CATALOG_FILE = Path(__file__).with_name("catalog.txt")
 class Entry:
     agent: str
     glob: str
-    segments: Tuple[str, ...]
-    regexes: Tuple["re.Pattern[str]", ...]
+    segments: tuple[str, ...]
+    regexes: tuple[re.Pattern[str], ...]
 
     @property
     def first_segment(self) -> str:
@@ -36,51 +36,51 @@ class Entry:
 
 @dataclass
 class Catalog:
-    entries: List[Entry] = field(default_factory=list)
-    project_entries: List[Entry] = field(default_factory=list)
-    excludes: List[str] = field(default_factory=list)
-    secrets: List[str] = field(default_factory=list)
-    docker_volumes: List[Entry] = field(default_factory=list)  # agent|volume name glob
+    entries: list[Entry] = field(default_factory=list)
+    project_entries: list[Entry] = field(default_factory=list)
+    excludes: list[str] = field(default_factory=list)
+    secrets: list[str] = field(default_factory=list)
+    docker_volumes: list[Entry] = field(default_factory=list)  # agent|volume name glob
     text: str = ""
 
     @property
-    def agents(self) -> List[str]:
-        seen: Dict[str, None] = {}
+    def agents(self) -> list[str]:
+        seen: dict[str, None] = {}
         for e in self.entries:
             seen.setdefault(e.agent)
         return list(seen)
 
-    def first_segment_regexes(self) -> List["re.Pattern[str]"]:
-        seen: Dict[str, "re.Pattern[str]"] = {}
+    def first_segment_regexes(self) -> list[re.Pattern[str]]:
+        seen: dict[str, re.Pattern[str]] = {}
         for e in self.entries:
             seen.setdefault(e.first_segment, e.regexes[0])
         return list(seen.values())
 
-    def nested_matches(self, agent_dir: Path) -> Iterator[Tuple[Entry, Path]]:
+    def nested_matches(self, agent_dir: Path) -> Iterator[tuple[Entry, Path]]:
         """Yield (entry, path) for catalog globs that live inside agent_dir
         when agent_dir itself is the first segment of their glob, for example
         .gemini/antigravity-cli inside a .gemini directory given as the root."""
-        listing_cache: Dict[Path, List[str]] = {}
+        listing_cache: dict[Path, list[str]] = {}
         for entry in self.entries:
             if len(entry.segments) < 2 or entry.regexes[0].fullmatch(agent_dir.name) is None:
                 continue
             for hit in _expand(agent_dir, entry.regexes[1:], listing_cache):
                 yield entry, hit
 
-    def matches_in_home(self, home: Path) -> Iterator[Tuple[Entry, Path]]:
+    def matches_in_home(self, home: Path) -> Iterator[tuple[Entry, Path]]:
         """Yield (entry, path) for every catalog glob that exists under home.
 
         Expansion is segment by segment through real directory listings, so
         the cost is proportional to the catalog, not to the size of the tree.
         Symlinks are never followed.
         """
-        listing_cache: Dict[Path, List[str]] = {}
+        listing_cache: dict[Path, list[str]] = {}
         for entry in self.entries:
             for hit in _expand(home, entry.regexes, listing_cache):
                 yield entry, hit
 
 
-def glob_segment_to_regex(seg: str) -> "re.Pattern[str]":
+def glob_segment_to_regex(seg: str) -> re.Pattern[str]:
     """Convert one glob path segment to a regex. `*` and `?` never match `/`;
     `[...]` passes through with `!` meaning negation as in sh."""
     out = []
@@ -108,7 +108,7 @@ def glob_segment_to_regex(seg: str) -> "re.Pattern[str]":
     return re.compile("".join(out))
 
 
-def _expand(base: Path, regexes: Tuple["re.Pattern[str]", ...], cache: Dict[Path, List[str]]) -> Iterator[Path]:
+def _expand(base: Path, regexes: tuple[re.Pattern[str], ...], cache: dict[Path, list[str]]) -> Iterator[Path]:
     if not regexes:
         yield base
         return

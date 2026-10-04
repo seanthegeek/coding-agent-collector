@@ -5,23 +5,33 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_analyzer import catalog, cli
+from agent_analyzer import catalog, cli, protobuf, sqlite_util
 from agent_analyzer.inputs import open_input
 from agent_analyzer.model import summarise
 from agent_analyzer.parsers import Options, by_agent
+from agent_analyzer.parsers.antigravity import AntigravityParser, tool_args_summary, uri_to_path
 from agent_analyzer.parsers.claude_code import ClaudeCodeParser, tool_summary
 from agent_analyzer.parsers.codex import CodexParser
-from agent_analyzer.timeutil import to_utc
-
-from agent_analyzer.parsers.antigravity import AntigravityParser, tool_args_summary, uri_to_path
 from agent_analyzer.parsers.crush import CrushParser, project_of
-from agent_analyzer.parsers.goose import GooseParser, unescape_history
-from agent_analyzer import protobuf, sqlite_util
-
 from agent_analyzer.parsers.gemini_cli import GeminiCliParser, resolve_project
-from fixtures import GEMINI_HASH, GEMINI_LEGACY, GEMINI_REL, GEMINI_RESUMED, GEMINI_SESSION, GEMINI_SUBAGENT
-from fixtures import AGY_CONVERSATION, CLAUDE_SESSION, CODEX_SESSION, build_home, write_bad_line
-from fixtures import CRUSH_SESSION, GOOSE_LEGACY_REL, GOOSE_SESSION
+from agent_analyzer.parsers.goose import GooseParser, unescape_history
+from agent_analyzer.timeutil import to_utc
+from fixtures import (
+    AGY_CONVERSATION,
+    CLAUDE_SESSION,
+    CODEX_SESSION,
+    CRUSH_SESSION,
+    GEMINI_HASH,
+    GEMINI_LEGACY,
+    GEMINI_REL,
+    GEMINI_RESUMED,
+    GEMINI_SESSION,
+    GEMINI_SUBAGENT,
+    GOOSE_LEGACY_REL,
+    GOOSE_SESSION,
+    build_home,
+    write_bad_line,
+)
 
 
 class TimeTests(unittest.TestCase):
@@ -335,7 +345,8 @@ class ProtobufTests(unittest.TestCase):
 
 class SqliteUtilTests(unittest.TestCase):
     def test_copy_leaves_original_untouched_and_reads_wal(self):
-        import sqlite3, time
+        import sqlite3
+        import time
         tmp = Path(tempfile.mkdtemp(prefix="cac-analyzer-test-"))
         try:
             db = tmp / "t.db"
@@ -807,8 +818,8 @@ class GooseTests(ParserBase):
         self.assertIn("content_json did not parse", rows[-1].text)
 
 
-from agent_analyzer.parsers.continue_dev import ContinueParser, load_session
 from agent_analyzer.parsers.aider import AiderParser
+from agent_analyzer.parsers.continue_dev import ContinueParser, load_session
 from fixtures import CONTINUE_SESSION, build_aider
 
 
@@ -968,9 +979,13 @@ from unittest import mock  # noqa: E402
 from agent_analyzer.parsers import zed as zed_mod  # noqa: E402
 from agent_analyzer.parsers.vscode import VsCodeParser, apply_mutation  # noqa: E402
 from agent_analyzer.parsers.zed import ZedParser  # noqa: E402
-
-from fixtures import (VSCODE_LEGACY_SESSION, VSCODE_SESSION, VSCODE_WS, ZED_EXTERNAL,  # noqa: E402
-                      ZED_THREAD)
+from fixtures import (  # noqa: E402
+    VSCODE_LEGACY_SESSION,
+    VSCODE_SESSION,
+    VSCODE_WS,
+    ZED_EXTERNAL,
+    ZED_THREAD,
+)
 
 HAVE_ZSTD = importlib.util.find_spec("zstandard") is not None
 
@@ -1128,10 +1143,17 @@ class VsCodeTests(ParserBase):
             apply_mutation(s, {"kind": 1, "k": ["missing", "x"], "v": 1})
 
 
-from agent_analyzer.parsers.opencode import OpenCodeParser, tool_summary as opencode_tool_summary
-from agent_analyzer.parsers.kilo_code import KiloCodeParser, iter_json_array as kilo_iter_json_array
-from fixtures import (KILO_SESSION, KILO_TASK, OPENCODE_LEGACY_SESSION, OPENCODE_SESSION,
-                      OPENCODE_V2_SESSION)
+from agent_analyzer.parsers.kilo_code import KiloCodeParser
+from agent_analyzer.parsers.kilo_code import iter_json_array as kilo_iter_json_array
+from agent_analyzer.parsers.opencode import OpenCodeParser
+from agent_analyzer.parsers.opencode import tool_summary as opencode_tool_summary
+from fixtures import (
+    KILO_SESSION,
+    KILO_TASK,
+    OPENCODE_LEGACY_SESSION,
+    OPENCODE_SESSION,
+    OPENCODE_V2_SESSION,
+)
 
 
 class OpenCodeTests(ParserBase):
@@ -1340,8 +1362,15 @@ class KiloCodeTests(ParserBase):
 from agent_analyzer.parsers.cline import ClineParser
 from agent_analyzer.parsers.cline_legacy import iter_json_array
 from agent_analyzer.parsers.roo_code import RooCodeParser
-from fixtures import (CLINE_CLI_TASK, CLINE_OLD_SESSION, CLINE_SESSION, CLINE_TASK, ROO_CLI_TASK, ROO_GONE_TASK,
-                      ROO_TASK)
+from fixtures import (
+    CLINE_CLI_TASK,
+    CLINE_OLD_SESSION,
+    CLINE_SESSION,
+    CLINE_TASK,
+    ROO_CLI_TASK,
+    ROO_GONE_TASK,
+    ROO_TASK,
+)
 
 CLINE_GS = ".config/Code/User/globalStorage/saoudrizwan.claude-dev/"
 ROO_GS = ".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/"
@@ -1643,7 +1672,13 @@ class TabbyTests(ParserBase):
             self.assertNotIn(secret, buf.getvalue())
 from agent_analyzer.parsers.openhands import OpenHandsParser
 from agent_analyzer.parsers.shellgpt import ShellGptParser, load_messages
-from fixtures import OPENHANDS_CLI_CONV, OPENHANDS_CONV, OPENHANDS_LEGACY, SHELLGPT_CHAT, SHELLGPT_LEGACY_CHAT
+from fixtures import (
+    OPENHANDS_CLI_CONV,
+    OPENHANDS_CONV,
+    OPENHANDS_LEGACY,
+    SHELLGPT_CHAT,
+    SHELLGPT_LEGACY_CHAT,
+)
 
 
 class OpenHandsTests(ParserBase):
@@ -1774,11 +1809,25 @@ class ShellGptTests(ParserBase):
         msgs, err = load_messages("not json")
         self.assertEqual(msgs, [])
         self.assertTrue(err)
-from agent_analyzer.parsers.pi import PiParser, args_summary as pi_args_summary  # noqa: E402
-from agent_analyzer.parsers.little_coder import LittleCoderParser  # noqa: E402
 from agent_analyzer.parsers.letta import LettaParser, decode_key  # noqa: E402
-from fixtures import (LC_FILE, LC_SESSION, LETTA_AGENT, LETTA_CONV, LETTA_LOCAL_CONV, LETTA_LOCAL_DIR,  # noqa: E402
-                      PI_DIR, PI_EXPERIMENTAL, PI_FILE, PI_FORK, PI_FORK_FILE, PI_SESSION, _jsonl)
+from agent_analyzer.parsers.little_coder import LittleCoderParser  # noqa: E402
+from agent_analyzer.parsers.pi import PiParser  # noqa: E402
+from agent_analyzer.parsers.pi import args_summary as pi_args_summary
+from fixtures import (  # noqa: E402
+    LC_FILE,
+    LC_SESSION,
+    LETTA_AGENT,
+    LETTA_CONV,
+    LETTA_LOCAL_CONV,
+    LETTA_LOCAL_DIR,
+    PI_DIR,
+    PI_EXPERIMENTAL,
+    PI_FILE,
+    PI_FORK,
+    PI_FORK_FILE,
+    PI_SESSION,
+    _jsonl,
+)
 
 
 class PiTests(ParserBase):
@@ -1976,8 +2025,17 @@ from dataclasses import replace as dc_replace  # noqa: E402
 
 from agent_analyzer.parsers.agent_zero import AgentZeroParser, recover_logs  # noqa: E402
 from agent_analyzer.parsers.hermes import HermesParser, decode_content  # noqa: E402
-from fixtures import (AGENT_ZERO_CHAT, AGENT_ZERO_LONG, AGENT_ZERO_REL, HERMES_CHILD, HERMES_DIVERTED,  # noqa: E402
-                      HERMES_DIVERTED_REL, HERMES_SESSION, agent_zero_chat, agent_zero_history)
+from fixtures import (  # noqa: E402
+    AGENT_ZERO_CHAT,
+    AGENT_ZERO_LONG,
+    AGENT_ZERO_REL,
+    HERMES_CHILD,
+    HERMES_DIVERTED,
+    HERMES_DIVERTED_REL,
+    HERMES_SESSION,
+    agent_zero_chat,
+    agent_zero_history,
+)
 
 
 class HermesTests(ParserBase):
@@ -2136,8 +2194,14 @@ class AgentZeroTests(ParserBase):
         self.assertEqual(recover_logs('{"logs": [{"no": 0}, {"no": 1'), [{"no": 0}])
 from agent_analyzer.parsers import codex as codex_mod  # noqa: E402
 from agent_analyzer.parsers.open_interpreter import OpenInterpreterParser  # noqa: E402
-from fixtures import (OI_ARCHIVED, OI_IMPORTED, OI_ROLLOUT, OI_SESSION,  # noqa: E402
-                      codex_rollout_records, open_interpreter_rollout_records)
+from fixtures import (  # noqa: E402
+    OI_ARCHIVED,
+    OI_IMPORTED,
+    OI_ROLLOUT,
+    OI_SESSION,
+    codex_rollout_records,
+    open_interpreter_rollout_records,
+)
 
 
 def _rollout_bytes(records) -> bytes:
@@ -2304,9 +2368,20 @@ class OpenInterpreterTests(ParserBase):
 from agent_analyzer.parsers import openclaw as openclaw_mod  # noqa: E402
 from agent_analyzer.parsers.nanobot import NanobotParser, decode_stem  # noqa: E402
 from agent_analyzer.parsers.openclaw import OpenClawParser  # noqa: E402
-from fixtures import (NANOBOT_HISTORY_REL, NANOBOT_KEY, NANOBOT_LEGACY_REL, NANOBOT_REL,  # noqa: E402
-                      OPENCLAW_AGENT, OPENCLAW_COLD_SESSION, OPENCLAW_DELETED, OPENCLAW_KEY, OPENCLAW_LEGACY,
-                      OPENCLAW_RESET_SESSION, OPENCLAW_SESSION, OPENCLAW_TOKEN)
+from fixtures import (  # noqa: E402
+    NANOBOT_HISTORY_REL,
+    NANOBOT_KEY,
+    NANOBOT_LEGACY_REL,
+    NANOBOT_REL,
+    OPENCLAW_AGENT,
+    OPENCLAW_COLD_SESSION,
+    OPENCLAW_DELETED,
+    OPENCLAW_KEY,
+    OPENCLAW_LEGACY,
+    OPENCLAW_RESET_SESSION,
+    OPENCLAW_SESSION,
+    OPENCLAW_TOKEN,
+)
 
 
 class OpenClawTests(ParserBase):
@@ -2490,10 +2565,27 @@ from agent_analyzer import vscode_state  # noqa: E402
 from agent_analyzer.parsers.cody import CodyParser, chat_time  # noqa: E402
 from agent_analyzer.parsers.pearai import PearAiParser  # noqa: E402
 from agent_analyzer.parsers.twinny import TwinnyParser  # noqa: E402
-from fixtures import (CODY_ACCOUNT, CODY_AGENTIC_CHAT, CODY_CHAT, CODY_JB_REL, CODY_TOKEN,  # noqa: E402
-                      CODY_VSCDB_REL, CODY_VSCODE_CHAT, PEARAI_GS, PEARAI_ROO, PEARAI_SEARCH_SESSION,
-                      PEARAI_SESSION, PEARAI_TASK, PEARAI_UI_TASK, TWINNY_ACTIVE, TWINNY_API_KEY,
-                      TWINNY_CONVERSATION, TWINNY_VSCDB_REL, _vscdb, cody_vscode_state)
+from fixtures import (  # noqa: E402
+    CODY_ACCOUNT,
+    CODY_AGENTIC_CHAT,
+    CODY_CHAT,
+    CODY_JB_REL,
+    CODY_TOKEN,
+    CODY_VSCDB_REL,
+    CODY_VSCODE_CHAT,
+    PEARAI_GS,
+    PEARAI_ROO,
+    PEARAI_SEARCH_SESSION,
+    PEARAI_SESSION,
+    PEARAI_TASK,
+    PEARAI_UI_TASK,
+    TWINNY_ACTIVE,
+    TWINNY_API_KEY,
+    TWINNY_CONVERSATION,
+    TWINNY_VSCDB_REL,
+    _vscdb,
+    cody_vscode_state,
+)
 
 
 class ReadsAgentsRoutingTests(ParserBase):

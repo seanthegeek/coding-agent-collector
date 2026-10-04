@@ -59,7 +59,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from typing import Dict, Iterator, List, Optional, Tuple
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -102,7 +102,7 @@ def _model(provider: str, name: str) -> str:
     return "%s/%s" % (provider, name) if provider and name else name or ""
 
 
-def result_text(tool_result) -> Tuple[str, bool]:
+def result_text(tool_result) -> tuple[str, bool]:
     """(text, is_error) of a toolResponse.toolResult."""
     if not isinstance(tool_result, dict):
         return compact_json(tool_result), False
@@ -120,7 +120,7 @@ def result_text(tool_result) -> Tuple[str, bool]:
 
 
 def unescape_history(line: str) -> str:
-    out: List[str] = []
+    out: list[str] = []
     i = 0
     while i < len(line):
         c = line[i]
@@ -165,7 +165,7 @@ class GooseParser(Parser):
 
     # -- content blocks, shared by every store ------------------------------------------
     def _block_rows(self, artifact: Artifact, base: Row, role: str, content, user_visible: bool,
-                    tool_names: Dict[str, str], opts: Options) -> Iterator[Row]:
+                    tool_names: dict[str, str], opts: Options) -> Iterator[Row]:
         if isinstance(content, str):
             content = [{"type": "text", "text": content}]
         if not isinstance(content, list):
@@ -243,7 +243,7 @@ class GooseParser(Parser):
                 tables = table_names(con)
                 if "messages" not in tables:
                     return
-                sessions: Dict[str, dict] = {}
+                sessions: dict[str, dict] = {}
                 if "sessions" in tables:
                     for s in con.execute("select rowid as _rowid, * from sessions order by created_at, rowid"):
                         s = dict(s)
@@ -263,7 +263,7 @@ class GooseParser(Parser):
                             "archived=%s" % s["archived_at"] if s.get("archived_at") else "",
                         ), opts.max_text_length)
                         yield row
-                tool_names: Dict[str, str] = {}
+                tool_names: dict[str, str] = {}
                 for m in con.execute("select * from messages order by session_id, created_timestamp, id"):
                     m = dict(m)
                     sid = str(m.get("session_id") or "")
@@ -294,7 +294,7 @@ class GooseParser(Parser):
         errors: list = []
         session_id = artifact.disk_path.name[: -len(".jsonl")]
         project_path = ""
-        tool_names: Dict[str, str] = {}
+        tool_names: dict[str, str] = {}
         for n, rec in iter_jsonl(artifact.disk_path, errors):
             if "role" not in rec and "content" not in rec:
                 session_id = str(rec.get("id") or session_id)
@@ -322,10 +322,10 @@ class GooseParser(Parser):
     # -- logs/llm_request.*.jsonl ---------------------------------------------------------
     def _parse_llm_log(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         errors: list = []
-        request: Optional[Row] = None
-        pending: List[Row] = []
+        request: Row | None = None
+        pending: list[Row] = []
         model = ""
-        tool_names: Dict[str, str] = {}
+        tool_names: dict[str, str] = {}
         for n, rec in iter_jsonl(artifact.disk_path, errors):
             if "input" in rec or "model_config" in rec:
                 cfg = rec.get("model_config") or {}

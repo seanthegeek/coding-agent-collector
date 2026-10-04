@@ -59,8 +59,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -94,7 +94,7 @@ def _skip_ws(s: str, i: int) -> int:
     return i
 
 
-def iter_array_at(s: str, i: int, errors: list, end: Optional[list] = None) -> Iterator[Tuple[int, object]]:
+def iter_array_at(s: str, i: int, errors: list, end: list | None = None) -> Iterator[tuple[int, object]]:
     """Yield (1-based position, element) from the JSON array starting at
     `s[i]`. A truncated or corrupt element stops the walk and is recorded in
     `errors` as (position, message); the elements before it are kept. When
@@ -130,7 +130,7 @@ def iter_array_at(s: str, i: int, errors: list, end: Optional[list] = None) -> I
         return
 
 
-def read_text(path: Path) -> Optional[str]:
+def read_text(path: Path) -> str | None:
     """File contents, or None for a symlink or an unreadable file."""
     p = Path(path)
     try:
@@ -143,7 +143,7 @@ def read_text(path: Path) -> Optional[str]:
     return s[1:] if s.startswith("\ufeff") else s
 
 
-def iter_json_array(path: Path, errors: list) -> Iterator[Tuple[int, object]]:
+def iter_json_array(path: Path, errors: list) -> Iterator[tuple[int, object]]:
     """Elements of a file holding one JSON array, tolerant of truncation and
     of data appended after the array, both reported through `errors`."""
     s = read_text(path)
@@ -169,7 +169,7 @@ def load_json(path: Path):
         return None
 
 
-def loads_or_none(s) -> Optional[dict]:
+def loads_or_none(s) -> dict | None:
     if not isinstance(s, str) or not s.lstrip().startswith("{"):
         return None
     try:
@@ -203,14 +203,14 @@ class TaskContext:
     """What one task directory knows about itself: id, project, models and a
     start time for records that carry none."""
 
-    def __init__(self, task_id: str, item: Optional[dict], metadata: Optional[dict], project_key: str):
+    def __init__(self, task_id: str, item: dict | None, metadata: dict | None, project_key: str):
         self.task_id = task_id
         item = item if isinstance(item, dict) else {}
         metadata = metadata if isinstance(metadata, dict) else {}
         self.project_path = str(item.get(project_key) or "")
         self.default_model = str(item.get("modelId") or "")
         usage = metadata.get("model_usage")
-        self.model_usage: List[Tuple[float, str]] = sorted(
+        self.model_usage: list[tuple[float, str]] = sorted(
             (float(u.get("ts") or 0), str(u.get("model_id") or ""))
             for u in (usage if isinstance(usage, list) else []) if isinstance(u, dict) and u.get("model_id"))
         self.start = self._start(task_id, item, metadata)
@@ -252,10 +252,10 @@ class LegacyTaskParser(Parser):
         self._task_rx = re.compile(
             r"^%s/tasks/([^/]+)/(ui_messages|api_conversation_history|claude_messages|task_metadata)\.json$" % self.ROOT,
             re.I)
-        self._cache: Dict[tuple, object] = {}
+        self._cache: dict[tuple, object] = {}
 
     # Subclass hook: the HistoryItem for a task, or None.
-    def history_item(self, task_dir: Path, root: Path, task_id: str) -> Optional[dict]:
+    def history_item(self, task_dir: Path, root: Path, task_id: str) -> dict | None:
         raise NotImplementedError
 
     def cached_json(self, path: Path):
@@ -271,7 +271,7 @@ class LegacyTaskParser(Parser):
     # Subclass hook: rows for one API history message. The default reads
     # native content blocks; PearAI's Roo fork overrides it for XML tool calls.
     def api_content_rows(self, msg: dict, n: int, base_turn: str,
-                         include_thinking: bool) -> Iterator[Tuple[str, str, str, str]]:
+                         include_thinking: bool) -> Iterator[tuple[str, str, str, str]]:
         return content_rows(msg.get("content"), base_turn, include_thinking)
 
     def task_match(self, artifact: Artifact):
@@ -445,7 +445,7 @@ class LegacyTaskParser(Parser):
         return row
 
 
-def map_ui(kind: str, msg: dict, first: bool) -> Optional[Tuple[str, str, str]]:
+def map_ui(kind: str, msg: dict, first: bool) -> tuple[str, str, str] | None:
     """(turn_type, text, tool_name) for one ClineMessage, or None to skip."""
     text = msg.get("text")
     text = text if isinstance(text, str) else ("" if text is None else compact_json(text))
@@ -491,7 +491,7 @@ def map_ui(kind: str, msg: dict, first: bool) -> Optional[Tuple[str, str, str]]:
     return ("system", "%s: %s" % (kind, text) if text else kind, "")
 
 
-def tool_use_text(kind: str, text: str) -> Tuple[str, str]:
+def tool_use_text(kind: str, text: str) -> tuple[str, str]:
     if kind == "tool":
         j = loads_or_none(text)
         if j is None:
@@ -518,7 +518,7 @@ def tool_use_text(kind: str, text: str) -> Tuple[str, str]:
     return TOOL_NAMES.get(kind, kind), text
 
 
-def content_rows(content, base_turn: str, include_thinking: bool) -> Iterator[Tuple[str, str, str, str]]:
+def content_rows(content, base_turn: str, include_thinking: bool) -> Iterator[tuple[str, str, str, str]]:
     """(turn_type, text, tool_name, tool_use_id) per content block of an
     Anthropic-style message, shared by the legacy API history and Cline's SDK
     messages."""

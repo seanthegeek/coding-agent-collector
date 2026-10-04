@@ -56,8 +56,8 @@ import json
 import os
 import re
 from collections import OrderedDict
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, List, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -149,7 +149,7 @@ def tool_text(call: dict) -> str:
 
 # ---- project path -------------------------------------------------------------
 
-def _read_small(path: Path) -> Optional[str]:
+def _read_small(path: Path) -> str | None:
     try:
         if os.path.islink(str(path)) or not path.is_file():
             return None
@@ -251,9 +251,9 @@ class GeminiCliParser(Parser):
 
         meta: dict = {}
         # id -> [record, line, session_id]
-        messages: "OrderedDict[str, list]" = OrderedDict()
-        starts: List[Tuple[int, str, str, str]] = []   # (line, ts, session_id, text)
-        events: List[Tuple[int, str, str, str]] = []
+        messages: OrderedDict[str, list] = OrderedDict()
+        starts: list[tuple[int, str, str, str]] = []   # (line, ts, session_id, text)
+        events: list[tuple[int, str, str, str]] = []
         session_id = ""
         latest_ts = ""
 
@@ -340,7 +340,7 @@ class GeminiCliParser(Parser):
                                "parser: %d unparseable line(s), first at line %d" % (len(errors), errors[0][0]), opts)
 
     @staticmethod
-    def _apply_patch(messages: "OrderedDict[str, list]", patch: dict) -> None:
+    def _apply_patch(messages: OrderedDict[str, list], patch: dict) -> None:
         entry = messages.get(patch["id"])
         if entry is None:
             return
@@ -374,7 +374,7 @@ class GeminiCliParser(Parser):
             return [], [(1, "not a ConversationRecord")]
         return [(1, rec)], []
 
-    def _message_rows(self, artifact: Artifact, opts: Options, msg: dict, line: int, sid: str, project: str) -> List[Row]:
+    def _message_rows(self, artifact: Artifact, opts: Options, msg: dict, line: int, sid: str, project: str) -> list[Row]:
         mtype = msg.get("type")
         ts = to_utc(msg.get("timestamp"))
         model = str(msg.get("model") or "") if mtype == "gemini" else ""
@@ -390,7 +390,7 @@ class GeminiCliParser(Parser):
             r.text = compact(text, opts.max_text_length)
             return r
 
-        out: List[Row] = []
+        out: list[Row] = []
         content = msg.get("content")
         if mtype == "user":
             out.append(row("user", part_text(content)))

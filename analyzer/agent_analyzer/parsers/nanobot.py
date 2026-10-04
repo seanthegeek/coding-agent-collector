@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import base64
 import re
-from typing import Iterator
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact

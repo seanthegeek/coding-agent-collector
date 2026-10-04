@@ -74,7 +74,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Dict, Iterator, List, Optional, Tuple
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -108,7 +108,7 @@ def tool_args_text(args) -> str:
     return compact_json(args)
 
 
-def _maybe_zstd(blob: bytes) -> Tuple[Optional[bytes], str]:
+def _maybe_zstd(blob: bytes) -> tuple[bytes | None, str]:
     """(data, error): zstd frames are decompressed, anything else returned."""
     blob = bytes(blob)
     if not blob.startswith(ZSTD_MAGIC):
@@ -122,7 +122,7 @@ def _maybe_zstd(blob: bytes) -> Tuple[Optional[bytes], str]:
         return None, "%s: %s" % (type(e).__name__, e)
 
 
-def _iter_lines(data: bytes, errors: list) -> Iterator[Tuple[int, dict]]:
+def _iter_lines(data: bytes, errors: list) -> Iterator[tuple[int, dict]]:
     for n, raw in enumerate(data.split(b"\n"), 1):
         raw = raw.strip()
         if not raw:
@@ -181,7 +181,7 @@ class OpenClawParser(Parser):
         row.text = compact(text, opts.max_text_length)
         return row
 
-    def _start(self, artifact: Artifact, s: _Session, line: int, ts: str, header: Optional[dict],
+    def _start(self, artifact: Artifact, s: _Session, line: int, ts: str, header: dict | None,
                opts: Options) -> Row:
         s.started = True
         header = header or {}
@@ -372,7 +372,7 @@ class OpenClawParser(Parser):
     def _parse_db(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         with open_copy(artifact.disk_path) as con:
             tables = table_names(con)
-            windows: Dict[str, dict] = {}
+            windows: dict[str, dict] = {}
             if "session_windows" in tables:
                 for w in con.execute("select * from session_windows"):
                     w = dict(w)
@@ -385,9 +385,9 @@ class OpenClawParser(Parser):
                 yield from self._db_cold(artifact, con, windows, opts)
 
     @staticmethod
-    def _window_session(session_id: str, windows: Dict[str, dict], key: str = "", extra: str = "") -> _Session:
+    def _window_session(session_id: str, windows: dict[str, dict], key: str = "", extra: str = "") -> _Session:
         w = windows.get(session_id) or {}
-        parts: List[str] = []
+        parts: list[str] = []
         for col in ("channel", "account_id", "chat_type", "reason", "previous_session_id",
                     "parent_session_key", "spawned_by", "display_name"):
             if w.get(col) not in (None, ""):
@@ -398,8 +398,8 @@ class OpenClawParser(Parser):
             parts.append("model_provider=%s" % w["model_provider"])
         return _Session(session_id, key or str(w.get("session_key") or ""), " ".join(parts), str(w.get("model") or ""))
 
-    def _db_events(self, artifact: Artifact, con, windows: Dict[str, dict], opts: Options) -> Iterator[Row]:
-        s: Optional[_Session] = None
+    def _db_events(self, artifact: Artifact, con, windows: dict[str, dict], opts: Options) -> Iterator[Row]:
+        s: _Session | None = None
         for r in con.execute("select rowid as _rowid, session_id, seq, event_json, event_zstd, created_at "
                              "from transcript_events order by session_id, seq"):
             r = dict(r)
@@ -430,7 +430,7 @@ class OpenClawParser(Parser):
                 continue
             yield from self._entry_rows(artifact, s, line, rec, r.get("created_at"), opts)
 
-    def _db_archives(self, artifact: Artifact, con, windows: Dict[str, dict], opts: Options) -> Iterator[Row]:
+    def _db_archives(self, artifact: Artifact, con, windows: dict[str, dict], opts: Options) -> Iterator[Row]:
         for r in con.execute("select rowid as _rowid, session_id, session_key, reason, encoding, archive_name, "
                              "created_at, published_at, archive_blob from session_transcript_archives "
                              "order by created_at"):
@@ -455,7 +455,7 @@ class OpenClawParser(Parser):
                 yield self._bad(artifact, s, line, "archive %s: %d unparseable line(s)" % (
                     r.get("archive_name") or sid, len(errors)), opts)
 
-    def _db_cold(self, artifact: Artifact, con, windows: Dict[str, dict], opts: Options) -> Iterator[Row]:
+    def _db_cold(self, artifact: Artifact, con, windows: dict[str, dict], opts: Options) -> Iterator[Row]:
         for r in con.execute("select rowid as _rowid, session_id, archive_name, archived_at, archive_blob "
                              "from session_transcript_cold_archives where storage = 'sqlite' order by archived_at"):
             r = dict(r)

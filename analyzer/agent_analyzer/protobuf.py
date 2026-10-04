@@ -12,16 +12,16 @@ only needs the fields a parser reads.
 from __future__ import annotations
 
 import struct
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from .timeutil import to_utc
 
-Schema = Dict[str, Dict[int, Tuple[str, str]]]
+Schema = dict[str, dict[int, tuple[str, str]]]
 
 SCALARS = ("str", "bytes", "int", "bool", "float", "double", "ts")
 
 
-def read_varint(b: bytes, i: int) -> Tuple[int, int]:
+def read_varint(b: bytes, i: int) -> tuple[int, int]:
     result = 0
     shift = 0
     while True:
@@ -99,12 +99,12 @@ def _scalar(kind: str, wt: int, v) -> Any:
     raise ValueError(kind)
 
 
-def decode(b: bytes, message: str, schema: Schema) -> Dict[str, Any]:
+def decode(b: bytes, message: str, schema: Schema) -> dict[str, Any]:
     """Decode bytes as `message` per `schema`. Returns a dict of the fields
     present; repeated fields are lists. Never raises on unknown fields; a
     malformed buffer raises ValueError."""
     fields = schema[message]
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for num, wt, v in iter_fields(b):
         spec = fields.get(num)
         if spec is None:
@@ -181,7 +181,7 @@ def _encode_scalar(field: int, kind: str, v) -> bytes:
     raise ValueError(kind)
 
 
-def encode(values: Dict[str, Any], message: str, schema: Schema) -> bytes:
+def encode(values: dict[str, Any], message: str, schema: Schema) -> bytes:
     """Encode a dict as `message`. Repeated fields take lists."""
     by_name = {}
     for num, (name, kind) in schema[message].items():

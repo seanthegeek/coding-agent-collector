@@ -43,8 +43,8 @@ from __future__ import annotations
 
 import bisect
 import re
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -61,7 +61,7 @@ LLM_RX = re.compile(r"^(TO LLM|LLM RESPONSE) (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)\s*
 ROLE_TURN = {"USER": "user", "ASSISTANT": "assistant", "SYSTEM": "system"}
 
 
-def _lines(path: Path) -> Iterator[Tuple[int, str]]:
+def _lines(path: Path) -> Iterator[tuple[int, str]]:
     with open(path, "rb") as fh:
         for n, raw in enumerate(fh, 1):
             yield n, raw.decode("utf-8", errors="replace").rstrip("\r\n")
@@ -85,9 +85,9 @@ def project_dir(original: str) -> str:
     return original[:i] if i > 0 else original[:i + 1]
 
 
-def read_input_history(path: Path, errors: Optional[list] = None) -> List[Tuple[int, str, str]]:
+def read_input_history(path: Path, errors: list | None = None) -> list[tuple[int, str, str]]:
     """(line, local timestamp, text) per prompt_toolkit FileHistory entry."""
-    out: List[list] = []
+    out: list[list] = []
     for n, line in _lines(path):
         m = INPUT_TS_RX.match(line)
         if m:
@@ -101,7 +101,7 @@ def read_input_history(path: Path, errors: Optional[list] = None) -> List[Tuple[
     return [(e[0], e[1], "\n".join(e[2])) for e in out]
 
 
-def read_headers(path: Path) -> List[str]:
+def read_headers(path: Path) -> list[str]:
     """Session header timestamps of a chat history, in file order."""
     if not path.is_file() or path.is_symlink():
         return []
@@ -160,7 +160,7 @@ class AiderParser(Parser):
         n_header = 0
         ts = ""
         kind = ""
-        buf: List[str] = []
+        buf: list[str] = []
         start = 0
 
         def flush() -> Iterator[Row]:
@@ -239,9 +239,9 @@ class AiderParser(Parser):
     def _parse_llm(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         errors: list = []
         session_for = self._session_for(artifact)
-        block: Optional[dict] = None
+        block: dict | None = None
 
-        def emit(b: Optional[dict]) -> Iterator[Row]:
+        def emit(b: dict | None) -> Iterator[Row]:
             if b is None:
                 return
             row = self.base_row(artifact)
@@ -256,7 +256,7 @@ class AiderParser(Parser):
                 row.text = compact(text, opts.max_text_length)
                 yield row
                 return
-            msgs: List[Tuple[str, List[str]]] = []
+            msgs: list[tuple[str, list[str]]] = []
             for l in b["lines"]:
                 if l == "-------":
                     msgs.append(("", []))
@@ -266,7 +266,7 @@ class AiderParser(Parser):
                         role = l.split(" ", 1)[0]
                         msgs[-1] = (role, body)
                     body.append(_strip_role(l, role))
-            counts: Dict[str, int] = {}
+            counts: dict[str, int] = {}
             last_user = ""
             for role, body in msgs:
                 counts[role] = counts.get(role, 0) + 1

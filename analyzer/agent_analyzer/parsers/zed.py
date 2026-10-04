@@ -47,7 +47,7 @@ from __future__ import annotations
 import io
 import json
 import re
-from typing import Iterator, Optional, Tuple
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -235,7 +235,7 @@ class ZedParser(Parser):
             yield row
 
     @staticmethod
-    def _decode(r: dict) -> Tuple[Optional[dict], str]:
+    def _decode(r: dict) -> tuple[dict | None, str]:
         data = r.get("data")
         if data is None:
             return None, "no data"
@@ -255,7 +255,7 @@ class ZedParser(Parser):
             return None, "not a JSON object"
         return thread, ""
 
-    def _messages(self, thread: dict) -> Iterator[Tuple[str, str, str, str]]:
+    def _messages(self, thread: dict) -> Iterator[tuple[str, str, str, str]]:
         """(turn_type, text, tool_name, tool_use_id) in transcript order."""
         for msg in thread.get("messages") or []:
             if isinstance(msg, str):
@@ -276,7 +276,7 @@ class ZedParser(Parser):
                 yield from self._legacy(msg)
 
     @staticmethod
-    def _user(u) -> Iterator[Tuple[str, str, str, str]]:
+    def _user(u) -> Iterator[tuple[str, str, str, str]]:
         # One row per prompt: text, mentions and images of one User message
         # are joined so sessions.csv counts prompts, not content items.
         content = u.get("content") if isinstance(u, dict) else None
@@ -298,7 +298,7 @@ class ZedParser(Parser):
         yield "user", "\n".join(parts), "", ""
 
     @staticmethod
-    def _agent(a) -> Iterator[Tuple[str, str, str, str]]:
+    def _agent(a) -> Iterator[tuple[str, str, str, str]]:
         if not isinstance(a, dict):
             return
         results = a.get("tool_results") if isinstance(a.get("tool_results"), dict) else {}
@@ -344,7 +344,7 @@ class ZedParser(Parser):
                 yield result(key, res)
 
     @staticmethod
-    def _legacy(msg: dict) -> Iterator[Tuple[str, str, str, str]]:
+    def _legacy(msg: dict) -> Iterator[tuple[str, str, str, str]]:
         role = str(msg.get("role") or "").lower()
         kind = "user" if role == "user" else "assistant" if role == "assistant" else "system"
         if isinstance(msg.get("text"), str):

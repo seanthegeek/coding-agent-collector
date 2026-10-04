@@ -40,8 +40,8 @@ from __future__ import annotations
 import base64
 import binascii
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -91,7 +91,7 @@ def _bare_messages(session: SessionFile) -> SessionFile:
 
 def _last_snapshots(session: SessionFile) -> SessionFile:
     """Keep only the last entry for each `message.id`."""
-    last: Dict[str, int] = {}
+    last: dict[str, int] = {}
     for i, (_, rec) in enumerate(session.entries):
         msg = rec.get("message")
         if isinstance(msg, dict) and msg.get("id"):
@@ -151,7 +151,7 @@ class LettaParser(Parser):
 
     # -- reflection transcript ------------------------------------------
 
-    def _local_twin(self, artifact: Artifact, agent_dir: str, conv_dir: str) -> Optional[Path]:
+    def _local_twin(self, artifact: Artifact, agent_dir: str, conv_dir: str) -> Path | None:
         base = artifact.home.disk_path / CONVERSATIONS_REL
         if base.is_symlink() or not base.is_dir():
             return None
@@ -163,7 +163,7 @@ class LettaParser(Parser):
                 return f
         return None
 
-    def _sessions(self, artifact: Artifact, agent_dir: str) -> List[Tuple[str, str]]:
+    def _sessions(self, artifact: Artifact, agent_dir: str) -> list[tuple[str, str]]:
         """(timestamp, project) of the sessions.jsonl lines for this agent,
         sorted by time."""
         f = artifact.home.disk_path / SESSIONS_REL

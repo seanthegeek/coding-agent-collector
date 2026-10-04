@@ -66,8 +66,8 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -116,7 +116,7 @@ def _d(value) -> dict:
     return value if isinstance(value, dict) else {}
 
 
-def _loads(value) -> Optional[dict]:
+def _loads(value) -> dict | None:
     if isinstance(value, bytes):
         value = value.decode("utf-8", errors="replace")
     if not isinstance(value, str):
@@ -128,7 +128,7 @@ def _loads(value) -> Optional[dict]:
     return v if isinstance(v, dict) else None
 
 
-def _read_json(path: Path) -> Optional[dict]:
+def _read_json(path: Path) -> dict | None:
     try:
         with open(path, "rb") as fh:
             return _loads(fh.read())
@@ -161,7 +161,7 @@ class OpenCodeParser(Parser):
     agent = "opencode"
     name = "opencode"
     data_dir = ".local/share/opencode"
-    db_prefixes: Tuple[str, ...] = ("opencode",)
+    db_prefixes: tuple[str, ...] = ("opencode",)
 
     def __init__(self) -> None:
         dd = re.escape(self.data_dir)
@@ -214,8 +214,8 @@ class OpenCodeParser(Parser):
         ), opts.max_text_length)
         return row
 
-    def _message_rows(self, artifact: Artifact, ctx: _Ctx, msg: dict, msg_src: Tuple[str, int, object],
-                      parts: List[Tuple[Optional[dict], str, int, object]], opts: Options) -> Iterator[Row]:
+    def _message_rows(self, artifact: Artifact, ctx: _Ctx, msg: dict, msg_src: tuple[str, int, object],
+                      parts: list[tuple[dict | None, str, int, object]], opts: Options) -> Iterator[Row]:
         """Rows for one V1 message and its parts. `msg_src` and each part
         entry carry (source_file, source_line, fallback time); a part whose
         data could not be decoded is passed as None and counted."""
@@ -226,9 +226,9 @@ class OpenCodeParser(Parser):
         if not ctx.project_path:
             ctx.project_path = str(_d(msg.get("path")).get("cwd") or "")
         bad = 0
-        user_text: List[str] = []
-        first_user: Optional[Tuple[str, int, int]] = None
-        out: List[Row] = []
+        user_text: list[str] = []
+        first_user: tuple[str, int, int] | None = None
+        out: list[Row] = []
         for data, pfile, pline, ptime in parts:
             if data is None:
                 bad += 1
@@ -327,7 +327,7 @@ class OpenCodeParser(Parser):
     def _parse_db(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
         if not is_sqlite(artifact.disk_path):
             return
-        rows: List[Row] = []
+        rows: list[Row] = []
         try:
             with open_copy(artifact.disk_path) as con:
                 for row in self._db_rows(con, artifact, opts):
@@ -341,15 +341,15 @@ class OpenCodeParser(Parser):
 
     def _db_rows(self, con: sqlite3.Connection, artifact: Artifact, opts: Options) -> Iterator[Row]:
         tables = table_names(con)
-        projects: Dict[str, dict] = {}
+        projects: dict[str, dict] = {}
         if "project" in tables:
             for r in con.execute("select * from project"):
                 projects[r["id"]] = dict(r)
-        sessions: Dict[str, Tuple[int, dict]] = {}
+        sessions: dict[str, tuple[int, dict]] = {}
         if "session" in tables:
             for r in con.execute("select rowid as _rowid, * from session order by time_created, id"):
                 sessions[r["id"]] = (r["_rowid"], dict(r))
-        ctxs: Dict[str, _Ctx] = {}
+        ctxs: dict[str, _Ctx] = {}
 
         def ctx_for(sid: str) -> _Ctx:
             c = ctxs.get(sid)
@@ -464,7 +464,7 @@ class OpenCodeParser(Parser):
 
     # -- legacy JSON tree -----------------------------------------------------------
     @staticmethod
-    def _orig_root(artifact: Artifact, depth: int) -> Tuple[str, str, Path]:
+    def _orig_root(artifact: Artifact, depth: int) -> tuple[str, str, Path]:
         """(original root, separator, disk root) for the directory `depth`
         levels above the artifact file. The original path is cut by the length
         of the relative tail, which is the same whatever the separator."""
@@ -478,14 +478,14 @@ class OpenCodeParser(Parser):
         return root, sep, disk
 
     @staticmethod
-    def _children(directory: Path) -> List[Path]:
+    def _children(directory: Path) -> list[Path]:
         try:
             return sorted(p for p in directory.iterdir() if p.suffix == ".json" and not p.is_symlink() and p.is_file())
         except OSError:
             return []
 
-    def _session_ctx(self, root: Path, session_id: str, old: bool, msg: dict) -> Tuple[_Ctx, dict]:
-        s: Optional[dict] = None
+    def _session_ctx(self, root: Path, session_id: str, old: bool, msg: dict) -> tuple[_Ctx, dict]:
+        s: dict | None = None
         if old:
             s = _read_json(root / "info" / (session_id + ".json"))
         else:

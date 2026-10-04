@@ -50,7 +50,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Dict, Iterator, Optional
+from collections.abc import Iterator
 from urllib.parse import unquote, urlparse
 
 from ..inputs import Artifact
@@ -320,7 +320,7 @@ def tool_args_summary(arguments_json: str) -> str:
     return compact_json(args)
 
 
-def _path_of(scope: Optional[dict]) -> str:
+def _path_of(scope: dict | None) -> str:
     if not scope:
         return ""
     return uri_to_path(scope.get("absolute_uri") or scope.get("absolute_path_migrate_me_to_uri") or "")
@@ -506,7 +506,7 @@ class AntigravityParser(Parser):
                             "parent=%s" % meta["parent_conversation_id"] if meta.get("parent_conversation_id") else "",
                         ), opts.max_text_length)
                         yield row
-            models: Dict[int, str] = {}
+            models: dict[int, str] = {}
             if "gen_metadata" in tables:
                 for (data,) in con.execute("select data from gen_metadata"):
                     try:

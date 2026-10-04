@@ -68,7 +68,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Dict, Iterator, List, Optional, Tuple
+from collections.abc import Iterator
 
 from ..inputs import Artifact
 from ..model import Row, compact
@@ -94,7 +94,7 @@ def _sniff_export(path) -> bool:
     return head.lstrip()[:1] == b"{" and b'"conversation_id"' in head
 
 
-def salvage(text: str) -> Tuple[Optional[dict], str]:
+def salvage(text: str) -> tuple[dict | None, str]:
     """Parse a ConversationState. On failure, recover `conversation_id` and
     every complete `history` entry before the damage; the second value is the
     error message, empty when the whole document parsed."""
@@ -132,7 +132,7 @@ def salvage(text: str) -> Tuple[Optional[dict], str]:
     return state, err
 
 
-def _variant(value) -> Tuple[str, dict]:
+def _variant(value) -> tuple[str, dict]:
     """Unpack a serde externally tagged enum: {"Tag": {...}}."""
     if isinstance(value, dict) and len(value) == 1:
         tag, body = next(iter(value.items()))
@@ -141,7 +141,7 @@ def _variant(value) -> Tuple[str, dict]:
 
 
 def result_text(result: dict) -> str:
-    parts: List[str] = []
+    parts: list[str] = []
     for block in result.get("content") or []:
         if not isinstance(block, dict):
             parts.append(str(block))
@@ -235,7 +235,7 @@ class KiroParser(Parser):
         elif isinstance(state.get("model"), str):
             conv_model = state["model"]
         project = key or self._first_cwd(state)
-        names: Dict[str, str] = {}
+        names: dict[str, str] = {}
         last_ts = [""]
 
         def base(ts: str, model: str = "") -> Row:
@@ -325,7 +325,7 @@ class KiroParser(Parser):
         return fill(row, content if isinstance(content, str) else compact_json(content))
 
     @staticmethod
-    def _user(content, ts: str, model: str, names: Dict[str, str], base, fill) -> Iterator[Row]:
+    def _user(content, ts: str, model: str, names: dict[str, str], base, fill) -> Iterator[Row]:
         tag, body = _variant(content)
         prompt = body.get("prompt")
         if tag in ("Prompt", "CancelledToolUses") and prompt:

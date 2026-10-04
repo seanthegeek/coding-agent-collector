@@ -10,7 +10,6 @@ from pathlib import Path
 
 from agent_analyzer import catalog, cli
 from agent_analyzer.inputs import open_input
-
 from fixtures import build_home, build_image
 
 REPO = Path(__file__).resolve().parents[2]
@@ -131,7 +130,8 @@ class LooseDetectTests(unittest.TestCase):
 
     def test_cli_detect_json_and_user_override(self):
         home = build_home(self.tmp / "x")
-        import io, contextlib
+        import contextlib
+        import io
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rc = cli.main(["detect", str(home / ".codex"), "--json", "--user", "mallory", "--host", "h1"])
@@ -199,7 +199,8 @@ class ArchiveTests(unittest.TestCase):
                 tf.extractall(extracted)
         col = open_input(extracted, self.cat)
         self.assertEqual(col.kind, "collected")
-        import io, contextlib
+        import contextlib
+        import io
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             rc = cli.main(["timeline", str(extracted), "-o", str(self.tmp / "tl")])
