@@ -61,7 +61,7 @@ def line_count_remote(repo: str, sha: str, path: str):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--repos", type=pathlib.Path, help="directory of local checkouts")
-    ap.add_argument("files", nargs="*", type=pathlib.Path)
+    ap.add_argument("files", nargs="*", type=lambda s: pathlib.Path(s).resolve())
     args = ap.parse_args()
     files = args.files or sorted(
         list((ROOT / "collectors" / "research").glob("*.md"))
