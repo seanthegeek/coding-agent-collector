@@ -590,6 +590,21 @@ printf '{}\n' >"$ROOT/srv/museproj/.muse/hooks.json"
 printf 'x\n' >"$ROOT/srv/museproj/.muse/worktrees/w1/f"
 printf '# trusted\n' >"$ROOT/srv/musetrust/AGENTS.md"
 
+# --- 2026-10-04 relocated Claude Code home: a config home moved with
+# CLAUDE_CONFIG_DIR to ~/.claude-work, which keeps .claude.json inside it, and
+# claude-code-router's ~/.claude-code-router, which the .claude-* catalog lines
+# must not claim. The same files are in smoke.ps1.
+CCW="$H/.claude-work"
+CCW_S="$CCW/projects/-srv-ccwork/0a0b0c0d-0000-4000-8000-000000000001.jsonl"
+mkdir -p "$CCW/projects/-srv-ccwork" "$H/.claude-code-router" "$ROOT/srv/ccwork/.claude" "$ROOT/srv/cchist/.claude"
+printf '{"type":"user","cwd":"/srv/ccwork","message":{"role":"user","content":"hi"}}\n' >"$CCW_S"
+printf '{"display":"hi","project":"/srv/cchist","timestamp":1790848800000}\n' >"$CCW/history.jsonl"
+printf '{"projects":{"/srv/ccwork":{"allowedTools":[]}}}\n' >"$CCW/.claude.json"
+printf '{"claudeAiOauth":{"accessToken":"sk-ant-oat-SECRET"}}\n' >"$CCW/.credentials.json"
+printf '{"PORT":3456}\n' >"$H/.claude-code-router/config.json"
+printf '{}\n' >"$ROOT/srv/ccwork/.claude/settings.json"
+printf '{}\n' >"$ROOT/srv/cchist/.claude/settings.json"
+
 run() { # run NAME ARGS...
   _n=$1; shift
   mkdir -p "$OUT/$_n"
@@ -750,6 +765,14 @@ check "muse .local/bin glob leaves other tools alone" "! grep -q '/.local/bin/ot
 check "muse trust.json projects key discovers project" "row \"$ROOT/srv/musetrust/AGENTS.md\" | grep -q '\"user\":\"alice\".*\"status\":\"collected\"'"
 check "muse session.jsonl workspace_root discovers project" "row \"$ROOT/srv/museproj/.muse/hooks.json\" | grep -q '\"user\":\"alice\",\"home\":\"$ROOT/srv/museproj\",\"agent\":\"project\".*\"status\":\"collected\"'"
 check "muse project .muse/worktrees excluded" "[ \"\$(status_of \"$ROOT/srv/museproj/.muse/worktrees\")\" = skipped_excluded ]"
+# 2026-10-04 relocated Claude Code home
+check "relocated claude home session collected as claude-code" "row \"$CCW_S\" | grep -q '\"agent\":\"claude-code\".*\"status\":\"collected\"'"
+check "relocated claude home history collected as claude-code" "row \"$CCW/history.jsonl\" | grep -q '\"agent\":\"claude-code\".*\"status\":\"collected\"'"
+check "relocated claude home credentials flagged secret" "row \"$CCW/.credentials.json\" | grep -q '\"agent\":\"claude-code\".*\"secret\":true,\"status\":\"collected\"'"
+check "relocated claude home .claude.json flagged secret" "row \"$CCW/.claude.json\" | grep -q '\"agent\":\"claude-code\".*\"secret\":true,\"status\":\"collected\"'"
+check "claude-code-router not collected" "! grep -q '/.claude-code-router/' \"\$M\""
+check "relocated .claude.json projects key discovers project" "row \"$ROOT/srv/ccwork/.claude/settings.json\" | grep -q '\"user\":\"alice\".*\"agent\":\"project\".*\"status\":\"collected\"'"
+check "relocated history.jsonl discovers project" "row \"$ROOT/srv/cchist/.claude/settings.json\" | grep -q '\"user\":\"alice\".*\"agent\":\"project\".*\"status\":\"collected\"'"
 check "no live snapshot directory" "! tar -tzf \"\$A\" | grep -q '^./live/'"
 check "summary has no no_live option" "! grep -q no_live \"\$S\""
 check "manifest and summary inside archive" "tar -tzf \"\$A\" | grep -q '^./manifest.jsonl' && tar -tzf \"\$A\" | grep -q '^./collection.json'"
@@ -838,7 +861,7 @@ check "inventory first line is the host line, keys in order" "head -n1 \"$OUT/in
 check "inventory host line counts" "head -n1 \"$OUT/inventory.stdout\" | grep -q '\"users_unreadable\":0,\"docker_volumes\":3}\$'"
 check "inventory every later line is an agent line, keys in order" "[ \"\$(sed 1d \"$OUT/inventory.stdout\" | grep -vc '$INV_AGENT_RE')\" = 0 ] && [ \"\$(grep -c . \"$OUT/inventory.stdout\")\" -gt 10 ]"
 check "inventory ollama line: one file, excluded models not counted" "agent_line inventory ollama ollama | grep -q '\"files\":1,\"bytes\":5,\"first\":\"2026-09-15T01:02:03Z\",\"last\":\"2026-09-15T01:02:03Z\",\"projects\":0,\"evidence\":\".ollama\"}\$'"
-check "inventory claude-code evidence in catalog order" "agent_line inventory alice claude-code | grep -q '\"evidence\":\".claude,.claude.json\\*\"}\$'"
+check "inventory claude-code evidence in catalog order" "agent_line inventory alice claude-code | grep -q '\"evidence\":\".claude,.claude.json\\*,.claude-\\*/projects,.claude-\\*/history.jsonl,.claude-\\*/.claude.json\\*,.claude-\\*/.credentials.json\"}\$'"
 check "inventory first and last set for alice claude-code" "agent_line inventory alice claude-code | grep -q '\"first\":\"20[0-9-]*T[0-9:]*Z\",\"last\":\"20[0-9-]*T[0-9:]*Z\"'"
 check "inventory nested entry claimed from the enclosing agent" "agent_line inventory alice antigravity | grep -q '\"evidence\":\"[^\"]*.gemini/antigravity-cli' && agent_line inventory alice gemini-cli | grep -q '\"evidence\":\".gemini\"'"
 check "inventory: matched directory with no files of its own gives no line" "[ -z \"\$(agent_line inventory bob gemini-cli)\" ] && agent_line inventory bob antigravity | grep -q '\"files\":1,\"bytes\":3,.*\"evidence\":\".gemini/antigravity-cli\"}\$'"

@@ -550,6 +550,19 @@ Mk 'Users/alice/.local/share/muse/sessions/2026/10/04/01a0f000-0000-7000-8000-00
 Mk 'museproj/.muse/hooks.json' '{}'
 Mk 'museproj/.muse/worktrees/w1/f' 'x'
 Mk 'musetrust/AGENTS.md' '# trusted'
+
+# --- 2026-10-04 relocated Claude Code home: a config home moved with
+# CLAUDE_CONFIG_DIR to ~/.claude-work, which keeps .claude.json inside it, and
+# claude-code-router's ~/.claude-code-router, which the .claude-* catalog lines
+# must not claim. The same files are in smoke.sh.
+$CcwS = 'alice/.claude-work/projects/-srv-ccwork/0a0b0c0d-0000-4000-8000-000000000001.jsonl'
+Mk "Users/$CcwS" '{"type":"user","cwd":"C:\\ccwork","message":{"role":"user","content":"hi"}}'
+Mk 'Users/alice/.claude-work/history.jsonl' '{"display":"hi","project":"C:\\cchist","timestamp":1790848800000}'
+Mk 'Users/alice/.claude-work/.claude.json' '{"projects":{"C:\\ccwork":{"allowedTools":[]}}}'
+Mk 'Users/alice/.claude-work/.credentials.json' '{"claudeAiOauth":{"accessToken":"sk-ant-oat-SECRET"}}'
+Mk 'Users/alice/.claude-code-router/config.json' '{"PORT":3456}'
+Mk 'ccwork/.claude/settings.json' '{}'
+Mk 'cchist/.claude/settings.json' '{}'
 $clawLinkOk = $false
 try {
   New-Item -ItemType SymbolicLink -Path (P 'home/bob/.clawdbot') -Target '.openclaw' -ErrorAction Stop | Out-Null
@@ -738,6 +751,20 @@ Check 'muse trust.json projects key discovers project' { (StatusOf 'musetrust/AG
 $r = Row 'museproj/.muse/hooks.json'
 Check 'muse session.jsonl workspace_root discovers project' { $r -and $r.user -eq 'alice' -and $r.agent -eq 'project' -and $r.status -eq 'collected' }
 Check 'muse project .muse/worktrees excluded' { (StatusOf 'museproj/.muse/worktrees') -eq 'skipped_excluded' }
+# 2026-10-04 relocated Claude Code home
+$r = Row $CcwS
+Check 'relocated claude home session collected as claude-code' { $r -and $r.agent -eq 'claude-code' -and $r.status -eq 'collected' }
+$r = Row 'alice/.claude-work/history.jsonl'
+Check 'relocated claude home history collected as claude-code' { $r -and $r.agent -eq 'claude-code' -and $r.status -eq 'collected' }
+$r = Row 'alice/.claude-work/.credentials.json'
+Check 'relocated claude home credentials flagged secret' { $r -and $r.agent -eq 'claude-code' -and $r.secret -eq $true -and $r.status -eq 'collected' }
+$r = Row 'alice/.claude-work/.claude.json'
+Check 'relocated claude home .claude.json flagged secret' { $r -and $r.agent -eq 'claude-code' -and $r.secret -eq $true -and $r.status -eq 'collected' }
+Check 'claude-code-router not collected' { $null -eq (Row 'alice/.claude-code-router/config.json') }
+$r = Row 'ccwork/.claude/settings.json'
+Check 'relocated .claude.json projects key discovers project' { $r -and $r.user -eq 'alice' -and $r.agent -eq 'project' -and $r.status -eq 'collected' }
+$r = Row 'cchist/.claude/settings.json'
+Check 'relocated history.jsonl discovers project' { $r -and $r.user -eq 'alice' -and $r.agent -eq 'project' -and $r.status -eq 'collected' }
 Check 'Public profile skipped' { $null -eq (Row 'Public/Desktop/readme.txt') }
 Check 'Default profile skipped' { $null -eq (Row 'Default/NTUSER.DAT') }
 $entries = ArchiveEntries
@@ -833,7 +860,7 @@ Check 'Inventory every later line is an agent line, keys in order' { $script:inv
 $r = InvAgent 'bob' 'ollama'
 Check 'Inventory ollama line: one file, excluded models not counted' { $r -and $r.files -eq 1 -and $r.bytes -eq 4 -and (InvRaw 'bob' 'ollama').Contains('"first":"2026-09-15T01:02:03Z","last":"2026-09-15T01:02:03Z"') -and $r.evidence -eq '.ollama' }
 $r = InvAgent 'alice' 'claude-code'
-Check 'Inventory claude-code evidence in catalog order' { $r -and $r.evidence -eq '.claude,.claude.json*' }
+Check 'Inventory claude-code evidence in catalog order' { $r -and $r.evidence -eq '.claude,.claude.json*,.claude-*/projects,.claude-*/history.jsonl,.claude-*/.claude.json*,.claude-*/.credentials.json' }
 Check 'Inventory first and last set for alice claude-code' { (InvRaw 'alice' 'claude-code') -match '"first":"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","last":"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ"' }
 Check 'Inventory: matched directory with no files of its own gives no line' { $null -eq (InvAgent 'bob' 'gemini-cli') -and ($b = InvAgent 'bob' 'antigravity') -and $b.files -eq 1 -and $b.bytes -eq 2 -and $b.evidence -eq '.gemini/antigravity-cli' }
 Check 'Inventory: no agent line has zero files' { -not ($script:inv | Where-Object { $_.type -eq 'agent' } | Where-Object { $_.files -eq 0 }) }

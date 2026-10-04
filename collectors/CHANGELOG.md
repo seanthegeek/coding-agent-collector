@@ -23,6 +23,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `muse-bin-*.exe` binary and `.muse/worktrees` are excluded. Projects are
   discovered from `trust.json` and session logs' `workspace_root`, and a
   project's `.muse` directory is collected.
+- Claude Code config homes moved with `CLAUDE_CONFIG_DIR` to a
+  `~/.claude-<name>` directory such as `~/.claude-work`: `projects/`,
+  `file-history/`, `history.jsonl`, `.claude.json*` and the credential
+  files inside it are collected as `claude-code`, the credential files and
+  `.claude.json` are flagged secret, and its `.claude.json` and
+  `history.jsonl` are project discovery sources. The entries name
+  Claude-only files, so `~/.claude-code-router`, `~/.claude-mem` and
+  `~/.claude-squad` are not collected.
 
 ### Changed
 

@@ -21,6 +21,7 @@ from agent_analyzer.timeutil import to_utc
 from fixtures import (
     AGY_CONVERSATION,
     CLAUDE_SESSION,
+    CLAUDE_WORK_SESSION,
     CODEX_FORK,
     CODEX_LEGACY,
     CODEX_REVERT_ROLLOUT,
@@ -263,6 +264,32 @@ class ClaudeCodeTests(ParserBase):
             base + "tool-results/b1c2d3e4f.txt",
         ):
             art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(ClaudeCodeParser().wants(art), rel)
+
+    def test_relocated_config_home(self):
+        # CLAUDE_CONFIG_DIR=~/.claude-work: the session and history are parsed.
+        rel = ".claude-work/projects/-srv-proj/%s.jsonl" % CLAUDE_WORK_SESSION
+        art = next(a for a in self.col.artifacts if a.rel == rel)
+        self.assertEqual(art.agent, "claude-code")
+        rows = self.rows_for(ClaudeCodeParser(), rel)
+        self.assertEqual(
+            [(r.source_line, r.turn_type, r.text) for r in rows],
+            [(1, "user", "rotate the work logs"), (2, "assistant", "Rotated.")],
+        )
+        self.assertTrue(all(r.session_id == CLAUDE_WORK_SESSION for r in rows))
+        self.assertTrue(all(r.project_path == "/srv/proj" for r in rows))
+        rows = self.rows_for(ClaudeCodeParser(), ".claude-work/history.jsonl")
+        self.assertEqual(
+            [(r.turn_type, r.session_id) for r in rows], [("user", CLAUDE_WORK_SESSION)]
+        )
+
+    def test_claude_code_router_not_wanted(self):
+        # .claude-code-router shares the prefix but is not a Claude Code home:
+        # the catalog does not claim it and the parser would not want it.
+        self.assertFalse(any(".claude-code-router" in a.rel for a in self.col.artifacts))
+        home = self.col.artifacts[0].home
+        for rel in (".claude-code-router/config.json", ".claude-code-router/history.json"):
+            art = Artifact(self.home / rel, rel, rel, "claude-code", home)
             self.assertFalse(ClaudeCodeParser().wants(art), rel)
 
     def test_tool_summary_shapes(self):

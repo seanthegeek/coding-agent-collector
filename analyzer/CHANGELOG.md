@@ -12,6 +12,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Claude Code: sessions and `history.jsonl` in a config home moved with
+  `CLAUDE_CONFIG_DIR` to a `.claude-<name>` directory (such as
+  `~/.claude-work`) are parsed, and the bundled catalog copy detects
+  them; `~/.claude-code-router` and other `.claude-` tools are not.
 - Claude Code: a tool result stored as a `<persisted-output>` stub now
   carries the full output from the session's `tool-results/*.txt` file;
   when the file is missing, the stub is kept with a

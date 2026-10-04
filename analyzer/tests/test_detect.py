@@ -117,6 +117,9 @@ class LooseDetectTests(unittest.TestCase):
         rels = {a.rel for a in col.artifacts if a.agent == "claude-code"}
         self.assertIn(".claude/history.jsonl", rels)
         self.assertIn(".claude/settings.json", rels)
+        # A config home moved with CLAUDE_CONFIG_DIR; not claude-code-router.
+        self.assertIn(".claude-work/history.jsonl", rels)
+        self.assertFalse(any(a.rel.startswith(".claude-code-router/") for a in col.artifacts))
 
     def test_agent_directory_as_root(self):
         home = build_home(self.tmp / "home" / "alice")

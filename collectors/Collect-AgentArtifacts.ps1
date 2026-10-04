@@ -85,6 +85,17 @@ $CATALOG = @'
 # Anthropic
 claude-code|.claude
 claude-code|.claude.json*
+# Claude Code config homes moved with CLAUDE_CONFIG_DIR (~/.claude-work):
+# anchored on Claude-only names, never a bare .claude-*
+claude-code|.claude-*/projects
+claude-code|.claude-*/file-history
+claude-code|.claude-*/history.jsonl
+claude-code|.claude-*/.claude.json*
+claude-code|.claude-*/.credentials.json
+claude-code|.claude-*/hfi-auth.json
+claude-code|.claude-*/.session_ingress_token
+claude-code|.claude-*/remote/.oauth_token
+claude-code|.claude-*/remote/.api_key
 claude-code|.local/share/claude
 claude-desktop|Library/Application Support/Claude
 claude-desktop|Library/Application Support/Claude-3p
@@ -974,6 +985,13 @@ $SECRET_GLOBS = @'
 .claude/remote/.oauth_token
 .claude/remote/.api_key
 .claude.json
+.claude-*/.credentials.json
+.claude-*/.device-keys.json
+.claude-*/hfi-auth.json
+.claude-*/.session_ingress_token
+.claude-*/remote/.oauth_token
+.claude-*/remote/.api_key
+.claude-*/.claude.json
 Library/Application Support/Claude*/config.json
 Library/Application Support/Claude*/Cookies*
 Library/Application Support/Claude*/host-creds-*.json
@@ -2091,6 +2109,9 @@ function Find-Projects {
     $vals = @()
     $vals += Get-JsonValues 'project' @((Join-PathSafe $h '.claude/history.jsonl'))
     $vals += Get-JsonKeys '\{' @((Join-PathSafe $h '.claude.json'))
+    # config homes moved with CLAUDE_CONFIG_DIR keep .claude.json inside
+    $vals += Get-JsonValues 'project' @(Expand-Glob $h '.claude-*/history.jsonl')
+    $vals += Get-JsonKeys '\{' @(Expand-Glob $h '.claude-*/.claude.json')
     $vals += Get-JsonValues 'cwd' @(Expand-Glob $h '.codex/sessions/*/*/*/*.jsonl')
     $vals += Get-JsonValues 'cwd' @(Expand-Glob $h '.qwen/projects/*/chats/*.jsonl')
     $vals += Get-JsonValues 'cwd' @(Expand-Glob $h '.cline/data/sessions/*/*.json')

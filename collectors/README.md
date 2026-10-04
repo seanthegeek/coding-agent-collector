@@ -157,6 +157,20 @@ and left out of the enclosing agent's walk. Project `.env` files are collected f
 directories because Aider, Gemini CLI, Qwen Code and Continue read them; they
 are flagged `secret: true` like every other credential file.
 
+Claude Code reads its whole config home from `CLAUDE_CONFIG_DIR` when that
+variable is set, and a second account in `~/.claude-work` or a similar
+`~/.claude-<name>` directory is common. Such a directory is collected as
+`claude-code` only by the Claude-specific names inside it: `projects/`,
+`file-history/`, `history.jsonl`, `.claude.json*`, `.credentials.json`,
+`hfi-auth.json`, `.session_ingress_token`, `remote/.oauth_token` and
+`remote/.api_key`. The credential files and `.claude.json` are flagged
+`secret: true`. A bare `.claude-*` entry would also take other tools'
+directories such as `~/.claude-code-router` and `~/.claude-mem`, so the
+rest of a relocated home (`settings.json`, `todos/`, `plans/`,
+`shell-snapshots/` and the other subdirectories) is not collected. A config
+home outside the home directory, or one not named `.claude-<name>`, is not
+found; collect it by hand.
+
 Home directories are gathered from several sources, merged, and
 de-duplicated by path:
 
@@ -185,7 +199,8 @@ too, for example the `ollama` system user.
 Project-level artifacts (`CLAUDE.md`, `.claude/`, `.mcp.json`, `AGENTS.md`,
 `.cursorrules`, `.aider.chat.history.md`, Crush's per-project `.crush/crush.db`,
 ...) are collected from every directory referenced in agent state that can be
-read with grep: Claude Code history and project list, Codex session rollouts,
+read with grep: Claude Code history and project list (in `~/.claude` and
+`~/.claude-<name>` config homes), Codex session rollouts,
 Qwen Code chats, Cline sessions and task history, Roo and Kilo task indexes,
 Continue sessions, Gemini CLI's project registry, trusted folders and project
 root markers, Antigravity's history, trusted workspaces and project cache,

@@ -44,6 +44,17 @@ CATALOG='
 # Anthropic
 claude-code|.claude
 claude-code|.claude.json*
+# Claude Code config homes moved with CLAUDE_CONFIG_DIR (~/.claude-work):
+# anchored on Claude-only names, never a bare .claude-*
+claude-code|.claude-*/projects
+claude-code|.claude-*/file-history
+claude-code|.claude-*/history.jsonl
+claude-code|.claude-*/.claude.json*
+claude-code|.claude-*/.credentials.json
+claude-code|.claude-*/hfi-auth.json
+claude-code|.claude-*/.session_ingress_token
+claude-code|.claude-*/remote/.oauth_token
+claude-code|.claude-*/remote/.api_key
 claude-code|.local/share/claude
 claude-desktop|Library/Application Support/Claude
 claude-desktop|Library/Application Support/Claude-3p
@@ -942,6 +953,13 @@ SECRET_GLOBS='.claude/.credentials.json
 .claude/remote/.oauth_token
 .claude/remote/.api_key
 .claude.json
+.claude-*/.credentials.json
+.claude-*/.device-keys.json
+.claude-*/hfi-auth.json
+.claude-*/.session_ingress_token
+.claude-*/remote/.oauth_token
+.claude-*/remote/.api_key
+.claude-*/.claude.json
 Library/Application Support/Claude*/config.json
 Library/Application Support/Claude*/Cookies*
 Library/Application Support/Claude*/host-creds-*.json
@@ -2004,6 +2022,12 @@ discover_projects() {
       json_vals project "$_h/.claude/history.jsonl"
       [ -f "$_h/.claude.json" ] && ! inv_secret "$_h/.claude.json" &&
         grep -o '"/[^"]*": *{' "$_h/.claude.json" 2>/dev/null | sed 's/^"//; s/": *{$//'
+      # config homes moved with CLAUDE_CONFIG_DIR keep .claude.json inside
+      json_vals project "$_h"/.claude-*/history.jsonl
+      for _dp_cj in "$_h"/.claude-*/.claude.json; do
+        [ -f "$_dp_cj" ] && ! inv_secret "$_dp_cj" &&
+          grep -o '"/[^"]*": *{' "$_dp_cj" 2>/dev/null | sed 's/^"//; s/": *{$//'
+      done
       [ -d "$_h/.codex/sessions" ] && find "$_h/.codex/sessions" -name '*.jsonl' -exec grep -ho '"cwd":"[^"]*"' {} + 2>/dev/null | sed 's/^"cwd":"//; s/"$//'
       json_vals cwd "$_h"/.qwen/projects/*/chats/*.jsonl "$_h"/.cline/data/sessions/*/*.json "$_h"/.cursor/chats/*/*/meta.json
       json_vals workspace_root "$_h"/.cline/data/sessions/*/*.json

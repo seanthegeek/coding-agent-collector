@@ -13,6 +13,7 @@ from agent_analyzer.parsers.antigravity import SCHEMA as AGY
 from agent_analyzer.protobuf import encode
 
 CLAUDE_SESSION = "11111111-2222-4333-8444-555555555555"
+CLAUDE_WORK_SESSION = "11111111-2222-4333-8444-666666666666"
 CODEX_SESSION = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 CODEX_SUBAGENT = "aaaaaaaa-bbbb-4ccc-8ddd-000000000002"
 CODEX_FORK = "aaaaaaaa-bbbb-4ccc-8ddd-000000000003"
@@ -397,6 +398,28 @@ def claude_fork_records():
                 },
             ],
         ),
+    ]
+
+
+def claude_work_records():
+    """A session in a config home moved with CLAUDE_CONFIG_DIR (~/.claude-work)."""
+    c = _claude_common("/srv/proj", "main")
+    c["sessionId"] = CLAUDE_WORK_SESSION
+    return [
+        _claude_user(c, "w1", "30", "rotate the work logs", parentUuid=None),
+        _claude_assistant(c, "w2", "31", [{"type": "text", "text": "Rotated."}]),
+    ]
+
+
+def claude_work_history_records():
+    return [
+        {
+            "display": "rotate the work logs",
+            "pastedContents": {},
+            "timestamp": 1790848830000,
+            "project": "/srv/proj",
+            "sessionId": CLAUDE_WORK_SESSION,
+        },
     ]
 
 
@@ -1039,6 +1062,15 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     )
     _jsonl(home / ".claude/history.jsonl", claude_history_records())
     (home / ".claude/settings.json").write_text("{}", encoding="utf-8")
+    # A config home moved with CLAUDE_CONFIG_DIR, and claude-code-router's
+    # directory, which shares the .claude- prefix and must not be parsed.
+    _jsonl(
+        home / ".claude-work/projects/-srv-proj" / (CLAUDE_WORK_SESSION + ".jsonl"),
+        claude_work_records(),
+    )
+    _jsonl(home / ".claude-work/history.jsonl", claude_work_history_records())
+    (home / ".claude-code-router").mkdir()
+    (home / ".claude-code-router/config.json").write_text('{"PORT": 3456}', encoding="utf-8")
     _jsonl(
         home
         / ".codex/sessions/2026/10/02"

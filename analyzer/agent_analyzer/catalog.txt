@@ -2,6 +2,17 @@
 # Anthropic
 claude-code|.claude
 claude-code|.claude.json*
+# Claude Code config homes moved with CLAUDE_CONFIG_DIR (~/.claude-work):
+# anchored on Claude-only names, never a bare .claude-*
+claude-code|.claude-*/projects
+claude-code|.claude-*/file-history
+claude-code|.claude-*/history.jsonl
+claude-code|.claude-*/.claude.json*
+claude-code|.claude-*/.credentials.json
+claude-code|.claude-*/hfi-auth.json
+claude-code|.claude-*/.session_ingress_token
+claude-code|.claude-*/remote/.oauth_token
+claude-code|.claude-*/remote/.api_key
 claude-code|.local/share/claude
 claude-desktop|Library/Application Support/Claude
 claude-desktop|Library/Application Support/Claude-3p
@@ -886,6 +897,13 @@ chroma
 .claude/remote/.oauth_token
 .claude/remote/.api_key
 .claude.json
+.claude-*/.credentials.json
+.claude-*/.device-keys.json
+.claude-*/hfi-auth.json
+.claude-*/.session_ingress_token
+.claude-*/remote/.oauth_token
+.claude-*/remote/.api_key
+.claude-*/.claude.json
 Library/Application Support/Claude*/config.json
 Library/Application Support/Claude*/Cookies*
 Library/Application Support/Claude*/host-creds-*.json

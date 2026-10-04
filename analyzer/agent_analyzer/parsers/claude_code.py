@@ -78,10 +78,15 @@ Validated against a real install (Claude Code 2.1.286 to 2.1.289, October
   prompt, `timestamp` in epoch milliseconds. Kept even when the session file
   exists because it survives session deletion.
 
-Not read: the `.meta.json` subagent sidecars, `sessions/*.json`,
-`paste-cache/` (excluded by the collector), and transcripts under a config
-home moved with `CLAUDE_CONFIG_DIR` (such as `~/.claude-work`), which
-neither the catalog nor `wants()` matches.
+The same files under a config home moved with `CLAUDE_CONFIG_DIR` to a
+`.claude-<name>` directory in the home (such as `~/.claude-work`) are read
+too: `SESSION_RX` and `HISTORY_RX` accept `.claude` or `.claude-<name>` as
+the first path component, matching the catalog's `.claude-*/projects` and
+`.claude-*/history.jsonl` entries. A config home anywhere else is not
+collected.
+
+Not read: the `.meta.json` subagent sidecars, `sessions/*.json` and
+`paste-cache/` (excluded by the collector).
 """
 
 from __future__ import annotations
@@ -95,9 +100,9 @@ from ..model import Row, compact
 from ..timeutil import to_utc
 from .base import Options, Parser, compact_json, iter_jsonl, text_of
 
-SESSION_RX = re.compile(r"^\.claude/projects/[^/]+/.*\.jsonl$")
+SESSION_RX = re.compile(r"^\.claude(?:-[^/]+)?/projects/[^/]+/.*\.jsonl$")
 SUBAGENT_RX = re.compile(r"/subagents/(?:[^/]+/)*agent-([^/]+)\.jsonl$")
-HISTORY_REL = ".claude/history.jsonl"
+HISTORY_RX = re.compile(r"^\.claude(?:-[^/]+)?/history\.jsonl$")
 PERSISTED_MARK = "<persisted-output>"
 PERSISTED_RX = re.compile(r"Full output saved to: ([^\r\n]*?tool-results[/\\][^/\\\r\n]+?\.txt)")
 
@@ -243,10 +248,10 @@ class ClaudeCodeParser(Parser):
     name = "claude-code"
 
     def wants(self, artifact: Artifact) -> bool:
-        return artifact.rel == HISTORY_REL or bool(SESSION_RX.match(artifact.rel))
+        return bool(HISTORY_RX.match(artifact.rel)) or bool(SESSION_RX.match(artifact.rel))
 
     def parse(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
-        if artifact.rel == HISTORY_REL:
+        if HISTORY_RX.match(artifact.rel):
             yield from self._parse_history(artifact, opts)
         else:
             yield from self._parse_session(artifact, opts)
