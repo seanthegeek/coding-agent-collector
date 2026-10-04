@@ -138,8 +138,16 @@ individual files failed. EDR consoles upload one file and run it once.
 - Never print secrets or file contents to stdout or the log.
 
 **Catalog is data, not code.** Agent paths live in the `CATALOG`,
-`PROJECT_CATALOG`, `EXCLUDES` and `SECRET_GLOBS` tables at the top of both
-scripts. Adding a tool means adding the same lines to both, never new code
+`PROJECT_CATALOG`, `EXCLUDES`, `SECRET_GLOBS` and `DOCKER_VOLUMES` tables at
+the top of both scripts. `DOCKER_VOLUMES` maps a Docker or Podman named
+volume name glob to an agent (`agent-zero|*a0_usr`); the first matching line
+wins, a matched volume is collected whole with its `_data` directory as the
+collection base, and an unmatched one gets a single
+`skipped_unmatched_volume` row. Because the base is the volume root, a tool
+deployed in a volume needs volume-relative forms of its exclusions and
+secret globs (`tmp/playwright`, `secrets.env`) beside the home-relative ones;
+keep them at the end of each table and check they do not collide with
+another tool's volume layout (no bare `tmp` or `cache`). Adding a tool means adding the same lines to both, never new code
 paths. Every entry is tried against every home directory so one table covers
 macOS, Linux, Windows and disk images of each. The tables are byte-identical
 between the sh single-quoted strings and the PowerShell `@'...'@`
@@ -147,8 +155,8 @@ here-strings; `collectors/tests/catalog-sync.sh` fails on any drift, and `--list
 `-List` must print identical output. Glob semantics are shared: catalog
 globs do not cross `/`, exclusion and secret globs do, and `[...]` and `[!...]` classes
 work in both (the PowerShell side converts globs to regexes). Exclusion and secret globs are matched
-relative to the collection base, a home directory or a discovered project,
-so one pattern such as `.claude/worktrees` applies in both places; write them
+relative to the collection base, a home directory, a discovered project
+or a Docker volume's `_data` directory, so one pattern such as `.claude/worktrees` applies in both places; write them
 without a leading `*/`. Anchor every glob on a path component: `.hermes*/auth.json`
 and `agent-zero*/usr/.env`, never `*hermes*/auth.json`, which also matches
 any project path containing the name. The one accepted leading `*` is the
@@ -170,7 +178,7 @@ inside another tool's directory.
 **Manifest schema is an interface.** The v2 parser and analysts depend on
 `manifest.jsonl` and `collection.json`. Fields, status values
 (`collected`, `symlink`, `skipped_excluded`, `skipped_size`, `skipped_secret`,
-`error_copy`) and the `fs/<original path>` archive layout are documented in the
+`error_copy`, `skipped_unmatched_volume`) and the `fs/<original path>` archive layout are documented in the
 collectors README. Add fields if needed, but do not rename or remove them
 without updating that README and noting it in the commit message.
 
@@ -306,7 +314,11 @@ find. The validation for every current entry is recorded in the table in
    `Unreleased` in `analyzer/CHANGELOG.md`, because the analyzer's detection
    changes with the catalog copy.
 4. Add large or irrelevant subtrees to `EXCLUDES` and credential files to
-   `SECRET_GLOBS`.
+   `SECRET_GLOBS`. If the tool's README, compose file or installer creates a
+   named Docker volume, add its name pattern to `DOCKER_VOLUMES` with the
+   source cited in the comment above it, and add volume-relative forms of
+   its exclusions and secret globs (paths relative to the container mount
+   point) at the end of `EXCLUDES` and `SECRET_GLOBS`.
 5. If the tool records project paths, add extraction to `discover_projects`
    in the sh collector and `Find-Projects` in the PowerShell collector, and
    any per-project files to `PROJECT_CATALOG`. Add the tool's process name
@@ -419,7 +431,7 @@ are encoded and how a parser reads them) goes to
 agents share a lineage, each says so and links to the other rather than
 repeating it. Each directory has a README index that lists every document
 and holds the cross-agent observations. Grouped reports are never
-committed. Then: rewrite the four tables in both scripts and regenerate
+committed. Then: rewrite the five tables in both scripts and regenerate
 `analyzer/agent_analyzer/catalog.txt` from `--list`, extend
 `discover_projects` in the sh collector and `Find-Projects` in the
 PowerShell collector with every new grep-able source, add a fixture and
@@ -497,10 +509,11 @@ And from the October 2026 round:
 - Counts in a brief are not evidence. The integration agent derives the
   number of agents from the documents in the tree, not from the brief, and
   says so when they differ.
-- Chat history outside the home (ShellGPT's temp directory, Docker named
-  volumes for Agent Zero) cannot become a catalog line. Record it in the
-  collectors README as a manual step and file an issue, rather than
-  stretching a glob.
+- Chat history outside the home (ShellGPT's temp directory) cannot become
+  a catalog line. Record it in the collectors README as a manual step and
+  file an issue, rather than stretching a glob. Docker and Podman named
+  volumes are the exception since collector 1.5.0: they go in
+  `DOCKER_VOLUMES`.
 
 ## Validation and testing
 

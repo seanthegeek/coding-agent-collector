@@ -507,6 +507,14 @@ Mk 'tabbyproj/AGENTS.md' '# tabby'
 Mk 'srv/tabbyunix/AGENTS.md' '# tabby'
 Mk 'Users/alice/.twinny/embeddings/twinproj/manifest.json' '{"files":{"C:\\twinproj\\src\\a.ts":{"hash":"h1"},"C:\\twinproj\\b.ts":{"hash":"h2"}}}'
 Mk 'twinproj/AGENTS.md' '# twin'
+# --- 1.5.0 Docker volumes (2026-10-04): a root Docker volume matched to Agent
+# Zero, an unmatched volume, and a rootless volume in alice's profile.
+Mk 'var/lib/docker/volumes/a0_usr/_data/chats/ctx1/chat.json' '{"id":"ctx1","name":"chat","history":"[]"}'
+Mk 'var/lib/docker/volumes/a0_usr/_data/.env' 'API_KEY_OPENAI=sk-x'
+Mk 'var/lib/docker/volumes/a0_usr/_data/tmp/playwright/junk' 'junk'
+Mk 'var/lib/docker/volumes/pgdata/_data/x' 'pg'
+Mk 'var/lib/docker/volumes/metadata.db' 'metadata'
+Mk 'Users/alice/.local/share/docker/volumes/tabby_data/_data/events/2026-10-01.json' '{"event":"completion"}'
 $clawLinkOk = $false
 try {
   New-Item -ItemType SymbolicLink -Path (P 'home/bob/.clawdbot') -Target '.openclaw' -ErrorAction Stop | Out-Null
@@ -666,6 +674,18 @@ Check 'nanobot instance config workspace discovers project' { (StatusOf 'nanocfg
 Check 'tabby config.toml file:// git_url (drive) discovers project' { (StatusOf 'tabbyproj/AGENTS.md') -eq 'collected' }
 Check 'tabby config.toml file:// git_url (unix) discovers project' { (StatusOf 'srv/tabbyunix/AGENTS.md') -eq 'collected' }
 Check 'twinny manifest common prefix discovers project' { (StatusOf 'twinproj/AGENTS.md') -eq 'collected' }
+# 1.5.0 Docker volumes (2026-10-04)
+$r = Row 'var/lib/docker/volumes/a0_usr/_data/chats/ctx1/chat.json'
+Check 'docker volume file collected as agent-zero, user docker' { $r -and $r.user -eq 'docker' -and $r.agent -eq 'agent-zero' -and $r.status -eq 'collected' -and ($r.home -replace '\\', '/').EndsWith('var/lib/docker/volumes/a0_usr/_data') }
+$r = Row 'var/lib/docker/volumes/a0_usr/_data/.env'
+Check 'docker volume .env flagged secret (volume-relative)' { $r -and $r.secret -eq $true -and $r.status -eq 'collected' }
+Check 'docker volume tmp/playwright excluded (volume-relative)' { (StatusOf 'var/lib/docker/volumes/a0_usr/_data/tmp/playwright') -eq 'skipped_excluded' }
+$r = Row 'var/lib/docker/volumes/pgdata/_data'
+Check 'unmatched volume recorded skipped_unmatched_volume with size' { $r -and $r.user -eq 'docker' -and $r.type -eq 'dir' -and $r.size -gt 0 -and $r.status -eq 'skipped_unmatched_volume' }
+Check 'unmatched volume contents not collected' { $null -eq (Row 'pgdata/_data/x') }
+Check 'volumes dir metadata.db not collected' { $null -eq (Row 'volumes/metadata.db') }
+$r = Row 'Users/alice/.local/share/docker/volumes/tabby_data/_data/events/2026-10-01.json'
+Check 'rootless volume collected as tabby' { $r -and $r.user -eq 'docker' -and $r.agent -eq 'tabby' -and $r.status -eq 'collected' }
 Check 'Public profile skipped' { $null -eq (Row 'Public/Desktop/readme.txt') }
 Check 'Default profile skipped' { $null -eq (Row 'Default/NTUSER.DAT') }
 $entries = ArchiveEntries
@@ -677,6 +697,11 @@ $sum = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
 Check 'summary is valid JSON with zero copy errors' { $sum.counts.error_copy -eq 0 }
 Check 'summary counts match manifest' { $sum.counts.collected -eq @($script:Rows | Where-Object { $_.status -eq 'collected' }).Count }
 Check 'manifest rows all parsed as JSON' { $script:Rows.Count -eq @(Get-Content -LiteralPath $script:M.FullName).Count }
+Check 'archive layout for a docker volume file is fs/<path relative to root>' { @($entries | Where-Object { $_ -match '(^|\./)fs/var/lib/docker/volumes/a0_usr/_data/chats/ctx1/chat\.json$' }).Count -eq 1 }
+Check 'summary counts skipped_unmatched_volume' { $sum.counts.skipped_unmatched_volume -eq 1 }
+Check 'summary docker counts' { $sum.docker.volumes_found -eq 3 -and $sum.docker.volumes_collected -eq 2 -and $sum.docker.unreadable -eq 0 -and $sum.docker.docker_desktop -eq $false }
+Check 'summary no_docker option false and notes empty' { $sum.options.no_docker -eq $false -and @($sum.notes).Count -eq 0 }
+Check 'stdout docker line' { $script:stdout -match '(?m)^docker:     3 volumes found, 2 collected, 0 unreadable\s*$' }
 
 # cross-check archived bytes against manifest hashes
 $x = Join-Path $Work 'x'; New-Item -ItemType Directory -Path $x -Force | Out-Null
@@ -707,8 +732,26 @@ Run 'users' @{ Users = 'bob' }
 Check 'Users exit 0' { $script:rc -eq 0 }
 Check 'only bob collected' { (-not ($script:Rows | Where-Object { $_.user -eq 'alice' })) -and ($script:Rows | Where-Object { $_.user -eq 'bob' }) }
 
+# ---- -NoDocker -------------------------------------------------------------
+Run 'nodocker' @{ NoDocker = $true }
+Check 'NoDocker exit 0' { $script:rc -eq 0 }
+Check 'NoDocker collects no volume' { -not ($script:Rows | Where-Object { ($_.path -replace '\\', '/') -like '*docker/volumes*' }) }
+$sum = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
+Check 'NoDocker recorded in options' { $sum.options.no_docker -eq $true }
+Check 'NoDocker prints no docker line' { $script:stdout -notmatch '(?m)^docker:' }
+
+# ---- Docker Desktop note ----------------------------------------------------
+Mk 'Users/alice/AppData/Local/Docker/wsl/disk/readme.txt' 'vhdx lives here'
+Run 'desktop' @{}
+Check 'Docker Desktop exit 0' { $script:rc -eq 0 }
+$sum = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
+Check 'Docker Desktop noted in collection.json' { $sum.docker.docker_desktop -eq $true -and @($sum.notes | Where-Object { $_ -like 'docker: Docker Desktop data at *' }).Count -eq 1 }
+Check 'Docker Desktop noted in stdout' { $script:stdout -match '(?m)^docker:     3 volumes found, 2 collected, 0 unreadable; Docker Desktop VM disk not collected\s*$' }
+Remove-Item -LiteralPath (P 'Users/alice/AppData/Local/Docker') -Recurse -Force
+
 # ---- -List ----------------------------------------------------------------
 Check '-List prints catalog' { @(& $Collector -List | Select-String -SimpleMatch 'claude-code|.claude').Count -ge 1 }
+Check '-List prints docker volume table' { @(& $Collector -List | Where-Object { $_ -eq 'agent-zero|*a0_usr' }).Count -eq 1 }
 
 if ($script:fail -eq 0) { Write-Output "ALL PASSED ($($PSVersionTable.PSEdition) $($PSVersionTable.PSVersion))"; Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue }
 else { Write-Output "FAILURES; work dir kept: $Work" }

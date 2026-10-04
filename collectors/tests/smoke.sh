@@ -538,6 +538,18 @@ printf '# tabby\n' >"$ROOT/srv/tabbyproj/AGENTS.md"
 printf '{"files":{"/srv/twinproj/src/a.ts":{"hash":"h1"},"/srv/twinproj/b.ts":{"hash":"h2"}}}\n' >"$H/.twinny/embeddings/twinproj/manifest.json"
 printf '# twin\n' >"$ROOT/srv/twinproj/AGENTS.md"
 
+# --- 1.5.0 Docker volumes (2026-10-04): a root Docker volume matched to Agent
+# Zero, an unmatched volume, and a rootless volume in alice's home.
+DV="$ROOT/var/lib/docker/volumes"
+mkdir -p "$DV/a0_usr/_data/chats/ctx1" "$DV/a0_usr/_data/tmp/playwright" "$DV/pgdata/_data" \
+  "$H/.local/share/docker/volumes/tabby_data/_data/events"
+printf '{"id":"ctx1","name":"chat","history":"[]"}\n' >"$DV/a0_usr/_data/chats/ctx1/chat.json"
+printf 'API_KEY_OPENAI=sk-x\n' >"$DV/a0_usr/_data/.env"
+printf 'junk\n' >"$DV/a0_usr/_data/tmp/playwright/junk"
+printf 'pg\n' >"$DV/pgdata/_data/x"
+printf '{"event":"completion"}\n' >"$H/.local/share/docker/volumes/tabby_data/_data/events/2026-10-01.json"
+printf 'metadata\n' >"$DV/metadata.db"
+
 run() { # run NAME ARGS...
   _n=$1; shift
   mkdir -p "$OUT/$_n"
@@ -665,6 +677,20 @@ check "nanobot .workspace marker discovers project" "[ \"\$(status_of \"$ROOT/sr
 check "nanobot instance config workspace discovers project" "[ \"\$(status_of \"$ROOT/srv/nanocfg/memory/MEMORY.md\")\" = collected ]"
 check "tabby config.toml file:// git_url discovers project" "[ \"\$(status_of \"$ROOT/srv/tabbyproj/AGENTS.md\")\" = collected ]"
 check "twinny manifest common prefix discovers project" "[ \"\$(status_of \"$ROOT/srv/twinproj/AGENTS.md\")\" = collected ]"
+# 1.5.0 Docker volumes (2026-10-04)
+A0="$DV/a0_usr/_data"
+check "docker volume file collected as agent-zero, user docker" "row \"$A0/chats/ctx1/chat.json\" | grep -q '\"user\":\"docker\",\"home\":\"$A0\",\"agent\":\"agent-zero\".*\"status\":\"collected\"'"
+check "docker volume file archived under fs/<original path>" "tar -tzf \"\$A\" | grep -q '^./fs/var/lib/docker/volumes/a0_usr/_data/chats/ctx1/chat.json\$'"
+check "docker volume .env flagged secret (volume-relative)" "row \"$A0/.env\" | grep -q '\"secret\":true,\"status\":\"collected\"'"
+check "docker volume tmp/playwright excluded (volume-relative)" "[ \"\$(status_of \"$A0/tmp/playwright\")\" = skipped_excluded ]"
+check "unmatched volume recorded skipped_unmatched_volume with size" "row \"$DV/pgdata/_data\" | grep -q '\"user\":\"docker\".*\"type\":\"dir\",\"size\":[1-9][0-9]*.*\"status\":\"skipped_unmatched_volume\"'"
+check "unmatched volume contents not collected" "! grep -q 'pgdata/_data/x' \"\$M\""
+check "volumes dir metadata.db not collected" "! grep -q 'volumes/metadata.db' \"\$M\""
+check "rootless volume collected as tabby" "row \"$H/.local/share/docker/volumes/tabby_data/_data/events/2026-10-01.json\" | grep -q '\"user\":\"docker\".*\"agent\":\"tabby\".*\"status\":\"collected\"'"
+check "summary counts skipped_unmatched_volume" "grep -q '\"skipped_unmatched_volume\": 1' \"\$S\""
+check "summary docker counts" "grep -q '\"docker\": {\"volumes_found\": 3, \"volumes_collected\": 2, \"unreadable\": 0' \"\$S\""
+check "summary no_docker option false" "grep -q '\"no_docker\": false' \"\$S\""
+check "stdout docker line" "grep -q '^docker:     3 volumes found, 2 collected, 0 unreadable\$' \"$OUT/default.stdout\""
 check "no live dir in image mode" "! tar -tzf \"\$A\" | grep -q '^./live/'"
 check "manifest and summary inside archive" "tar -tzf \"\$A\" | grep -q '^./manifest.jsonl' && tar -tzf \"\$A\" | grep -q '^./collection.json'"
 check "staging removed" "[ -z \"\$(ls -d \"$OUT/default\"/.stage-* 2>/dev/null)\" ]"
@@ -699,8 +725,41 @@ check "cache contents collected with --full" "[ \"\$(status_of \"$ROOT/home/alic
 run users -u bob; check "users exit 0" "[ $? -eq 0 ]"
 check "only bob collected" "! grep -q '\"user\":\"alice\"' \"\$M\" && grep -q '\"user\":\"bob\"' \"\$M\""
 
+# ---- --no-docker ----------------------------------------------------------
+run nodocker --no-docker; check "no-docker exit 0" "[ $? -eq 0 ]"
+check "no-docker collects no volume" "! grep -q 'docker/volumes' \"\$M\""
+check "no-docker recorded in options" "grep -q '\"no_docker\": true' \"\$S\""
+check "no-docker prints no docker line" "! grep -q '^docker:' \"$OUT/nodocker.stdout\""
+
+# ---- unreadable volume (needs a non-root user; chmod 000 does not stop root)
+if [ "$(id -u)" != 0 ]; then
+  mkdir -p "$DV/hermes_data/_data/sessions"
+  printf '{}\n' >"$DV/hermes_data/_data/sessions/s.json"
+  chmod 000 "$DV/hermes_data/_data"
+  # a root-only data root, as /var/lib/containers is for a non-root responder
+  mkdir -p "$ROOT/var/lib/containers/storage/volumes/x_ollama/_data"
+  chmod 000 "$ROOT/var/lib/containers"
+  run dockerperm; check "unreadable volume exit 0" "[ $? -eq 0 ]"
+  chmod 700 "$DV/hermes_data/_data" "$ROOT/var/lib/containers"
+  check "unreadable volume and data root counted in stdout" "grep -q '^docker:     4 volumes found, 2 collected, 2 unreadable (run as root to collect)\$' \"$OUT/dockerperm.stdout\""
+  check "unreadable volume noted in collection.json" "grep -q 'docker: volume hermes_data (hermes) at .* is not readable' \"\$S\""
+  check "unreadable data root noted in collection.json" "grep -q 'docker: [^\"]*/var/lib/containers is not readable' \"\$S\""
+  check "other volumes still collected" "[ \"\$(status_of \"$A0/chats/ctx1/chat.json\")\" = collected ]"
+  rm -rf "$DV/hermes_data" "$ROOT/var/lib/containers"
+else
+  printf 'skip unreadable volume check (running as root)\n'
+fi
+
+# ---- Docker Desktop note (macOS layout) -----------------------------------
+mkdir -p "$B/Library/Containers/com.docker.docker/Data"
+run desktop; check "docker desktop exit 0" "[ $? -eq 0 ]"
+check "docker desktop noted in stdout" "grep -q '^docker:     3 volumes found, 2 collected, 0 unreadable; Docker Desktop VM disk not collected\$' \"$OUT/desktop.stdout\""
+check "docker desktop noted in collection.json" "grep -q '\"docker: Docker Desktop data at .*com.docker.docker; volumes inside its virtual machine disk are not collected\"' \"\$S\" && grep -q '\"docker_desktop\": true' \"\$S\""
+rm -rf "$B/Library/Containers"
+
 # ---- --list ---------------------------------------------------------------
 check "--list prints catalog" "\"$SHELL_UNDER_TEST\" \"$SCRIPT\" --list | grep -q '^claude-code|.claude$'"
+check "--list prints docker volume table" "\"$SHELL_UNDER_TEST\" \"$SCRIPT\" --list | grep -q '^agent-zero|\\*a0_usr$'"
 
 if [ "$fail" = 0 ]; then printf 'ALL PASSED (%s)\n' "$SHELL_UNDER_TEST"; rm -rf "$WORK"; else printf 'FAILURES (%s); work dir kept: %s\n' "$SHELL_UNDER_TEST" "$WORK"; fi
 exit $fail

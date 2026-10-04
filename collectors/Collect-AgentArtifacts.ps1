@@ -6,7 +6,8 @@
   Windows counterpart of collect-agent-artifacts.sh. Collects the on-disk state
   of AI coding agents (Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot
   CLI, Cursor, Windsurf, Continue, Aider, Ollama, ...) for every user profile on
-  a host, plus PowerShell history and a live system snapshot, into a single
+  a host, from Docker and Podman named volumes it can reach on disk, plus
+  PowerShell history and a live system snapshot, into a single
   tar.gz (via the built-in tar.exe on Windows 10 1803+) or zip, with a JSONL
   manifest. Same catalog, manifest schema and archive layout as the sh script.
 
@@ -29,6 +30,9 @@
   Skip the live system snapshot.
 .PARAMETER NoProjects
   Skip project-level artifact discovery.
+.PARAMETER NoDocker
+  Skip Docker and Podman volume enumeration. Docker Desktop keeps Linux volumes
+  inside a WSL virtual disk that this script cannot reach; it only notes that.
 .PARAMETER MaxFileSizeMB
   Skip files larger than this (default 256, 0 = none).
 .PARAMETER KeepStaging
@@ -56,6 +60,7 @@ param(
   [switch]$NoSecrets,
   [switch]$NoLive,
   [switch]$NoProjects,
+  [switch]$NoDocker,
   [int]$MaxFileSizeMB = 256,
   [Alias('k')][switch]$KeepStaging,
   [switch]$List,
@@ -65,7 +70,7 @@ param(
 
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
-$ToolVersion = '1.4.0'
+$ToolVersion = '1.5.0'
 $TOOL = 'collect-agent-artifacts'
 
 # ---------------------------------------------------------------------------
@@ -893,6 +898,53 @@ Documents/LocalDeepResearch/Library
 AppData/Local/Ollama/updates
 Library/Caches/ollama
 Library/Caches/com.electron.ollama
+.time_travel
+usr/.time_travel
+workdir/*/.venv
+workdir/*/node_modules
+usr/workdir/*/.venv
+usr/workdir/*/node_modules
+tmp/playwright
+tmp/memory/embeddings
+models
+index
+repositories
+journal_data
+library
+agent-canvas/workspaces
+agent-canvas/tmux
+hermes-agent/[!.]*
+hermes-agent/.[!e]*
+runtimes
+node
+installs
+tools
+sandboxes
+checkpoints/store/objects
+checkpoints/store/indexes
+checkpoints/legacy-*
+state-snapshots
+backups
+browser-profile
+browser-profiles
+browser_profiles
+chrome-debug
+bot-desktop/browser-profile
+plugins/*/node_modules
+plugins/*/.venv
+npm
+npm-runtime
+worktrees
+extensions/*/node_modules
+sandbox/skills-workspaces
+browser/*/user-data/*/Cache
+browser/*/user-data/*/Code Cache
+browser/*/user-data/*/GPUCache
+browser/*/user-data/*/Service Worker
+bin
+mod-cache
+tool_execution_dir
+chroma
 '@
 
 $SECRET_GLOBS = @'
@@ -1222,6 +1274,109 @@ Library/Application Support/local-deep-research/.secret_key
 AppData/Local/local-deep-research/local-deep-research/.secret_key
 .ollama/id_ed25519
 .env
+secrets.env
+settings.json
+projects/*/.a0proj/secrets.env
+plugins/_desktop/profiles/*/.ssh/*
+plugins/_desktop/profiles/*/.gnupg/*
+usr/.env
+usr/secrets.env
+usr/settings.json
+usr/projects/*/.a0proj/secrets.env
+usr/plugins/_desktop/profiles/*/.ssh/*
+usr/plugins/_desktop/profiles/*/.gnupg/*
+tmp/secrets.env
+tmp/settings.json
+config.toml
+id_ed25519
+.secret_key
+agent-canvas/secret-key.txt
+agent-canvas/api-key.txt
+secrets.json
+profiles/*
+provider-connections/*
+runtime-control/*
+agent_settings.json
+cloud/*
+mcp.json
+.jwt_secret
+.keys
+pg_uri
+credentials
+lc-local-backend/providers/auth.json
+channels/*/accounts.json
+channels/whatsapp/auth/*
+agents/*/memory/.git/config
+agents/*/memory/.git/letta-credential-helper.cmd
+.env.bak*
+.op.env
+npmrc
+auth.json
+auth.json.*
+auth/*
+.anthropic_oauth.json
+.copilot_jwt.json
+google_*.json
+google_chat_user_tokens/*
+slack_tokens.json
+honcho.json
+mem0.json
+webhook_subscriptions.json
+teams_pipeline_store.json
+mcp-tokens/*
+vault/*
+browser_auth/*
+pairing/*
+platforms/pairing/*
+whatsapp/session/*
+platforms/whatsapp/session/*
+matrix/store/*
+platforms/matrix/store/*
+cache/bws_cache*.json
+weixin/accounts/*
+runtime/photon-sidecar.json
+proxy/*
+home/*
+openclaw.json*
+clawdbot.json*
+moltbot.json*
+credentials/*
+service-env/*
+agents/*/agent/auth-profiles.json*
+agents/*/agent/models.json
+browser/*/user-data/*/Cookies*
+config.json
+whatsapp-auth/*
+matrix-store/*
+'@
+
+# Docker and Podman named volumes, agent|glob matched against the volume name.
+$DOCKER_VOLUMES = @'
+# Matched against each volume name; the first matching line wins. A matched
+# volume is collected whole as user "docker" with its _data directory as the
+# home, so EXCLUDES and SECRET_GLOBS apply relative to the volume root.
+# Agent Zero: a0_usr in the README docker run (Compose prefixes it as
+# <project>_a0_usr) and a0-launcher-<slug>-usr in the A0 Launcher named-volume
+# mode; both are mounted at /a0/usr
+agent-zero|*a0_usr
+agent-zero|a0-launcher-*-usr
+# Local Deep Research: ldr_data in docker-compose.yml, mounted at /data
+local-deep-research|*ldr_data
+# Ollama: ollama in docs/docker.mdx, ollama_data in the Local Deep Research
+# compose file; mounted at /root/.ollama
+ollama|ollama
+ollama|*ollama*
+# Inferred names: the documentation of these tools bind-mounts the home directory
+# instead of a named volume; a volume replacing it has the same layout (~/.tabby
+# at /data, ~/.hermes at /opt/data, ~/.openclaw at /home/node/.openclaw, ...)
+tabby|*tabby*
+local-deep-research|*local-deep-research*
+openhands|*openhands*
+letta|*letta*
+hermes|*hermes*
+openclaw|*openclaw*
+openclaw|*clawdbot*
+nanobot|*nanobot*
 '@
 
 $AGENT_PROC_RE = 'claude|gemini|antigravity|codex|copilot|cursor|windsurf|codeium|devin|ollama|aider|opencode|\\amp(\.exe)?( |$)|goose|continue|\\cn(\.exe)?( |$)|\\zed(\.exe)?( |$)|qwen|kiro|cline|roo-cline|kilo|augment|auggie|droid|crush|amazon-q|hermes|openclaw|clawdbot|nanobot|letta|openhands|openinterpreter|interpreter|sgpt|tabby|twinny|little-coder|agent-zero|\\pi(\.exe)?( |$)'
@@ -1242,6 +1397,8 @@ if ($List) {
   Write-Output ''
   Write-Output '# credential files (flagged secret, skipped with --no-secrets)'
   $SECRET_GLOBS -split "`r?`n" | Where-Object { $_ -ne '' } | ForEach-Object { Write-Output $_ }
+  Write-Output '# docker volumes (agent|volume name glob)'
+  $DOCKER_VOLUMES -split "`r?`n" | Where-Object { $_ -ne '' } | ForEach-Object { Write-Output $_ }
   exit 0
 }
 
@@ -1430,7 +1587,9 @@ New-Item -ItemType Directory -Path (Join-PathSafe $Stage 'fs') -Force | Out-Null
 $script:LogWriter = New-Object System.IO.StreamWriter($LogPath, $false, $Utf8NoBom)
 $script:ManifestWriter = New-Object System.IO.StreamWriter($ManifestPath, $false, $Utf8NoBom)
 $script:LogWriter.AutoFlush = $true
-$script:Counts = @{ collected = 0; symlink = 0; skipped_excluded = 0; skipped_size = 0; skipped_secret = 0; error_copy = 0; bytes = [int64]0 }
+$script:Counts = @{ collected = 0; symlink = 0; skipped_excluded = 0; skipped_size = 0; skipped_secret = 0; error_copy = 0; skipped_unmatched_volume = 0; bytes = [int64]0 }
+$script:WalkErrors = 0
+$script:ClaimedPaths = @{}
 
 function Write-Log([string]$msg) {
   $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -1503,7 +1662,7 @@ function Add-Excluded([string]$user, [string]$homeDir, [string]$agent, $item) {
 function Add-Tree([string]$user, [string]$homeDir, [string]$agent, [string]$dir) {
   $children = @()
   try { $children = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop) }
-  catch { Write-Log "list failed: ${dir}: $($_.Exception.Message)"; return }
+  catch { $script:WalkErrors++; Write-Log "list failed: ${dir}: $($_.Exception.Message)"; return }
   foreach ($child in $children) {
     # A path matched by another catalog entry is collected under that entry.
     if ($script:ClaimedPaths.ContainsKey($child.FullName)) { continue }
@@ -1517,7 +1676,7 @@ function Add-Tree([string]$user, [string]$homeDir, [string]$agent, [string]$dir)
 
 function Add-Path([string]$user, [string]$homeDir, [string]$agent, [string]$path) {
   $item = $null
-  try { $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop } catch { Write-Log "stat failed: ${path}: $($_.Exception.Message)"; return }
+  try { $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop } catch { $script:WalkErrors++; Write-Log "stat failed: ${path}: $($_.Exception.Message)"; return }
   $hrel = Get-RelPath $homeDir $path
   if (Test-AnyMatch $hrel $script:ExcludeRegexes) { Add-Excluded $user $homeDir $agent $item; return }
   $isLink = (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
@@ -1591,7 +1750,7 @@ $script:InaccessibleHomes = @()
 $UserList = @(Get-UserHomes)
 
 Write-Log "$TOOL $ToolVersion starting on $HostName ($([Environment]::OSVersion.VersionString), PowerShell $($PSVersionTable.PSVersion)) mode=$Mode root=$(if ($Root) { $Root } else { '\' })"
-Write-Log "archive=$(if ($TarExe) { 'tar.gz via ' + $TarExe } else { 'zip (tar.exe not found)' }) max_file_size=${MaxFileSizeMB}MB full=$($Full.IsPresent) no_secrets=$($NoSecrets.IsPresent)"
+Write-Log "archive=$(if ($TarExe) { 'tar.gz via ' + $TarExe } else { 'zip (tar.exe not found)' }) max_file_size=${MaxFileSizeMB}MB full=$($Full.IsPresent) no_secrets=$($NoSecrets.IsPresent) no_docker=$($NoDocker.IsPresent)"
 $IsAdmin = $false
 try { $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) } catch { }
 if ($Mode -eq 'live' -and -not $IsAdmin) { Write-Log "WARNING: not running as Administrator; other users' profiles will probably be unreadable" }
@@ -1636,6 +1795,121 @@ if (-not $NoLive) {
 foreach ($u in $UserList) {
   Write-Log "User $($u.user) ($($u.home))"
   Invoke-CatalogCollection $u.user $u.home $CATALOG
+}
+
+# ---------------------------------------------------------------------------
+# Docker and Podman named volumes, enumerated from the filesystem as in the sh
+# collector: <volumes dir>/<name>/_data. A volume whose name matches
+# DOCKER_VOLUMES is collected whole as user "docker" with _data as its home;
+# any other volume gets one skipped_unmatched_volume row with its size. This
+# reaches Linux data roots in an image (or under PowerShell 7 on Linux) and
+# Windows-container volumes under ProgramData\Docker. Docker Desktop keeps
+# Linux volumes inside a WSL virtual disk, which is only noted. Failures are
+# noted in collection.json and the summary and never stop the collection.
+# ---------------------------------------------------------------------------
+$script:Notes = @()
+$script:Docker = @{ seen = $false; found = 0; collected = 0; unreadable = 0; desktop = $false }
+function Add-Note([string]$msg) { $script:Notes += $msg; Write-Log "NOTE: $msg" }
+$script:DockerVolumeRules = @()
+foreach ($line in (Get-TableLines $DOCKER_VOLUMES)) {
+  $parts = @($line -split '\|', 2)
+  if ($parts.Count -lt 2) { continue }
+  $script:DockerVolumeRules += , @($parts[0], (Convert-GlobToRegex $parts[1] $false))
+}
+function Get-DockerVolumeAgent([string]$name) {
+  # Volume names are case-sensitive, as in the sh collector's case(1) match.
+  foreach ($rule in $script:DockerVolumeRules) { if ($name -cmatch $rule[1]) { return $rule[0] } }
+  return ''
+}
+function Test-IsLink([string]$p) {
+  try {
+    $it = Get-Item -LiteralPath $p -Force -ErrorAction Stop
+    return (($it.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
+  } catch { return $false }
+}
+function Test-DirReadable([string]$p) {
+  try { [void][System.IO.Directory]::GetFileSystemEntries($p); return $true } catch { return $false }
+}
+# Each component of $rel is checked on the way down, so a data root the
+# responder cannot enter, or a symlinked one, is reported rather than skipped.
+function Invoke-VolumeDir([string]$base, [string]$rel) {
+  $vd = $base
+  $segs = @($rel -split '/')
+  for ($i = 0; $i -lt $segs.Count; $i++) {
+    $vd = Join-PathSafe $vd $segs[$i]
+    if (Test-IsLink $vd) {
+      $script:Docker.seen = $true
+      Add-Note "docker: $vd is a symlink and was not followed; collect its target by hand"
+      return
+    }
+    if (-not (Test-PathQuiet $vd 'Container')) { return }
+    $last = ($i -eq $segs.Count - 1)
+    # A directory that cannot be listed may still be searchable; go on when
+    # the next component is visible, as the sh collector's -x test would.
+    if (-not (Test-DirReadable $vd) -and ($last -or -not (Test-PathQuiet (Join-PathSafe $vd $segs[$i + 1]) 'Container'))) {
+      $script:Docker.seen = $true; $script:Docker.unreadable++
+      Add-Note "docker: $vd is not readable; run as root to collect the volumes under it"
+      return
+    }
+  }
+  $script:Docker.seen = $true
+  $children = @(Get-ChildItem -LiteralPath $vd -Force -ErrorAction SilentlyContinue)
+  Write-Log "Docker volumes in $vd"
+  foreach ($v in $children) {
+    if (-not $v.PSIsContainer) { continue }
+    if (($v.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+    $script:Docker.found++
+    $name = $v.Name
+    $data = Join-PathSafe $v.FullName '_data'
+    $agent = Get-DockerVolumeAgent $name
+    $label = $agent; if (-not $label) { $label = 'unmatched' }
+    if (-not (Test-DirReadable $v.FullName) -or ((Test-PathQuiet $data 'Container') -and -not (Test-DirReadable $data))) {
+      $script:Docker.unreadable++
+      Add-Note "docker: volume $name ($label) at $($v.FullName) is not readable; run as root to collect it"
+    } elseif ((Test-IsLink $data) -or -not (Test-PathQuiet $data 'Container')) {
+      Write-Log "  volume $name has no _data directory, skipped"
+    } elseif (-not $agent) {
+      $attrs = ''; try { $attrs = [string](Get-Item -LiteralPath $data -Force -ErrorAction Stop).Attributes } catch { }
+      Write-Row 'docker' $data '' $data '' 'dir' (Get-DirSize $data) 0 0 0 0 '' $attrs '' $false 'skipped_unmatched_volume' '' ''
+    } else {
+      Write-Log "  [$agent] $data"
+      $script:WalkErrors = 0
+      $script:ClaimedPaths = @{}
+      Add-Path 'docker' $data $agent $data
+      $script:Docker.collected++
+      if ($script:WalkErrors -gt 0) {
+        $script:Docker.unreadable++
+        Add-Note "docker: volume $name ($agent) could not be walked completely ($($script:WalkErrors) unreadable paths, see collector.log); run as root to collect it"
+      }
+    }
+  }
+}
+
+if (-not $NoDocker) {
+  if ($Mode -eq 'image') { $dockerBase = $Root }
+  elseif ($Sep -eq '/') { $dockerBase = '/' }
+  else { $dockerBase = $env:SystemDrive; if (-not $dockerBase) { $dockerBase = 'C:' }; $dockerBase += $Sep }
+  $programData = Join-PathSafe $dockerBase 'ProgramData'
+  if ($Mode -eq 'live' -and $env:ProgramData) { $programData = $env:ProgramData }
+  # Root Docker, root Podman and Windows-container Docker data roots, then the
+  # rootless Docker and Podman roots of each (selected) user.
+  Invoke-VolumeDir (Join-PathSafe $dockerBase 'var/lib') 'docker/volumes'
+  Invoke-VolumeDir (Join-PathSafe $dockerBase 'var/lib') 'containers/storage/volumes'
+  Invoke-VolumeDir $programData 'Docker/volumes'
+  $desktopDirs = @(Join-PathSafe $programData 'DockerDesktop')
+  foreach ($u in $UserList) {
+    Invoke-VolumeDir (Join-PathSafe $u.home '.local/share') 'docker/volumes'
+    Invoke-VolumeDir (Join-PathSafe $u.home '.local/share') 'containers/storage/volumes'
+    $desktopDirs += (Join-PathSafe $u.home 'Library/Containers/com.docker.docker')
+    $desktopDirs += (Join-PathSafe $u.home 'AppData/Local/Docker')
+  }
+  # Docker Desktop keeps Linux volumes inside a VM disk that no file walk reaches.
+  foreach ($dd in $desktopDirs) {
+    if ((Test-PathQuiet $dd 'Container') -and -not (Test-IsLink $dd)) {
+      $script:Docker.seen = $true; $script:Docker.desktop = $true
+      Add-Note "docker: Docker Desktop data at $dd; volumes inside its virtual machine disk are not collected"
+    }
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -1816,12 +2090,14 @@ $summary = [ordered]@{
   run_as = $(try { [Security.Principal.WindowsIdentity]::GetCurrent().Name } catch { [Environment]::UserDomainName + '\' + [Environment]::UserName })
   run_as_admin = $IsAdmin
   started = $StartTs; finished = $EndTs
-  options = [ordered]@{ full = $Full.IsPresent; no_secrets = $NoSecrets.IsPresent; no_live = [bool]$NoLive; max_file_size_bytes = $MaxSize; users_filter = $Users }
+  options = [ordered]@{ full = $Full.IsPresent; no_secrets = $NoSecrets.IsPresent; no_live = [bool]$NoLive; max_file_size_bytes = $MaxSize; users_filter = $Users; no_docker = $NoDocker.IsPresent }
   capabilities = [ordered]@{ hash_tool = 'Get-FileHash'; archiver = $(if ($TarExe) { 'tar.exe' } else { 'ZipFile' }) }
   users = @($UserList | ForEach-Object { $_.user })
   homes = @($UserList | ForEach-Object { $_.home })
   projects = @($ProjectList | ForEach-Object { $_.path })
-  counts = [ordered]@{ collected = $script:Counts.collected; symlink = $script:Counts.symlink; skipped_excluded = $script:Counts.skipped_excluded; skipped_size = $script:Counts.skipped_size; skipped_secret = $script:Counts.skipped_secret; error_copy = $script:Counts.error_copy; collected_bytes = $script:Counts.bytes }
+  counts = [ordered]@{ collected = $script:Counts.collected; symlink = $script:Counts.symlink; skipped_excluded = $script:Counts.skipped_excluded; skipped_size = $script:Counts.skipped_size; skipped_secret = $script:Counts.skipped_secret; error_copy = $script:Counts.error_copy; skipped_unmatched_volume = $script:Counts.skipped_unmatched_volume; collected_bytes = $script:Counts.bytes }
+  docker = [ordered]@{ volumes_found = $script:Docker.found; volumes_collected = $script:Docker.collected; unreadable = $script:Docker.unreadable; docker_desktop = $script:Docker.desktop }
+  notes = @($script:Notes)
   archive = (Split-Path -Leaf $Archive)
 }
 [System.IO.File]::WriteAllText($SummaryPath, ($summary | ConvertTo-Json -Depth 4), $Utf8NoBom)
@@ -1869,4 +2145,10 @@ Write-Output "projects:   $($ProjectList.Count)"
 Write-Output "collected:  $($c.collected) files, $($c.bytes) bytes"
 Write-Output "skipped:    $($c.skipped_excluded) excluded, $($c.skipped_size) too large, $($c.skipped_secret) secret"
 Write-Output "errors:     $($c.error_copy)"
+if ($script:Docker.seen) {
+  $dl = "docker:     $($script:Docker.found) volumes found, $($script:Docker.collected) collected, $($script:Docker.unreadable) unreadable"
+  if ($script:Docker.unreadable -gt 0) { $dl += ' (run as root to collect)' }
+  if ($script:Docker.desktop) { $dl += '; Docker Desktop VM disk not collected' }
+  Write-Output $dl
+}
 exit 0

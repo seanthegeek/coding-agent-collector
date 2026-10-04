@@ -7,8 +7,9 @@
 #
 # Collects the on-disk state of AI coding agents (Claude Code, Gemini CLI,
 # Antigravity, Codex CLI, Copilot CLI, Cursor, Windsurf, Continue, Aider,
-# Ollama, ...) for every user on a host, plus shell histories and a live
-# system snapshot, into a single tar.gz with a JSONL manifest.
+# Ollama, ...) for every user on a host, from Docker and Podman named
+# volumes, plus shell histories and a live system snapshot, into a single
+# tar.gz with a JSONL manifest.
 #
 # Portability: POSIX sh only. Runs under bash 3.2 (macOS /bin/sh), dash,
 # ash/busybox, FreeBSD/OpenBSD sh and zsh in sh emulation. External tools used:
@@ -22,7 +23,7 @@
 # Exit codes: 0 archive written (per-file errors are recorded in the manifest),
 #             1 usage error, 2 fatal (no output dir, no tar, ...).
 
-VERSION="1.4.0"
+VERSION="1.5.0"
 TOOL="collect-agent-artifacts"
 
 LC_ALL=C
@@ -504,7 +505,9 @@ project|memory/HISTORY.md
 project|.env
 '
 
-# Paths (globs relative to home or project dir) skipped unless --full. They are
+# Paths (globs relative to home, project dir or Docker volume _data) skipped
+# unless --full. Volume-relative forms of a tool's exclusions follow the
+# home-relative ones at the end of the table. They are
 # recorded in the manifest as skipped_excluded with their size. find(1) -path
 # semantics: * also matches /.
 EXCLUDES='
@@ -861,11 +864,59 @@ Documents/LocalDeepResearch/Library
 AppData/Local/Ollama/updates
 Library/Caches/ollama
 Library/Caches/com.electron.ollama
+.time_travel
+usr/.time_travel
+workdir/*/.venv
+workdir/*/node_modules
+usr/workdir/*/.venv
+usr/workdir/*/node_modules
+tmp/playwright
+tmp/memory/embeddings
+models
+index
+repositories
+journal_data
+library
+agent-canvas/workspaces
+agent-canvas/tmux
+hermes-agent/[!.]*
+hermes-agent/.[!e]*
+runtimes
+node
+installs
+tools
+sandboxes
+checkpoints/store/objects
+checkpoints/store/indexes
+checkpoints/legacy-*
+state-snapshots
+backups
+browser-profile
+browser-profiles
+browser_profiles
+chrome-debug
+bot-desktop/browser-profile
+plugins/*/node_modules
+plugins/*/.venv
+npm
+npm-runtime
+worktrees
+extensions/*/node_modules
+sandbox/skills-workspaces
+browser/*/user-data/*/Cache
+browser/*/user-data/*/Code Cache
+browser/*/user-data/*/GPUCache
+browser/*/user-data/*/Service Worker
+bin
+mod-cache
+tool_execution_dir
+chroma
 '
 
 # Files holding credentials. Collected by default and flagged secret=true in
 # the manifest; skipped with --no-secrets. Matched with case(1) globs against
-# the path relative to the home or project directory; * also matches /.
+# the path relative to the home, project or Docker volume _data directory;
+# * also matches /. Volume-relative forms come last.
 SECRET_GLOBS='.claude/.credentials.json
 .claude/.device-keys.json
 .claude/hfi-auth.json
@@ -1191,7 +1242,110 @@ Desktop/agent-zero*/usr/plugins/_desktop/profiles/*/.gnupg/*
 Library/Application Support/local-deep-research/.secret_key
 AppData/Local/local-deep-research/local-deep-research/.secret_key
 .ollama/id_ed25519
-.env'
+.env
+secrets.env
+settings.json
+projects/*/.a0proj/secrets.env
+plugins/_desktop/profiles/*/.ssh/*
+plugins/_desktop/profiles/*/.gnupg/*
+usr/.env
+usr/secrets.env
+usr/settings.json
+usr/projects/*/.a0proj/secrets.env
+usr/plugins/_desktop/profiles/*/.ssh/*
+usr/plugins/_desktop/profiles/*/.gnupg/*
+tmp/secrets.env
+tmp/settings.json
+config.toml
+id_ed25519
+.secret_key
+agent-canvas/secret-key.txt
+agent-canvas/api-key.txt
+secrets.json
+profiles/*
+provider-connections/*
+runtime-control/*
+agent_settings.json
+cloud/*
+mcp.json
+.jwt_secret
+.keys
+pg_uri
+credentials
+lc-local-backend/providers/auth.json
+channels/*/accounts.json
+channels/whatsapp/auth/*
+agents/*/memory/.git/config
+agents/*/memory/.git/letta-credential-helper.cmd
+.env.bak*
+.op.env
+npmrc
+auth.json
+auth.json.*
+auth/*
+.anthropic_oauth.json
+.copilot_jwt.json
+google_*.json
+google_chat_user_tokens/*
+slack_tokens.json
+honcho.json
+mem0.json
+webhook_subscriptions.json
+teams_pipeline_store.json
+mcp-tokens/*
+vault/*
+browser_auth/*
+pairing/*
+platforms/pairing/*
+whatsapp/session/*
+platforms/whatsapp/session/*
+matrix/store/*
+platforms/matrix/store/*
+cache/bws_cache*.json
+weixin/accounts/*
+runtime/photon-sidecar.json
+proxy/*
+home/*
+openclaw.json*
+clawdbot.json*
+moltbot.json*
+credentials/*
+service-env/*
+agents/*/agent/auth-profiles.json*
+agents/*/agent/models.json
+browser/*/user-data/*/Cookies*
+config.json
+whatsapp-auth/*
+matrix-store/*'
+
+# Docker and Podman named volumes, agent|glob matched against the volume name.
+DOCKER_VOLUMES='
+# Matched against each volume name; the first matching line wins. A matched
+# volume is collected whole as user "docker" with its _data directory as the
+# home, so EXCLUDES and SECRET_GLOBS apply relative to the volume root.
+# Agent Zero: a0_usr in the README docker run (Compose prefixes it as
+# <project>_a0_usr) and a0-launcher-<slug>-usr in the A0 Launcher named-volume
+# mode; both are mounted at /a0/usr
+agent-zero|*a0_usr
+agent-zero|a0-launcher-*-usr
+# Local Deep Research: ldr_data in docker-compose.yml, mounted at /data
+local-deep-research|*ldr_data
+# Ollama: ollama in docs/docker.mdx, ollama_data in the Local Deep Research
+# compose file; mounted at /root/.ollama
+ollama|ollama
+ollama|*ollama*
+# Inferred names: the documentation of these tools bind-mounts the home directory
+# instead of a named volume; a volume replacing it has the same layout (~/.tabby
+# at /data, ~/.hermes at /opt/data, ~/.openclaw at /home/node/.openclaw, ...)
+tabby|*tabby*
+local-deep-research|*local-deep-research*
+openhands|*openhands*
+letta|*letta*
+hermes|*hermes*
+openclaw|*openclaw*
+openclaw|*clawdbot*
+nanobot|*nanobot*
+'
 
 AGENT_PROC_RE='claude|gemini|antigravity|codex|copilot|cursor|windsurf|codeium|devin|ollama|aider|opencode|[/ ]amp( |$)|goose|continue|[/ ]cn( |$)|[/ ]zed( |$)|qwen|kiro|cline|roo-cline|kilo|augment|auggie|droid|crush|amazon-q|hermes|openclaw|clawdbot|nanobot|letta|openhands|openinterpreter|interpreter|sgpt|tabby|twinny|little-coder|agent-zero|[/ ]pi( |$)'
 
@@ -1328,6 +1482,7 @@ Usage: $0 [options]
       --no-secrets        Skip credential files instead of collecting them
       --no-live           Skip the live system snapshot
       --no-projects       Skip project-level artifact discovery
+      --no-docker         Skip Docker and Podman volume enumeration
       --max-file-size MB  Skip files larger than this (default 256, 0 = none)
   -k, --keep-staging      Keep the staging directory after archiving
       --list              Print the artifact catalog and exit
@@ -1348,6 +1503,7 @@ FULL=0
 NO_SECRETS=0
 NO_LIVE=0
 NO_PROJECTS=0
+NO_DOCKER=0
 MAX_MB=256
 KEEP=0
 QUIET=0
@@ -1364,6 +1520,7 @@ $2"; shift ;;
     --no-secrets)       NO_SECRETS=1 ;;
     --no-live)          NO_LIVE=1 ;;
     --no-projects)      NO_PROJECTS=1 ;;
+    --no-docker)        NO_DOCKER=1 ;;
     --max-file-size)    [ $# -ge 2 ] || { usage >&2; exit 1; }; MAX_MB=$2; shift ;;
     -k|--keep-staging)  KEEP=1 ;;
     --list)             LIST=1 ;;
@@ -1380,6 +1537,7 @@ if [ "$LIST" = 1 ]; then
   printf '\n# project artifacts (relative to each discovered project)\n%s\n' "$PROJECT_CATALOG" | grep -v '^$'
   printf '\n# excluded unless --full\n%s\n' "$EXCLUDES" | grep -v '^$'
   printf '\n# credential files (flagged secret, skipped with --no-secrets)\n%s\n' "$SECRET_GLOBS"
+  printf '\n# docker volumes (agent|volume name glob)\n%s\n' "$DOCKER_VOLUMES" | grep -v '^$'
   exit 0
 fi
 
@@ -1443,7 +1601,7 @@ mkdir -p "$STAGE/fs" || { printf 'Cannot create staging dir\n' >&2; exit 2; }
 [ "$FULL" = 1 ] && ACTIVE_EXCLUDES= || ACTIVE_EXCLUDES=$EXCLUDES
 
 log_line "$TOOL $VERSION starting on $HOST ($(uname -s 2>/dev/null) $(uname -r 2>/dev/null)) mode=$MODE root=${ROOT:-/} uid=$(id -u 2>/dev/null)"
-log_line "hash=$HASH_TOOL stat=$STAT_MODE max_file_size=${MAX_MB}MB full=$FULL no_secrets=$NO_SECRETS worker_sh=$WORKER_SH"
+log_line "hash=$HASH_TOOL stat=$STAT_MODE max_file_size=${MAX_MB}MB full=$FULL no_secrets=$NO_SECRETS no_docker=$NO_DOCKER worker_sh=$WORKER_SH"
 if [ "$MODE" = live ] && [ "$(id -u 2>/dev/null)" != 0 ]; then
   log_line "WARNING: not running as root; other users' homes will probably be unreadable"
 fi
@@ -1616,6 +1774,118 @@ printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
 done
 
 # ---------------------------------------------------------------------------
+# Docker and Podman named volumes. Enumerated from the filesystem, never with
+# the docker binary, so the same code covers live hosts and disk images. Each
+# volume is <volumes dir>/<name>/_data. A volume whose name matches
+# DOCKER_VOLUMES is collected whole as user "docker" with _data as its home;
+# any other volume gets one skipped_unmatched_volume row with its size.
+# Failures (an unreadable volumes directory, a volume that cannot be walked)
+# are counted, noted in collection.json and printed in the summary; they never
+# stop the collection.
+NOTES=
+DOCKER_SEEN=0; DOCKER_FOUND=0; DOCKER_COLLECTED=0; DOCKER_UNREADABLE=0; DOCKER_DESKTOP=0
+add_note() { NOTES="$NOTES
+$1"; log_line "NOTE: $1"; }
+# docker_volume_agent NAME -> the agent of the first DOCKER_VOLUMES line whose glob matches
+docker_volume_agent() {
+  _dv_ifs=$IFS
+  IFS='
+'
+  set -f
+  for _dv_l in $DOCKER_VOLUMES; do
+    case "$_dv_l" in ''|'#'*) continue ;; esac
+    _dv_p=${_dv_l#*|}
+    # shellcheck disable=SC2254 # the table entry is a glob
+    case "$1" in $_dv_p) set +f; IFS=$_dv_ifs; printf '%s' "${_dv_l%%|*}"; return 0 ;; esac
+  done
+  set +f
+  IFS=$_dv_ifs
+}
+# find_errors_since LINE -> number of find(1) error lines appended to the log after LINE
+find_errors_since() { tail -n "+$(( $1 + 1 ))" "$LOG" 2>/dev/null | grep -c '^find: '; }
+# collect_volume_dir BASE REL: every <name>/_data under the volumes directory
+# BASE/REL. Each component of REL is checked on the way down, so a data root
+# the responder cannot enter (/var/lib/docker and /var/lib/containers are
+# root-only) or a symlinked one is reported rather than silently skipped.
+collect_volume_dir() {
+  _vd=$1; _vr=$2/
+  while [ -n "$_vr" ]; do
+    _vd="$_vd/${_vr%%/*}"; _vr=${_vr#*/}
+    if [ -L "$_vd" ]; then
+      DOCKER_SEEN=1
+      add_note "docker: $_vd is a symlink and was not followed; collect its target by hand"
+      return
+    fi
+    [ -d "$_vd" ] || return
+    if [ ! -x "$_vd" ] || { [ -z "$_vr" ] && [ ! -r "$_vd" ]; }; then
+      DOCKER_SEEN=1; DOCKER_UNREADABLE=$(( DOCKER_UNREADABLE + 1 ))
+      add_note "docker: $_vd is not readable; run as root to collect the volumes under it"
+      return
+    fi
+  done
+  DOCKER_SEEN=1
+  log_line "Docker volumes in $_vd"
+  _vd_list=$(expand_glob "$_vd" '*')
+  while IFS= read -r _vv; do
+    [ -n "$_vv" ] || continue
+    if [ -L "$_vv" ] || [ ! -d "$_vv" ]; then continue; fi
+    DOCKER_FOUND=$(( DOCKER_FOUND + 1 ))
+    _vn=${_vv##*/}; _vdata="$_vv/_data"
+    _va=$(docker_volume_agent "$_vn")
+    if [ ! -r "$_vv" ] || [ ! -x "$_vv" ] || { [ -d "$_vdata" ] && { [ ! -r "$_vdata" ] || [ ! -x "$_vdata" ]; }; }; then
+      DOCKER_UNREADABLE=$(( DOCKER_UNREADABLE + 1 ))
+      add_note "docker: volume $_vn (${_va:-unmatched}) at $_vv is not readable; run as root to collect it"
+    elif [ -L "$_vdata" ] || [ ! -d "$_vdata" ]; then
+      log_line "  volume $_vn has no _data directory, skipped"
+    elif [ -z "$_va" ]; then
+      _vkb=$(du -sk "$_vdata" 2>/dev/null | cut -f1)
+      emit_row "$MANIFEST" docker "$_vdata" "" "$_vdata" "" dir "$(( $(num "$_vkb") * 1024 ))" 0 0 0 0 0 0 0 "" false skipped_unmatched_volume "" ""
+    else
+      log_line "  [$_va] $_vdata"
+      _vl=$(wc -l <"$LOG" | tr -d ' ')
+      collect_path docker "$_vdata" "$_va" "$_vdata" </dev/null
+      _vfe=$(num "$(find_errors_since "$(num "$_vl")")")
+      DOCKER_COLLECTED=$(( DOCKER_COLLECTED + 1 ))
+      if [ "$_vfe" -gt 0 ]; then
+        DOCKER_UNREADABLE=$(( DOCKER_UNREADABLE + 1 ))
+        add_note "docker: volume $_vn ($_va) could not be walked completely ($_vfe unreadable paths, see collector.log); run as root to collect it"
+      fi
+    fi
+  done <<EOF_VOLUMES
+$_vd_list
+EOF_VOLUMES
+}
+
+if [ "$NO_DOCKER" != 1 ]; then
+  # Root Docker, root Podman and Windows-container Docker data roots, then the
+  # rootless Docker and Podman roots of each (selected) user.
+  collect_volume_dir "$ROOT/var/lib" docker/volumes </dev/null
+  collect_volume_dir "$ROOT/var/lib" containers/storage/volumes </dev/null
+  collect_volume_dir "$ROOT/ProgramData" Docker/volumes </dev/null
+  # Docker Desktop keeps Linux volumes inside a VM disk that no file walk reaches.
+  _dk_desktop="$ROOT/ProgramData/DockerDesktop"
+  while IFS= read -r _dk_line; do
+    [ -n "$_dk_line" ] || continue
+    _dk_h=${_dk_line#*:}
+    collect_volume_dir "$_dk_h/.local/share" docker/volumes </dev/null
+    collect_volume_dir "$_dk_h/.local/share" containers/storage/volumes </dev/null
+    _dk_desktop="$_dk_desktop
+$_dk_h/Library/Containers/com.docker.docker
+$_dk_h/AppData/Local/Docker"
+  done <<EOF_DKUSERS
+$USER_LIST
+EOF_DKUSERS
+  while IFS= read -r _dk_d; do
+    if [ -n "$_dk_d" ] && [ -d "$_dk_d" ] && [ ! -L "$_dk_d" ]; then
+      DOCKER_SEEN=1; DOCKER_DESKTOP=1
+      add_note "docker: Docker Desktop data at $_dk_d; volumes inside its virtual machine disk are not collected"
+    fi
+  done <<EOF_DKDESKTOP
+$_dk_desktop
+EOF_DKDESKTOP
+fi
+
+# ---------------------------------------------------------------------------
 # Project discovery: paths referenced by agent state files, prefixed with ROOT.
 # Emits "user:path"; the user is whoever's state referenced the path. Only
 # plain-text sources are read here (JSON/JSONL via grep); SQLite-backed agents
@@ -1769,12 +2039,14 @@ cat >"$SUMMARY" <<EOF
   "run_as_uid": "$(id -u 2>/dev/null)",
   "started": "$START_TS",
   "finished": "$END_TS",
-  "options": {"full": $( [ "$FULL" = 1 ] && printf true || printf false ), "no_secrets": $( [ "$NO_SECRETS" = 1 ] && printf true || printf false ), "no_live": $( [ "$NO_LIVE" = 1 ] && printf true || printf false ), "max_file_size_bytes": $MAX_SIZE, "users_filter": "$(json_str "$USERS")"},
+  "options": {"full": $( [ "$FULL" = 1 ] && printf true || printf false ), "no_secrets": $( [ "$NO_SECRETS" = 1 ] && printf true || printf false ), "no_live": $( [ "$NO_LIVE" = 1 ] && printf true || printf false ), "max_file_size_bytes": $MAX_SIZE, "users_filter": "$(json_str "$USERS")", "no_docker": $( [ "$NO_DOCKER" = 1 ] && printf true || printf false )},
   "capabilities": {"hash_tool": "$HASH_TOOL", "stat_mode": "$STAT_MODE", "worker_shell": "$(json_str "$WORKER_SH")"},
   "users": $(json_list "$(printf '%s\n' "$USER_LIST" | cut -d: -f1)"),
   "homes": $(json_list "$(printf '%s\n' "$USER_LIST" | sed 's/^[^:]*://')"),
   "projects": $(json_list "$(printf '%s\n' "$PROJECT_LIST" | sed 's/^[^:]*://')"),
-  "counts": {"collected": $(count_status collected), "symlink": $(count_status symlink), "skipped_excluded": $(count_status skipped_excluded), "skipped_size": $(count_status skipped_size), "skipped_secret": $(count_status skipped_secret), "error_copy": $(count_status error_copy), "collected_bytes": $BYTES},
+  "counts": {"collected": $(count_status collected), "symlink": $(count_status symlink), "skipped_excluded": $(count_status skipped_excluded), "skipped_size": $(count_status skipped_size), "skipped_secret": $(count_status skipped_secret), "error_copy": $(count_status error_copy), "skipped_unmatched_volume": $(count_status skipped_unmatched_volume), "collected_bytes": $BYTES},
+  "docker": {"volumes_found": $DOCKER_FOUND, "volumes_collected": $DOCKER_COLLECTED, "unreadable": $DOCKER_UNREADABLE, "docker_desktop": $( [ "$DOCKER_DESKTOP" = 1 ] && printf true || printf false )},
+  "notes": $(json_list "$NOTES"),
   "archive": "$(json_str "$NAME.tar.gz")"
 }
 EOF
@@ -1804,4 +2076,10 @@ printf 'archive:    %s\nsize:       %s\nsha256:     %s\nmanifest:   %s\nsummary:
   "$ARCHIVE" "$ARCHIVE_SIZE" "$ARCHIVE_SHA" "$MANIFEST" "$SUMMARY" "$LOG" \
   "$(printf '%s\n' "$USER_LIST" | grep -c .)" "$(printf '%s\n' "$PROJECT_LIST" | grep -c .)" \
   "$(count_status collected)" "$BYTES" "$(count_status skipped_excluded)" "$(count_status skipped_size)" "$(count_status skipped_secret)" "$(count_status error_copy)"
+if [ "$DOCKER_SEEN" = 1 ]; then
+  printf 'docker:     %s volumes found, %s collected, %s unreadable' "$DOCKER_FOUND" "$DOCKER_COLLECTED" "$DOCKER_UNREADABLE"
+  [ "$DOCKER_UNREADABLE" -gt 0 ] && printf ' (run as root to collect)'
+  [ "$DOCKER_DESKTOP" = 1 ] && printf '; Docker Desktop VM disk not collected'
+  printf '\n'
+fi
 exit 0
