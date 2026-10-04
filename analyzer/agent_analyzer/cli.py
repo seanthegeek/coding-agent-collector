@@ -163,7 +163,10 @@ PROJECT_AGENT = "project"
 def parsers_for(artifact, parsers: Dict[str, list]) -> list:
     if artifact.agent == PROJECT_AGENT:
         return ALL
-    return parsers.get(artifact.agent, [])
+    own = parsers.get(artifact.agent, [])
+    # Parsers that read another agent's files (Cody and Twinny rows inside
+    # the `vscode` state.vscdb) say so in `reads_agents`.
+    return own + [p for p in ALL if artifact.agent in p.reads_agents and p not in own]
 
 
 def collect_rows(col: Collection, opts: Options, agents: List[str]) -> Tuple[List[Row], Counter, List[str]]:

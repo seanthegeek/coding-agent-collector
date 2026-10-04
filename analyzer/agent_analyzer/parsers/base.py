@@ -19,6 +19,10 @@ class Options:
 class Parser:
     agent: str = ""
     name: str = ""
+    # Other catalog agents whose artifacts this parser is also offered: an
+    # extension whose chats are rows of the editor's own state.vscdb, which
+    # the catalog attributes to `vscode`, lists ("vscode",) here.
+    reads_agents: Tuple[str, ...] = ()
 
     def wants(self, artifact: Artifact) -> bool:
         raise NotImplementedError

@@ -176,6 +176,7 @@ class TimelineTests(ParserBase):
             "crush", "goose",
             "zed", "vscode",
             "cline", "roo-code",
+            "cody", "twinny", "pearai",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -188,6 +189,8 @@ class TimelineTests(ParserBase):
             GEMINI_SESSION, GEMINI_RESUMED, GEMINI_LEGACY, GEMINI_SUBAGENT,
             CRUSH_SESSION, GOOSE_SESSION, "20260301_090000",
             ZED_THREAD, ZED_EXTERNAL, VSCODE_SESSION, VSCODE_LEGACY_SESSION,
+            "Sat, 03 Oct 2026 10:00:00 GMT", "7d1c2b3a-1111-4000-8000-000000000001",
+            "9b1c2d3e-0000-4000-8000-000000000001", "1791036000000",
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -1527,5 +1530,256 @@ class RooCodeTests(ParserBase):
         write_bad_line(self.home / self.UI)
         rows = self.rows_for(RooCodeParser(), self.UI)
         self.assertEqual(len(rows), 10)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("parser:", rows[-1].text)
+
+
+from agent_analyzer import vscode_state  # noqa: E402
+from agent_analyzer.parsers.cody import CodyParser, chat_time  # noqa: E402
+from agent_analyzer.parsers.pearai import PearAiParser  # noqa: E402
+from agent_analyzer.parsers.twinny import TwinnyParser  # noqa: E402
+from fixtures import (CODY_ACCOUNT, CODY_AGENTIC_CHAT, CODY_CHAT, CODY_JB_REL, CODY_TOKEN,  # noqa: E402
+                      CODY_VSCDB_REL, CODY_VSCODE_CHAT, PEARAI_GS, PEARAI_ROO, PEARAI_SEARCH_SESSION,
+                      PEARAI_SESSION, PEARAI_TASK, PEARAI_UI_TASK, TWINNY_ACTIVE, TWINNY_API_KEY,
+                      TWINNY_CONVERSATION, TWINNY_VSCDB_REL, _vscdb)
+
+
+class ReadsAgentsRoutingTests(ParserBase):
+    """`reads_agents` offers a `vscode` state.vscdb to the Cody and Twinny
+    parsers as well as to the VS Code parser, and nothing else to them."""
+
+    def test_state_vscdb_offered_to_extension_parsers(self):
+        parsers = by_agent()
+        art = next(a for a in self.col.artifacts if a.rel == CODY_VSCDB_REL)
+        self.assertEqual(art.agent, "vscode")
+        offered = cli.parsers_for(art, parsers)
+        self.assertEqual({p.agent for p in offered}, {"vscode", "cody", "twinny"})
+        self.assertEqual(len(offered), len(set(map(id, offered))))
+        self.assertFalse(any(p.wants(art) for p in offered if p.agent == "vscode"))
+        other = next(a for a in self.col.artifacts if a.agent == "codex-cli")
+        self.assertEqual({p.agent for p in cli.parsers_for(other, parsers)}, {"codex-cli"})
+
+    def test_cli_attributes_rows_to_the_extension(self):
+        rows, counts, problems = cli.collect_rows(self.col, Options(), [])
+        self.assertEqual(problems, [])
+        from_vscdb = {r.agent for r in rows if r.source_file.endswith("/User/globalStorage/state.vscdb")}
+        self.assertEqual(from_vscdb, {"cody", "twinny"})
+        rows, _, _ = cli.collect_rows(self.col, Options(), ["twinny"])
+        self.assertEqual({r.agent for r in rows}, {"twinny"})
+
+
+class CodyTests(ParserBase):
+    def test_rows(self):
+        rows = self.rows_for(CodyParser(), CODY_JB_REL)
+        self.assertEqual([r.turn_type for r in rows], [
+            "system", "user", "assistant",
+            "system", "user", "assistant", "tool_use", "tool_result", "assistant", "system"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.source_line, r.git_branch), ("h1", "alice", "cody", 1, ""))
+        first, user, asst = rows[:3]
+        self.assertEqual({r.session_id for r in rows[:3]}, {CODY_CHAT})
+        self.assertEqual({r.timestamp_utc for r in rows[:3]}, {"2026-10-03T10:00:00.000Z"})
+        self.assertEqual({r.timestamp_utc for r in rows[3:]}, {"2026-10-03T10:30:00.000Z"})
+        self.assertEqual(first.text, "chat: Fix flaky test | account=%s | interactions=1" % CODY_ACCOUNT)
+        self.assertEqual(user.text, "why is test_login flaky? [context: /srv/proj/tests/test_login.py]")
+        self.assertEqual((user.model, user.project_path), ("", ""))
+        self.assertEqual((asst.text, asst.model), ("It depends on wall-clock time.",
+                                                   "anthropic::2024-10-22::claude-sonnet-4-latest"))
+        use, result = rows[6], rows[7]
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text),
+                         ("run_terminal_command", "toolu_01", '{"command":"pytest -q"}'))
+        self.assertEqual((result.tool_name, result.tool_use_id, result.text, result.session_id),
+                         ("run_terminal_command", "toolu_01", "3 passed", CODY_AGENTIC_CHAT))
+        self.assertEqual(rows[-1].text, "error: rate limit exceeded")
+
+    def test_vscode_state_row(self):
+        rows = self.rows_for(CodyParser(), CODY_VSCDB_REL)
+        self.assertEqual([(r.turn_type, r.text) for r in rows], [
+            ("system", "chat: | account=%s | interactions=1" % CODY_ACCOUNT),
+            ("user", "explain build.sh"), ("assistant", "It runs make.")])
+        self.assertEqual({(r.agent, r.session_id, r.source_line, r.timestamp_utc) for r in rows},
+                         {("cody", CODY_VSCODE_CHAT, 0, "2026-10-03T09:00:00.000Z")})
+        self.assertNotIn(CODY_TOKEN, " ".join(r.text for r in rows))
+
+    def test_thinking_opt_in(self):
+        # Cody records no reasoning; the option must not invent rows.
+        plain = self.rows_for(CodyParser(), CODY_JB_REL)
+        self.assertEqual(self.rows_for(CodyParser(), CODY_JB_REL, include_thinking=True), plain)
+
+    def test_chat_time_and_account_collision(self):
+        self.assertEqual(chat_time("Sat, 03 Oct 2026 10:00:00 GMT", None), "2026-10-03T10:00:00.000Z")
+        self.assertEqual(chat_time("0f0e-uuid", "Sat, 03 Oct 2026 11:00:00 GMT"), "2026-10-03T11:00:00.000Z")
+        self.assertEqual(chat_time("0f0e-uuid", None), "")
+        hist = json.loads((self.home / CODY_JB_REL).read_text(encoding="utf-8"))
+        hist["https://example.org/-bob"] = {"chat": {CODY_CHAT: hist[CODY_ACCOUNT]["chat"][CODY_CHAT]}}
+        (self.home / CODY_JB_REL).write_text(json.dumps(hist), encoding="utf-8")
+        sids = {r.session_id for r in self.rows_for(CodyParser(), CODY_JB_REL)}
+        self.assertEqual(sids, {CODY_ACCOUNT + "/" + CODY_CHAT, "https://example.org/-bob/" + CODY_CHAT,
+                                CODY_AGENTIC_CHAT})
+
+    def test_not_wanted(self):
+        for rel in (".local/share/Cody-nodejs/user-settings.json",
+                    ".config/Code/User/globalStorage/rjmacarthy.twinny/twinny-providers.json"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertFalse(CodyParser().wants(art), rel)
+        # A state.vscdb that is not SQLite (or has no Cody row) yields nothing.
+        self.assertEqual(self.rows_for(CodyParser(), ".config/Code/User/globalStorage/state.vscdb"), [])
+        self.assertEqual(self.rows_for(CodyParser(), TWINNY_VSCDB_REL), [])
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / CODY_JB_REL)
+        rows = self.rows_for(CodyParser(), CODY_JB_REL)
+        self.assertEqual(len(rows), 11)
+        self.assertEqual([r.turn_type for r in rows[:3]], ["system", "user", "assistant"])
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("parser: chat history did not parse; recovered 2 chat(s)", rows[-1].text)
+
+    def test_cut_mid_chat_keeps_earlier_interactions(self):
+        text = (self.home / CODY_JB_REL).read_text(encoding="utf-8")
+        cut = text.index('"All three pass.')
+        (self.home / CODY_JB_REL).write_text(text[:cut], encoding="utf-8")
+        rows = self.rows_for(CodyParser(), CODY_JB_REL)
+        texts = [r.text for r in rows]
+        self.assertIn("It depends on wall-clock time.", texts)
+        self.assertIn("Running tests.", texts)
+        self.assertNotIn("All three pass.", texts)
+        self.assertEqual(rows[-1].turn_type, "system")
+
+
+class TwinnyTests(ParserBase):
+    def test_rows(self):
+        # The rows live only in the -wal sidecar: read through sqlite_util.
+        self.assertTrue((self.home / (TWINNY_VSCDB_REL + "-wal")).is_file())
+        rows = self.rows_for(TwinnyParser(), TWINNY_VSCDB_REL)
+        self.assertEqual([r.turn_type for r in rows], [
+            "system", "user", "assistant", "tool_use", "tool_result", "tool_use", "tool_result", "system",
+            "system", "user"])
+        for r in rows[:8]:
+            self.assertEqual((r.agent, r.session_id, r.timestamp_utc, r.source_line, r.project_path),
+                             ("twinny", TWINNY_CONVERSATION, "2026-10-03T12:00:05.000Z", 0, ""))
+        self.assertEqual(rows[0].text, "conversation: List the tests | messages=2")
+        self.assertEqual((rows[2].text, rows[2].model), ("Two tests fail.", "qwen2.5-coder:7b"))
+        self.assertEqual((rows[3].tool_name, rows[3].tool_use_id, rows[3].text),
+                         ("run_command", "step-1", '{"command":"npm test"}'))
+        self.assertEqual((rows[4].tool_use_id, rows[4].text), ("step-1", "2 failing"))
+        self.assertEqual(rows[6].text, "[failed] permission denied")
+        self.assertEqual(rows[7].text, 'secret shield withheld: [{"count":1,"kind":"aws-key"}]')
+        self.assertEqual({r.session_id for r in rows[8:]}, {TWINNY_ACTIVE})     # unsaved active conversation
+        self.assertEqual(rows[9].text, "unsaved question")
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(TwinnyParser(), TWINNY_VSCDB_REL, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["run the suite"])
+        self.assertEqual(rows[rows.index(next(r for r in rows if r.turn_type == "thinking")) + 1].text,
+                         "Two tests fail.")
+
+    def test_api_key_never_emitted(self):
+        out = self.tmp / "out"
+        import contextlib
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(["timeline", str(self.tmp / "home"), "-o", str(out), "--host", "h1"]), 0)
+        for name in ("timeline.csv", "sessions.csv"):
+            text = (out / name).read_text(encoding="utf-8")
+            self.assertNotIn(TWINNY_API_KEY, text, name)
+            self.assertNotIn(CODY_TOKEN, text, name)
+        self.assertIn(TWINNY_CONVERSATION, (out / "sessions.csv").read_text(encoding="utf-8"))
+        # Nor from a value the parser cannot decode.
+        db = self.home / ".config/Code - Insiders/User/globalStorage/state.vscdb"
+        _vscdb(db, {"rjmacarthy.twinny": '{"twinny.inference-providers":{"apiKey":"%s"' % TWINNY_API_KEY})
+        col = open_input(self.tmp / "home", self.cat, host="h1")
+        art = next(a for a in col.artifacts if a.rel == ".config/Code - Insiders/User/globalStorage/state.vscdb")
+        rows = list(TwinnyParser().parse(art, Options()))
+        self.assertEqual([r.turn_type for r in rows], ["system"])
+        self.assertTrue(rows[0].text.startswith("parser: ItemTable value for rjmacarthy.twinny is not valid JSON"))
+        self.assertNotIn(TWINNY_API_KEY, rows[0].text)
+
+    def test_secret_rows_never_read(self):
+        db = self.home / TWINNY_VSCDB_REL
+        key = 'secret://{"extensionId":"rjmacarthy.twinny","key":"gateway"}'
+        self.assertEqual(vscode_state.read_item(db, key), (None, []))
+        values, _ = vscode_state.read_items(db, [key, "rjmacarthy.twinny"])
+        self.assertEqual(list(values), ["rjmacarthy.twinny"])
+
+    def test_not_wanted(self):
+        art = next(a for a in self.col.artifacts
+                   if a.rel == ".config/Code/User/globalStorage/rjmacarthy.twinny/twinny-providers.json")
+        self.assertEqual(art.agent, "twinny")
+        self.assertFalse(TwinnyParser().wants(art))
+        self.assertEqual(self.rows_for(TwinnyParser(), ".config/Code/User/globalStorage/state.vscdb"), [])
+        self.assertEqual(self.rows_for(TwinnyParser(), CODY_VSCDB_REL), [])
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        # A damaged SQLite file is one system row, not an exception.
+        db = self.home / CODY_VSCDB_REL
+        data = db.read_bytes()
+        db.write_bytes(data[:100] + b"\x00" * (len(data) - 100))
+        rows = self.rows_for(TwinnyParser(), CODY_VSCDB_REL)
+        self.assertEqual([r.turn_type for r in rows], ["system"])
+        self.assertIn("parser: state.vscdb unreadable", rows[0].text)
+
+
+class PearAiTests(ParserBase):
+    SESSION = ".pearai/sessions/%s.json" % PEARAI_SESSION
+    API = PEARAI_ROO + "tasks/%s/api_conversation_history.json" % PEARAI_TASK
+
+    def test_rows(self):
+        rows = self.rows_for(PearAiParser(), self.SESSION)
+        self.assertEqual([(r.turn_type, r.source_line) for r in rows], [("system", 0), ("user", 1), ("assistant", 2)])
+        for r in rows:
+            self.assertEqual((r.agent, r.session_id, r.project_path, r.timestamp_utc),
+                             ("pearai", PEARAI_SESSION, "/srv/proj", "2026-10-03T13:00:00.000Z"))
+        self.assertEqual(rows[0].text, "session start: why does build.sh fail | integration=continue | "
+                                       "history=2 perplexityHistory=0")
+        self.assertEqual(rows[1].text, "why does build.sh fail [context: /srv/proj/build.sh]")
+        self.assertEqual((rows[2].text, rows[2].model), ("The make target is missing.", "pearai_model"))
+        rows = self.rows_for(PearAiParser(), ".pearai/sessions/%s.json" % PEARAI_SEARCH_SESSION)
+        self.assertEqual([(r.turn_type, r.source_line, r.text) for r in rows][1:], [
+            ("user", 1, "latest make release"),
+            ("assistant", 2, "GNU make 4.4.1. [citations: https://www.gnu.org/software/make/]")])
+        self.assertIn("integration=perplexity", rows[0].text)
+
+    def test_task_xml_tool_calls(self):
+        rows = self.rows_for(PearAiParser(), self.API)
+        self.assertEqual([r.turn_type for r in rows], ["user", "system", "assistant", "tool_use", "tool_result",
+                                                       "tool_use"])
+        self.assertEqual({(r.agent, r.session_id, r.project_path, r.model) for r in rows},
+                         {("pearai", PEARAI_TASK, "/srv/proj", "")})       # project from state.vscdb taskHistory
+        user, env, asst, use, result, done = rows
+        self.assertEqual((user.text, user.timestamp_utc), ("run the tests", "2026-10-03T14:00:00.000Z"))
+        self.assertTrue(env.text.startswith("<environment_details>"))
+        self.assertEqual(asst.text, "I will run them.")
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text, use.source_line),
+                         ("execute_command", "2", "npm test", 2))
+        self.assertEqual((result.tool_name, result.tool_use_id, result.text, result.timestamp_utc),
+                         ("execute_command", "2", "12 passing", "2026-10-03T14:00:09.000Z"))
+        self.assertEqual((done.tool_name, done.tool_use_id, done.text), ("attempt_completion", "4", "All 12 tests pass."))
+
+    def test_thinking_opt_in(self):
+        self.assertNotIn("thinking", [r.turn_type for r in self.rows_for(PearAiParser(), self.API)])
+        rows = self.rows_for(PearAiParser(), self.API, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["use npm"])
+
+    def test_ui_messages_preferred(self):
+        task = PEARAI_ROO + "tasks/%s/" % PEARAI_UI_TASK
+        self.assertEqual(self.rows_for(PearAiParser(), task + "api_conversation_history.json"), [])
+        rows = self.rows_for(PearAiParser(), task + "ui_messages.json")
+        self.assertEqual(rows[0].turn_type, "user")
+        self.assertEqual({r.session_id for r in rows}, {PEARAI_UI_TASK})
+        self.assertIn("tool_result", [r.turn_type for r in rows])
+
+    def test_not_wanted(self):
+        for rel in (".pearai/config.json", ".pearai/sessions/sessions.json", PEARAI_GS + "state.vscdb"):
+            art = next(a for a in self.col.artifacts if a.rel == rel)
+            self.assertEqual(art.agent, "pearai")
+            self.assertFalse(PearAiParser().wants(art), rel)
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / self.SESSION)
+        rows = self.rows_for(PearAiParser(), self.SESSION)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "assistant", "system"])
+        self.assertIn("parser:", rows[-1].text)
+        write_bad_line(self.home / self.API)
+        rows = self.rows_for(PearAiParser(), self.API)
+        self.assertEqual(len(rows), 7)
         self.assertEqual(rows[-1].turn_type, "system")
         self.assertIn("parser:", rows[-1].text)

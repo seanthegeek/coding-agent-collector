@@ -20,6 +20,9 @@ from .opencode import OpenCodeParser
 from .kilo_code import KiloCodeParser
 from .cline import ClineParser
 from .roo_code import RooCodeParser
+from .cody import CodyParser
+from .twinny import TwinnyParser
+from .pearai import PearAiParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -38,6 +41,9 @@ ALL: List[Parser] = [
     KiloCodeParser(),
     ClineParser(),
     RooCodeParser(),
+    CodyParser(),
+    TwinnyParser(),
+    PearAiParser(),
 ]
 
 
