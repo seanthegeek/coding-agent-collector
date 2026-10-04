@@ -118,7 +118,7 @@ def _maybe_zstd(blob: bytes) -> tuple[bytes | None, str]:
         return None, "zstandard package not installed"
     try:
         return decompress(blob, zstd), ""
-    except Exception as e:  # zstd.ZstdError
+    except Exception as e:  # noqa: BLE001 - zstd.ZstdError; the module is imported lazily
         return None, "%s: %s" % (type(e).__name__, e)
 
 

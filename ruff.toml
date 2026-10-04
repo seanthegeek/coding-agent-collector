@@ -1,0 +1,52 @@
+# Ruff configuration for every Python file in the repository (analyzer/,
+# analyzer/tools/, tools/). analyzer/pyproject.toml extends this file so
+# running ruff from inside analyzer/ uses the same settings. A project
+# config takes precedence over any user-level ruff configuration.
+target-version = "py310"
+line-length = 100
+# Only Python and the pyproject files; ruff must never rewrite the code blocks
+# in the Markdown research documents.
+include = ["*.py", "*.pyi", "**/pyproject.toml"]
+
+[lint]
+# E, W     pycodestyle errors and warnings.
+# F        pyflakes: undefined names, unused imports and variables.
+# I        isort: one import order everywhere.
+# B        flake8-bugbear: mutable defaults, loop-variable closures, bare
+#          except and other patterns that hide bugs in parsers.
+# UP       pyupgrade, bounded by target-version so nothing newer than 3.10.
+# SIM      flake8-simplify.
+# RUF      ruff-specific checks (ambiguous unicode, mutable class defaults).
+# BLE      flake8-blind-except: a parser must catch specific errors so a
+#          bad record becomes a system row rather than hiding a bug.
+# Not selected: S (bandit) flags every dynamic SQL string the SQLite readers
+# build from whitelisted table and column names, and PTH
+# would rewrite working os.path and os.walk calls for no bug-finding value.
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "BLE"]
+ignore = [
+    # Line length belongs to `ruff format`; what it cannot wrap is long
+    # string literals (regexes, SQL, fixture records) that read better whole.
+    "E501",
+    # %-formatting is the house style, including regex templates such as
+    # ROLLOUT_TMPL % re.escape(prefix); the rewrite to str.format is unsafe.
+    "UP031",
+    # try/except/pass is explicit about what a parser tolerates, and it sits
+    # in per-record loops where contextlib.suppress adds a context manager
+    # per record for no gain in clarity.
+    "SIM105",
+]
+
+[lint.per-file-ignores]
+# Each parser's tests import their parser and fixtures at the head of their
+# own section of this long file, so the sections can be read alone.
+"analyzer/tests/test_parsers.py" = ["E402"]
+# These parsers define a small row-building closure inside the record loop
+# and call it only within the iteration that defined it (the row is built
+# before the generator yields), so late binding of the loop variables
+# cannot be observed. B023 stays on everywhere else.
+"analyzer/agent_analyzer/parsers/{agent_zero,claude_code,codex,kilo_code,letta,opencode,pi,qwen_code}.py" = ["B023"]
+
+[lint.isort]
+# Fixed here so import order does not depend on the directory ruff runs
+# from; the tests import their fixtures module as a top-level name.
+known-first-party = ["agent_analyzer", "fixtures"]

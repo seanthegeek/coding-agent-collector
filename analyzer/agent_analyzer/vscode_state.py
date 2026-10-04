@@ -77,4 +77,4 @@ def read_item(path: Path, key: str) -> tuple[object, list[str]]:
     return values.get(key), problems
 
 
-__all__ = ["STATE_DB_RX", "SECRET_PREFIX", "read_item", "read_items"]
+__all__ = ["SECRET_PREFIX", "STATE_DB_RX", "read_item", "read_items"]

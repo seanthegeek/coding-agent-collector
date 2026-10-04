@@ -213,7 +213,7 @@ class ClineParser(LegacyTaskParser):
                 if "sessions" not in table_names(con):
                     return
                 rows = [dict(r) for r in con.execute("select rowid as _rowid, * from sessions")]
-        except Exception as e:  # a damaged database must not stop the timeline
+        except Exception as e:  # noqa: BLE001 - a damaged database must not stop the timeline
             yield error_row(self, artifact, [(0, "sessions.db unreadable (%s)" % e)])
             return
         for r in rows:
@@ -225,7 +225,7 @@ class ClineParser(LegacyTaskParser):
                 if isinstance(meta, dict) and meta.get("title"):
                     r["title"] = meta["title"]
             yield self._session_start(r, artifact, int(r.get("_rowid") or 0), opts, "started_at",
-                                      "session index", self.START_KEYS + ("ended_at", "exit_code"))
+                                      "session index", (*self.START_KEYS, "ended_at", "exit_code"))
 
 
 def load_json_text(s):

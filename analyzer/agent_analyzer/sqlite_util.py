@@ -8,7 +8,6 @@ written, which matters because SQLite would otherwise checkpoint the WAL into
 the evidence copy."""
 from __future__ import annotations
 
-import os
 import shutil
 import sqlite3
 import tempfile

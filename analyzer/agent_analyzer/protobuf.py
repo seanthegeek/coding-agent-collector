@@ -173,7 +173,7 @@ def _encode_scalar(field: int, kind: str, v) -> bytes:
     if kind == "ts":
         # v is epoch seconds (float allowed)
         seconds = int(v)
-        nanos = int(round((v - seconds) * 1e9))
+        nanos = round((v - seconds) * 1e9)
         body = _tag(1, 0) + _write_varint(seconds)
         if nanos:
             body += _tag(2, 0) + _write_varint(nanos)

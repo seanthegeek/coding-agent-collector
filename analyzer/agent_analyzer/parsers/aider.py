@@ -249,7 +249,7 @@ class AiderParser(Parser):
             row.timestamp_utc = to_utc(b["ts"])
             row.session_id = session_for(b["ts"])
             if b["kind"] == "LLM RESPONSE":
-                text = "\n".join(_strip_role(l, "ASSISTANT") for l in b["lines"]).strip()
+                text = "\n".join(_strip_role(ln, "ASSISTANT") for ln in b["lines"]).strip()
                 if not text:
                     return
                 row.turn_type = "assistant"
@@ -257,15 +257,15 @@ class AiderParser(Parser):
                 yield row
                 return
             msgs: list[tuple[str, list[str]]] = []
-            for l in b["lines"]:
-                if l == "-------":
+            for ln in b["lines"]:
+                if ln == "-------":
                     msgs.append(("", []))
                 elif msgs:
                     role, body = msgs[-1]
                     if not role:
-                        role = l.split(" ", 1)[0]
+                        role = ln.split(" ", 1)[0]
                         msgs[-1] = (role, body)
-                    body.append(_strip_role(l, role))
+                    body.append(_strip_role(ln, role))
             counts: dict[str, int] = {}
             last_user = ""
             for role, body in msgs:

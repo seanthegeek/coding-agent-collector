@@ -114,7 +114,7 @@ def _select(con: sqlite3.Connection, table: str, order: str) -> Iterator[dict]:
     if order_cols:
         sql += " order by " + ", ".join(order_cols)
     for r in con.execute(sql):
-        yield dict(zip(cols, r))
+        yield dict(zip(cols, r, strict=False))
 
 
 def _loc(filepath, start_line) -> str:
@@ -238,7 +238,7 @@ class TabbyParser(Parser):
                                 "ephemeral" if t.get("is_ephemeral") else "",
                                 "thread row missing" if "user_id" not in t else "",
                                 "relevant questions: " + "; ".join(questions) if questions else ""))
-            for m, att in zip(msgs, atts):
+            for m, att in zip(msgs, atts, strict=False):
                 role = str(m.get("role") or "")
                 text = str(m.get("content") or "")
                 parts = attachment_parts(att)

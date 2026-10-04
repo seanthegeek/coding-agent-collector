@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 from agent_analyzer import catalog, cli, protobuf, sqlite_util
 from agent_analyzer.inputs import open_input
@@ -138,7 +139,7 @@ class CodexTests(ParserBase):
             self.assertEqual(r.session_id, CODEX_SESSION)
             self.assertEqual(r.project_path, "/srv/proj")
             self.assertEqual(r.git_branch, "feature/x")
-        start, started, dev, user, sh, shout, patch, patchout, asst, done = rows
+        start, _started, dev, user, sh, shout, patch, patchout, asst, done = rows
         self.assertIn("session start: codex_cli_rs 0.99.0", start.text)
         self.assertEqual(start.model, "")                      # model unknown until turn_context
         self.assertEqual(user.model, "gpt-5-codex")
@@ -268,7 +269,7 @@ class ProjectRoutingTests(unittest.TestCase):
         out = self.tmp / ("tl%d" % len(list(self.tmp.glob("tl*"))))
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            rc = cli.main(["timeline", str(archive), "-o", str(out)] + list(extra))
+            rc = cli.main(["timeline", str(archive), "-o", str(out), *list(extra)])
         self.assertEqual(rc, 0, buf.getvalue())
         with open(out / "timeline.csv", encoding="utf-8", newline="") as fh:
             return list(csv.DictReader(fh)), buf.getvalue()
@@ -316,7 +317,7 @@ if __name__ == "__main__":
 
 
 class ProtobufTests(unittest.TestCase):
-    SCHEMA = {"M": {1: ("a", "str"), 2: ("+n", "int"), 3: ("sub", "N"), 4: ("t", "ts"), 5: ("f", "bool"), 6: ("+subs", "N")},
+    SCHEMA: ClassVar[dict] = {"M": {1: ("a", "str"), 2: ("+n", "int"), 3: ("sub", "N"), 4: ("t", "ts"), 5: ("f", "bool"), 6: ("+subs", "N")},
               "N": {1: ("x", "str"), 2: ("d", "double")}}
 
     def test_round_trip(self):
@@ -346,7 +347,6 @@ class ProtobufTests(unittest.TestCase):
 class SqliteUtilTests(unittest.TestCase):
     def test_copy_leaves_original_untouched_and_reads_wal(self):
         import sqlite3
-        import time
         tmp = Path(tempfile.mkdtemp(prefix="cac-analyzer-test-"))
         try:
             db = tmp / "t.db"
@@ -431,8 +431,8 @@ class AntigravityTests(ParserBase):
         self.assertEqual(tool_args_summary("not json"), "not json")
 
 
-from agent_analyzer.parsers.qwen_code import QwenCodeParser, args_summary  # noqa: E402
-from fixtures import QWEN_ARCHIVED, QWEN_SESSION, QWEN_TMP  # noqa: E402
+from agent_analyzer.parsers.qwen_code import QwenCodeParser, args_summary
+from fixtures import QWEN_ARCHIVED, QWEN_SESSION, QWEN_TMP
 
 
 class QwenCodeTests(ParserBase):
@@ -504,8 +504,8 @@ class QwenCodeTests(ParserBase):
         self.assertEqual(args_summary(None), "")
 
 
-from agent_analyzer.parsers.kiro import KiroParser, salvage  # noqa: E402
-from fixtures import KIRO_EXPORT_SESSION, KIRO_SESSION, KIRO_SHELL_SESSION  # noqa: E402
+from agent_analyzer.parsers.kiro import KiroParser, salvage
+from fixtures import KIRO_EXPORT_SESSION, KIRO_SESSION, KIRO_SHELL_SESSION
 
 
 class KiroTests(ParserBase):
@@ -603,7 +603,7 @@ class GeminiCliTests(ParserBase):
             self.assertEqual((r.host, r.user, r.agent), ("h1", "alice", "gemini-cli"))
             self.assertEqual((r.project_path, r.git_branch), ("/srv/proj", ""))
             self.assertTrue(r.timestamp_utc.endswith("Z"), r)
-        start, u1, g1, ls, lsout, u3, g3, rf, rfout, info, sh, shout, u4, summ, rewind = rows
+        start, u1, g1, ls, lsout, _u3, g3, rf, rfout, info, sh, shout, u4, summ, rewind = rows
         self.assertIn("session start: kind=main", start.text)
         self.assertEqual((u1.text, u1.session_id), ("list files in src", GEMINI_SESSION))
         self.assertEqual((g1.text, g1.model, g1.source_line), ("Listing now.", "gemini-2.5-pro", 4))  # re-appended record
@@ -835,7 +835,7 @@ class ContinueTests(ParserBase):
             self.assertEqual((r.project_path, r.git_branch), ("/srv/proj", ""))
             # no per-message time: every row inherits sessions.json dateCreated
             self.assertEqual(r.timestamp_utc, "2026-10-02T10:00:00.000Z")
-        start, user, use1, res1, asst, use2, res2 = rows
+        start, user, use1, res1, asst, _use2, res2 = rows
         self.assertIn("session start: Fix bug mode=agent items=5", start.text)
         self.assertEqual(user.text, "rename foo [image]")
         self.assertEqual((use1.tool_name, use1.tool_use_id, use1.text, use1.model),
@@ -903,7 +903,7 @@ class AiderTests(ParserBase):
         for r in rows:
             self.assertEqual((r.host, r.user, r.agent, r.project_path), ("h1", "alice", "aider", "/alice"))
             self.assertEqual((r.model, r.git_branch, r.tool_use_id), ("", "", ""))
-        start, user, asst, tool, start2, add, added, blank = rows
+        start, user, asst, tool, _start2, add, added, blank = rows
         self.assertEqual([r.session_id for r in rows], [self.S1] * 4 + [self.S2] * 4)
         self.assertEqual(start.timestamp_utc, "2026-10-02T12:00:00.000Z")
         # the prompt takes its time from the matching input-history entry, and later rows inherit it
@@ -970,16 +970,16 @@ class AiderTests(ParserBase):
         self.assertFalse(AiderParser().wants(next(a for a in col.artifacts if a.rel == ".aider.conf.yml")))
 
 
-import importlib.util  # noqa: E402
-import json  # noqa: E402
-import sqlite3  # noqa: E402
-from types import SimpleNamespace  # noqa: E402
-from unittest import mock  # noqa: E402
+import importlib.util
+import json
+import sqlite3
+from types import SimpleNamespace
+from unittest import mock
 
-from agent_analyzer.parsers import zed as zed_mod  # noqa: E402
-from agent_analyzer.parsers.vscode import VsCodeParser, apply_mutation  # noqa: E402
-from agent_analyzer.parsers.zed import ZedParser  # noqa: E402
-from fixtures import (  # noqa: E402
+from agent_analyzer.parsers import zed as zed_mod
+from agent_analyzer.parsers.vscode import VsCodeParser, apply_mutation
+from agent_analyzer.parsers.zed import ZedParser
+from fixtures import (
     VSCODE_LEGACY_SESSION,
     VSCODE_SESSION,
     VSCODE_WS,
@@ -1204,7 +1204,7 @@ class OpenCodeTests(ParserBase):
         self.assertEqual(rows[0].timestamp_utc, "2026-10-02T09:00:01.000Z")
         rows = self.rows_for(p, self.STORAGE + "message/%s/msg_b.json" % OPENCODE_LEGACY_SESSION)
         self.assertEqual([r.turn_type for r in rows], ["tool_use", "tool_result", "assistant", "system"])
-        use, res, asst, err = rows
+        use, res, _asst, err = rows
         self.assertEqual((use.tool_name, use.text), ("read", "/srv/proj/.env"))
         self.assertEqual(res.text, "[error] permission denied")
         self.assertEqual(err.text, "error: APIError overloaded")
@@ -1388,7 +1388,7 @@ class ClineTests(ParserBase):
             self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "cline", CLINE_TASK))
             self.assertEqual((r.project_path, r.git_branch, r.model), ("/srv/proj", "", "claude-sonnet-4-5"))
             self.assertTrue(r.timestamp_utc.endswith("Z"), r)
-        user, api, read, text, cmd, out, ckpt, done = rows
+        user, api, read, _text, cmd, out, ckpt, done = rows
         self.assertEqual((user.text, user.timestamp_utc), ("fix tests | [1 image(s)]", "2026-10-03T10:00:00.000Z"))
         self.assertEqual(api.text, "api_req_started: tokensIn=1200 tokensOut=80 cacheWrites=0 cacheReads=900 cost=0.0041")
         self.assertEqual((read.tool_name, read.tool_use_id, read.text),
@@ -1435,7 +1435,7 @@ class ClineTests(ParserBase):
         self.assertIn("title=fix tests", rows[0].text)
         rows = self.rows_for(ClineParser(), self.SDK + ".messages.json")
         self.assertEqual([r.turn_type for r in rows], ["user", "tool_use", "tool_result", "assistant"])
-        user, use, res, asst = rows
+        _user, use, res, asst = rows
         self.assertEqual({r.session_id for r in rows}, {CLINE_SESSION})
         self.assertEqual({r.project_path for r in rows}, {"/srv/proj"})
         self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("bash", "call_1", "pytest -q"))
@@ -1526,7 +1526,7 @@ class RooCodeTests(ParserBase):
         for r in rows:
             self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "roo-code", ROO_TASK))
             self.assertEqual((r.project_path, r.git_branch, r.model), ("/srv/proj", "", ""))
-        user, api, diff, cmd, out, condense, ask, feedback, done = rows
+        user, api, diff, cmd, out, condense, ask, feedback, _done = rows
         self.assertEqual((user.text, user.timestamp_utc), ("rename the helper", "2026-10-03T10:03:20.000Z"))
         self.assertIn("apiProtocol=anthropic", api.text)
         self.assertEqual((diff.tool_name, diff.text), ("appliedDiff", "src/util.py | -old +new"))
@@ -1809,11 +1809,11 @@ class ShellGptTests(ParserBase):
         msgs, err = load_messages("not json")
         self.assertEqual(msgs, [])
         self.assertTrue(err)
-from agent_analyzer.parsers.letta import LettaParser, decode_key  # noqa: E402
-from agent_analyzer.parsers.little_coder import LittleCoderParser  # noqa: E402
-from agent_analyzer.parsers.pi import PiParser  # noqa: E402
+from agent_analyzer.parsers.letta import LettaParser, decode_key
+from agent_analyzer.parsers.little_coder import LittleCoderParser
+from agent_analyzer.parsers.pi import PiParser
 from agent_analyzer.parsers.pi import args_summary as pi_args_summary
-from fixtures import (  # noqa: E402
+from fixtures import (
     LC_FILE,
     LC_SESSION,
     LETTA_AGENT,
@@ -2021,11 +2021,11 @@ class LettaTests(ParserBase):
             self.assertEqual(len(rows), n + 1, rel)
             self.assertEqual(rows[-1].turn_type, "system")
             self.assertIn("parser:", rows[-1].text)
-from dataclasses import replace as dc_replace  # noqa: E402
+from dataclasses import replace as dc_replace
 
-from agent_analyzer.parsers.agent_zero import AgentZeroParser, recover_logs  # noqa: E402
-from agent_analyzer.parsers.hermes import HermesParser, decode_content  # noqa: E402
-from fixtures import (  # noqa: E402
+from agent_analyzer.parsers.agent_zero import AgentZeroParser, recover_logs
+from agent_analyzer.parsers.hermes import HermesParser, decode_content
+from fixtures import (
     AGENT_ZERO_CHAT,
     AGENT_ZERO_LONG,
     AGENT_ZERO_REL,
@@ -2192,9 +2192,9 @@ class AgentZeroTests(ParserBase):
         self.assertEqual({r.session_id for r in rows}, {AGENT_ZERO_CHAT})
         self.assertEqual(rows[4].text, "a.txt")
         self.assertEqual(recover_logs('{"logs": [{"no": 0}, {"no": 1'), [{"no": 0}])
-from agent_analyzer.parsers import codex as codex_mod  # noqa: E402
-from agent_analyzer.parsers.open_interpreter import OpenInterpreterParser  # noqa: E402
-from fixtures import (  # noqa: E402
+from agent_analyzer.parsers import codex as codex_mod
+from agent_analyzer.parsers.open_interpreter import OpenInterpreterParser
+from fixtures import (
     OI_ARCHIVED,
     OI_IMPORTED,
     OI_ROLLOUT,
@@ -2212,7 +2212,7 @@ class CodexArchiveAndZstdTests(ParserBase):
     """Codex `archived_sessions/` and `.jsonl.zst` rollouts, which the shared
     RolloutParser reads for Codex and its forks alike."""
     ARCHIVED = ".codex/archived_sessions/2026/10/02/rollout-2026-10-02T09-00-00-%s.jsonl" % CODEX_SESSION
-    LIVE_TYPES = ["system", "system", "system", "user", "tool_use", "tool_result",
+    LIVE_TYPES: ClassVar[list[str]] = ["system", "system", "system", "user", "tool_use", "tool_result",
                   "tool_use", "tool_result", "assistant", "system"]
 
     def _add(self, rel, data: bytes):
@@ -2365,10 +2365,10 @@ class OpenInterpreterTests(ParserBase):
         rows = self.rows_for(OpenInterpreterParser(), rel)
         self.assertEqual(len(rows), 6)
         self.assertEqual({r.agent for r in rows}, {"open-interpreter"})
-from agent_analyzer.parsers import openclaw as openclaw_mod  # noqa: E402
-from agent_analyzer.parsers.nanobot import NanobotParser, decode_stem  # noqa: E402
-from agent_analyzer.parsers.openclaw import OpenClawParser  # noqa: E402
-from fixtures import (  # noqa: E402
+from agent_analyzer.parsers import openclaw as openclaw_mod
+from agent_analyzer.parsers.nanobot import NanobotParser, decode_stem
+from agent_analyzer.parsers.openclaw import OpenClawParser
+from fixtures import (
     NANOBOT_HISTORY_REL,
     NANOBOT_KEY,
     NANOBOT_LEGACY_REL,
@@ -2561,11 +2561,11 @@ class NanobotTests(ParserBase):
         self.assertIn("parser:", rows[-1].text)
 
 
-from agent_analyzer import vscode_state  # noqa: E402
-from agent_analyzer.parsers.cody import CodyParser, chat_time  # noqa: E402
-from agent_analyzer.parsers.pearai import PearAiParser  # noqa: E402
-from agent_analyzer.parsers.twinny import TwinnyParser  # noqa: E402
-from fixtures import (  # noqa: E402
+from agent_analyzer import vscode_state
+from agent_analyzer.parsers.cody import CodyParser, chat_time
+from agent_analyzer.parsers.pearai import PearAiParser
+from agent_analyzer.parsers.twinny import TwinnyParser
+from fixtures import (
     CODY_ACCOUNT,
     CODY_AGENTIC_CHAT,
     CODY_CHAT,
@@ -2604,7 +2604,7 @@ class ReadsAgentsRoutingTests(ParserBase):
         self.assertEqual({p.agent for p in cli.parsers_for(other, parsers)}, {"codex-cli"})
 
     def test_cli_attributes_rows_to_the_extension(self):
-        rows, counts, problems = cli.collect_rows(self.col, Options(), [])
+        rows, _counts, problems = cli.collect_rows(self.col, Options(), [])
         self.assertEqual(problems, [])
         from_vscdb = {r.agent for r in rows if r.source_file.endswith("/User/globalStorage/state.vscdb")}
         self.assertEqual(from_vscdb, {"cody", "twinny"})

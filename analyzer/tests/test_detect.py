@@ -2,7 +2,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tarfile
 import tempfile
 import unittest
@@ -172,7 +171,7 @@ class ArchiveTests(unittest.TestCase):
         return archives[0], out
 
     def test_archive_attribution_comes_from_manifest(self):
-        archive, out = self._collect()
+        archive, _out = self._collect()
         col = open_input(archive, self.cat)
         try:
             self.assertEqual(col.kind, "archive")
@@ -189,7 +188,7 @@ class ArchiveTests(unittest.TestCase):
         self.assertFalse(Path(col.root).exists())
 
     def test_extracted_directory_and_timeline_cli(self):
-        archive, out = self._collect()
+        archive, _out = self._collect()
         extracted = self.tmp / "extracted"
         extracted.mkdir()
         with tarfile.open(archive) as tf:

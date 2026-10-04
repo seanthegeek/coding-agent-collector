@@ -192,8 +192,7 @@ class AgentZeroParser(Parser):
         except ValueError as e:
             yield self._row(base, "system", "parser: chat.json did not parse (%s); log items recovered without history" % e,
                             opts)
-            for row in self._log_rows(base, recover_logs(raw), {}, None, opts):
-                yield row
+            yield from self._log_rows(base, recover_logs(raw), {}, None, opts)
             return
 
         base.session_id = str(chat.get("id") or fallback_id)

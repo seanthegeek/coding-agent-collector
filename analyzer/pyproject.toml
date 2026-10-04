@@ -19,3 +19,9 @@ packages = ["agent_analyzer", "agent_analyzer.parsers"]
 
 [tool.setuptools.package-data]
 agent_analyzer = ["catalog.txt"]
+
+# The rule set lives in the repository root's ruff.toml so analyzer/,
+# analyzer/tools/ and tools/ share it; this makes ruff run from inside
+# analyzer/ pick up the same settings instead of any user-level config.
+[tool.ruff]
+extend = "../ruff.toml"

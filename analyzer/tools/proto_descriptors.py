@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from agent_analyzer.protobuf import iter_fields, read_varint  # noqa: E402
+from agent_analyzer.protobuf import iter_fields, read_varint
 
 TYPES = {1: "double", 2: "float", 3: "int64", 4: "uint64", 5: "int32", 6: "fixed64", 7: "fixed32", 8: "bool",
          9: "string", 10: "group", 11: "message", 12: "bytes", 13: "uint32", 14: "enum", 15: "sfixed32",
@@ -38,7 +38,7 @@ def _s(x: bytes) -> str:
 
 def parse_enum(b: bytes) -> dict:
     e = {"name": "", "values": {}}
-    for f, wt, v in iter_fields(b):
+    for f, _wt, v in iter_fields(b):
         if f == 1:
             e["name"] = _s(v)
         elif f == 2:
@@ -54,7 +54,7 @@ def parse_enum(b: bytes) -> dict:
 
 def parse_message(b: bytes) -> dict:
     m = {"name": "", "fields": [], "nested": [], "enums": [], "oneofs": []}
-    for f, wt, v in iter_fields(b):
+    for f, _wt, v in iter_fields(b):
         if f == 1:
             m["name"] = _s(v)
         elif f == 2:

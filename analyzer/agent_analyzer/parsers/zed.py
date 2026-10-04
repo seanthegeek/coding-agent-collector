@@ -63,7 +63,7 @@ SIDEBAR_RX = re.compile(r"^" + DATA_DIR + r"/db/0-[^/]+/db\.sqlite$")
 def _zstd_module():
     """The `zstandard` module, or None when it is not installed."""
     try:
-        import zstandard  # noqa: F401
+        import zstandard
     except ImportError:
         return None
     return zstandard
@@ -249,7 +249,7 @@ class ZedParser(Parser):
             else:
                 raw = data if isinstance(data, (bytes, bytearray)) else str(data).encode("utf-8")
             thread = json.loads(bytes(raw).decode("utf-8", errors="replace"))
-        except Exception as e:  # zstd.ZstdError, ValueError, ...
+        except Exception as e:  # noqa: BLE001 - zstd.ZstdError (lazy import), ValueError, ...
             return None, "%s: %s" % (type(e).__name__, e)
         if not isinstance(thread, dict):
             return None, "not a JSON object"

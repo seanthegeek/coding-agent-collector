@@ -92,13 +92,13 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         rows = self.read_csv(target)
         self.assertEqual(len(rows), 5)
-        alice = [r for r in rows[1:] if r[4] == "alice" and r[5] == "claude-code"][0]
+        alice = next(r for r in rows[1:] if r[4] == "alice" and r[5] == "claude-code")
         self.assertEqual(alice, [
             "ws01", "1.6.0", "live", "2026-10-04T16:31:54.000Z", "alice", "claude-code", "6", "318",
             "2026-09-15T01:02:03.000Z", "2026-10-04T16:31:11.000Z", "2", ".claude,.claude.json*"])
-        bob = [r for r in rows[1:] if r[4] == "bob"][0]
+        bob = next(r for r in rows[1:] if r[4] == "bob")
         self.assertEqual(bob[6:10], ["0", "0", "", ""])
-        docker = [r for r in rows[1:] if r[4] == "docker"][0]
+        docker = next(r for r in rows[1:] if r[4] == "docker")
         self.assertEqual((docker[5], docker[11]), ("agent-zero", "*a0_usr"))
 
     def test_junk_lines_skipped_and_counted(self):
@@ -120,7 +120,7 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         lines = out.splitlines()
         self.assertTrue(lines[0].startswith("rows:   6 from 3 hosts in "))
-        table = [l.split() for l in lines[lines.index("") + 1:]]
+        table = [ln.split() for ln in lines[lines.index("") + 1:]]
         self.assertEqual(table[0], ["agent", "hosts", "users", "latest"])
         self.assertEqual(table[1], ["claude-code", "2", "3", "2026-10-04T16:31:11.000Z"])
         self.assertEqual(table[2], ["agent-zero", "1", "1", "2026-10-03T10:00:00.000Z"])

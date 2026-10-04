@@ -86,7 +86,7 @@ def call_name(payload: dict) -> str:
 def _zstd_module():
     """The `zstandard` module, or None when it is not installed."""
     try:
-        import zstandard  # noqa: F401
+        import zstandard
     except ImportError:
         return None
     return zstandard

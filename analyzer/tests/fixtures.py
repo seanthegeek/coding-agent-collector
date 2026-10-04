@@ -185,7 +185,7 @@ AGY_CONVERSATION = "799062d5-0000-4000-8000-000000000099"
 AGY_T0 = 1790848800  # 2026-10-01T10:00:00Z
 
 
-def _step(kind: str, payload: dict, created: float, completed: float = None, tool_call: dict = None,
+def _step(kind: str, payload: dict, created: float, completed: float | None = None, tool_call: dict | None = None,
           source: int = 2, status: int = 3) -> dict:
     md = {"created_at": created, "source": source}
     if completed is not None:
@@ -1384,15 +1384,7 @@ def tabby_records():
     """The INSERT statements of research/tabby.md section 8, with the
     research's single fixture token replaced by one per secret column, and a
     user_events row whose payload is the pretty JSON event_logger.rs writes."""
-    return tabby_secret_records() + [
-        "INSERT INTO threads(id,is_ephemeral,user_id,created_at,updated_at,relevant_questions) "
-        """VALUES(7,0,1,'2026-10-01 10:00:00','2026-10-01 10:00:09','["How is the cache invalidated?"]')""",
-        "INSERT INTO thread_messages(id,thread_id,role,content,created_at,updated_at,attachment) VALUES "
-        """(1,7,'user','Where is the cache cleared?','2026-10-01 10:00:00','2026-10-01 10:00:00','{"code":null,"client_code":[{"filepath":"src/cache.rs","start_line":10,"content":"fn clear()"}],"doc":null}'),"""
-        """(2,7,'assistant','In `clear()` in src/cache.rs.','2026-10-01 10:00:02','2026-10-01 10:00:09','{"code":[{"git_url":"https://github.com/acme/app","commit":"abc123","language":"rust","filepath":"src/cache.rs","content":"fn clear() {}","start_line":10}],"client_code":null,"doc":null}')""",
-        "INSERT INTO user_events(id,user_id,kind,created_at,payload) VALUES(1,1,'select','2026-10-01 10:00:01',"
-        "'%s')" % TABBY_SELECT_PAYLOAD,
-    ]
+    return [*tabby_secret_records(), "INSERT INTO threads(id,is_ephemeral,user_id,created_at,updated_at,relevant_questions) " """VALUES(7,0,1,'2026-10-01 10:00:00','2026-10-01 10:00:09','["How is the cache invalidated?"]')""", "INSERT INTO thread_messages(id,thread_id,role,content,created_at,updated_at,attachment) VALUES " """(1,7,'user','Where is the cache cleared?','2026-10-01 10:00:00','2026-10-01 10:00:00','{"code":null,"client_code":[{"filepath":"src/cache.rs","start_line":10,"content":"fn clear()"}],"doc":null}'),""" """(2,7,'assistant','In `clear()` in src/cache.rs.','2026-10-01 10:00:02','2026-10-01 10:00:09','{"code":[{"git_url":"https://github.com/acme/app","commit":"abc123","language":"rust","filepath":"src/cache.rs","content":"fn clear() {}","start_line":10}],"client_code":null,"doc":null}')""", "INSERT INTO user_events(id,user_id,kind,created_at,payload) VALUES(1,1,'select','2026-10-01 10:00:01'," "'%s')" % TABBY_SELECT_PAYLOAD]
 
 
 # A pre-0.25 backup: deprecated per-kind attachment columns, no `attachment`,
@@ -1406,13 +1398,7 @@ TABBY_EVENTS_REL = ".tabby/events/2025-10-01.json"
 
 
 def tabby_backup_records():
-    return tabby_secret_records() + [
-        "INSERT INTO threads(id,is_ephemeral,user_id,created_at,updated_at) "
-        "VALUES(3,1,1,'2026-09-10 08:00:00','2026-09-10 08:00:04')",
-        "INSERT INTO thread_messages(id,thread_id,role,content,created_at,updated_at,code_attachments) VALUES "
-        "(1,3,'user','dump the users table','2026-09-10 08:00:00','2026-09-10 08:00:00',NULL),"
-        """(2,3,'assistant','Run `select * from users`.','2026-09-10 08:00:04','2026-09-10 08:00:04','[{"git_url":"https://github.com/acme/ops","filepath":"db.sql","content":"select 1","language":"sql","start_line":null}]')""",
-    ]
+    return [*tabby_secret_records(), "INSERT INTO threads(id,is_ephemeral,user_id,created_at,updated_at) " "VALUES(3,1,1,'2026-09-10 08:00:00','2026-09-10 08:00:04')", "INSERT INTO thread_messages(id,thread_id,role,content,created_at,updated_at,code_attachments) VALUES " "(1,3,'user','dump the users table','2026-09-10 08:00:00','2026-09-10 08:00:00',NULL)," """(2,3,'assistant','Run `select * from users`.','2026-09-10 08:00:04','2026-09-10 08:00:04','[{"git_url":"https://github.com/acme/ops","filepath":"db.sql","content":"select 1","language":"sql","start_line":null}]')"""]
 
 
 def tabby_event_records():
@@ -1608,15 +1594,7 @@ def pi_session_records(cwd="/srv/proj"):
 
 def pi_fork_records(parent_path):
     parent = pi_session_records()
-    return [
-        {"type": "session", "version": 3, "id": PI_FORK, "timestamp": "2026-10-01T09:30:00.000Z",
-         "cwd": "/srv/proj", "parentSession": parent_path},
-    ] + parent[1:4] + [
-        {"type": "message", "id": "8192a3b4", "parentId": "3c4d5e6f", "timestamp": "2026-10-01T09:30:05.000Z",
-         "message": {"role": "assistant", "content": [{"type": "text", "text": "Trying another way."}],
-                     "provider": "anthropic", "model": "claude-sonnet-4-5", "stopReason": "stop",
-                     "timestamp": 1790847005000}},
-    ]
+    return [{"type": "session", "version": 3, "id": PI_FORK, "timestamp": "2026-10-01T09:30:00.000Z", "cwd": "/srv/proj", "parentSession": parent_path}, *parent[1:4], {"type": "message", "id": "8192a3b4", "parentId": "3c4d5e6f", "timestamp": "2026-10-01T09:30:05.000Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "Trying another way."}], "provider": "anthropic", "model": "claude-sonnet-4-5", "stopReason": "stop", "timestamp": 1790847005000}}]
 
 
 def little_coder_session_records(cwd="/srv/proj"):
@@ -2031,8 +2009,7 @@ def build_openclaw(home: Path) -> None:
         else:
             inserts.append("INSERT INTO transcript_events VALUES ('%s',%d,'%s',%d,NULL,NULL,NULL)"
                            % (OPENCLAW_SESSION, seq, raw.replace("'", "''"), created))
-    reset = _openclaw_jsonl(openclaw_records(OPENCLAW_RESET_SESSION)[:2] + [
-        {"type": "reset", "id": "r1", "parentId": "a1b2c3d4", "timestamp": "2026-10-01T09:30:00.000Z", "reason": "reset"}])
+    reset = _openclaw_jsonl([*openclaw_records(OPENCLAW_RESET_SESSION)[:2], {"type": "reset", "id": "r1", "parentId": "a1b2c3d4", "timestamp": "2026-10-01T09:30:00.000Z", "reason": "reset"}])
     inserts.append("INSERT INTO session_transcript_archives VALUES ('%s','g1','%s','reset','identity',X'%s','%s',"
                    "'%s.jsonl.reset.2026-10-01T09-30-00.000Z',1790847000000,NULL)"
                    % (OPENCLAW_RESET_SESSION, OPENCLAW_KEY, reset.hex(), "0" * 64, OPENCLAW_RESET_SESSION))

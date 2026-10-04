@@ -117,7 +117,7 @@ def _walk(state, path):
         try:
             cur = cur[k]
         except (KeyError, IndexError, TypeError):
-            raise MutationError("path %r not found" % (path,))
+            raise MutationError("path %r not found" % (path,)) from None
     return cur
 
 

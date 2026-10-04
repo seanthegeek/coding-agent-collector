@@ -22,7 +22,6 @@ import json
 import os
 import re
 import shutil
-import sys
 import tarfile
 import tempfile
 import zipfile
@@ -272,7 +271,7 @@ def _discover_loose(col: Collection, catalog: Catalog) -> None:
                         host=col.host, inferred=True)
             col.notes.append("root is a %s directory; treating its parent as the home" % e.agent)
             homes.append(home)
-            _add_hits(col, home, [(e, tree)] + list(catalog.nested_matches(tree)))
+            _add_hits(col, home, [(e, tree), *list(catalog.nested_matches(tree))])
             col.homes = homes
             return
 

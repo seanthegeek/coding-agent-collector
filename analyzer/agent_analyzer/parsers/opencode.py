@@ -544,12 +544,9 @@ class OpenCodeParser(Parser):
         msg_id = str(msg.get("id") or artifact.disk_path.stem)
         msg.setdefault("id", msg_id)
         ctx, _ = self._session_ctx(root, session_id, old, msg)
-        if old:
-            pdir_rel = ["part", session_id, msg_id]
-        else:
-            pdir_rel = ["part", msg_id]
+        pdir_rel = ["part", session_id, msg_id] if old else ["part", msg_id]
         pdir = root.joinpath(*pdir_rel)
         parts = []
         for f in self._children(pdir):
-            parts.append((_read_json(f), orig_root + sep + sep.join(pdir_rel + [f.name]), 1, None))
+            parts.append((_read_json(f), orig_root + sep + sep.join([*pdir_rel, f.name]), 1, None))
         yield from self._message_rows(artifact, ctx, msg, ("", 1, None), parts, opts)
