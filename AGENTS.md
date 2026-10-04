@@ -581,9 +581,22 @@ collector itself.
 - Work on `main` directly for now; branch when a change spans several commits.
 - Outstanding work is tracked as GitHub issues labelled `enhancement`. File
   one when you find something out of scope rather than widening a change.
-- Keep the option table, output layout and status list in
-  `collectors/README.md` accurate. Behaviour changes without a README update
-  are incomplete. The top-level README is an overview only.
+- Documentation describes the code, not the intent. Every sentence that
+  states an option, an output file, a field, a value a field can take, or a
+  behaviour is checked against the code path that implements it before it
+  is committed, and says where the two collectors or the platforms differ
+  and what happens without root or Administrator. A feature is documented
+  with specifics, an option table row, a file-by-file or field-by-field
+  table, the list of values, never named in passing: a reader who has only
+  the README must be able to say what each file in the output holds and
+  which command produced it. A sentence that cannot be verified from the
+  code is not written; "the analyzer reads X" is a claim about `cli.py`,
+  not about what would be sensible. Before a `VERSION` bump, re-derive the
+  option list, the output file list and the status or column list from the
+  code and diff them against the README; the changelog entry then records
+  what changed in those lists.
+  Behaviour changes without a README update are incomplete. The top-level
+  README is an overview only.
 - Bump `VERSION` in the script for any change to output format or options.
   For the analyzer, bump `VERSION` in `agent_analyzer/__init__.py` and
   `pyproject.toml` together.
