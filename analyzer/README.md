@@ -101,8 +101,16 @@ event per row; `--max-text-length` shortens it for a spreadsheet view. History f
 matching session transcript exists, because they survive session deletion;
 filter on `source_file` to drop them.
 
-Agents detected but not yet parsed: everything else in the catalog.
-Windsurf and Cursor need format work first.
+Files the collector finds inside a discovered repository through its project
+catalog are recorded with agent `project`; the analyzer offers each of them to
+every parser and keeps the rows of any parser that accepts it, under that
+parser's agent, so `--agent aider` also includes a repository's
+`.aider.chat.history.md` and `--agent crush` its `.crush/crush.db`.
+
+Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
+`copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
+`augment` and `ollama`, plus the `shared` and `shell-history` entries, which
+are not agents. Windsurf and Cursor need format work first.
 
 Protobuf stores are decoded by `agent_analyzer/protobuf.py`, a small
 schema-driven wire decoder, from field tables written into each parser. For
@@ -181,7 +189,7 @@ tests/run.sh                 # python3 -m unittest discover -s tests
 ```
 
 The suite builds a fake image with two Linux users and a Windows profile
-tree, each holding synthetic Claude Code and Codex state in the exact shapes
+tree, each holding synthetic state for every parsed agent in the exact shapes
 the parsers were validated against, and checks detection in every input mode,
 each parser's rows, the CSV output, and the bundled catalog against the
 collector's `--list`. When `sh` and `tar` are available it also runs the sh

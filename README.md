@@ -33,11 +33,14 @@ A Python tool that reads a collector archive, an extracted collection, or any
 loose directory such as a copied home or a mounted image, detects which agents
 left state in it using the collectors' own catalog, and parses the transcripts
 it understands into a normalised CSV timeline of turns, tool calls and tool
-results, plus a per-session summary. Parsers exist for Claude Code and Codex
-CLI; every other agent in the catalog is detected and reported but not yet
-parsed. Parsing never happens on the host, so the analyzer is free to carry
-its own requirements. It currently needs only Python 3.9 and the standard
-library.
+results, plus a per-session summary. Parsers exist for Claude Code, Codex
+CLI, Gemini CLI, Antigravity, Qwen Code, Amazon Q CLI (the `kiro` entry), VS Code chat
+(including Copilot Chat), Cline, Roo Code, Kilo Code, Continue, Aider,
+OpenCode, Crush, Goose and Zed; every other agent in the catalog is detected
+and reported but not yet parsed. Parsing never happens on the host, so the
+analyzer is free to carry its own requirements. It needs Python 3.9 or later
+and the packages in `analyzer/requirements.txt`, currently only `zstandard`
+for Zed threads.
 
 Usage, accepted inputs, the CSV schema and the parser table are in
 [analyzer/README.md](analyzer/README.md).
