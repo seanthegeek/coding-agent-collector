@@ -343,6 +343,14 @@ permission to create symlinks are skipped, with the reason, when it is
 missing. CI runs the suite on Python 3.10, 3.12 and 3.13 with `requirements.txt`
 installed.
 
+Lint and type checks, from the repository root, at the versions CI pins
+(see "Quality gates" in AGENTS.md):
+
+```sh
+uvx ruff@0.16.10 check . && uvx ruff@0.16.10 format --check .
+uvx --from pyright==1.1.414 --with zstandard pyright   # also clean without zstandard
+```
+
 ## Adding a parser
 
 1. Confirm the record format against source or a real install and write the

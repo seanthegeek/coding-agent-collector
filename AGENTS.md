@@ -45,6 +45,8 @@ the host.
 collectors/
   collect-agent-artifacts.sh   the macOS/Linux/BSD collector, single POSIX sh file
   Collect-AgentArtifacts.ps1   the Windows collector, single PowerShell 5.1 file
+  PSScriptAnalyzerSettings.psd1  PSScriptAnalyzer rules, including the 5.1 compatibility
+                               profiles
   README.md                    collector user documentation, keep in sync with behaviour
   CHANGELOG.md                 collector release history, one entry per VERSION
   tests/smoke.sh               end-to-end test of the sh collector (fake disk image)
@@ -70,6 +72,10 @@ README.md                      project overview; points at the per-part READMEs
 AGENTS.md                      this file
 CLAUDE.md                      imports this file for Claude Code
 LICENSE                        Apache 2.0
+ruff.toml, pyrightconfig.json, .markdownlint-cli2.jsonc, .shellcheckrc
+                               linter configuration; see "Quality gates"
+.githooks/pre-commit           the quality gates and the Dependabot alert check
+.github/                       CI workflow and Dependabot configuration
 ```
 
 Nothing in `collectors/` may depend on `analyzer/`. Paths in this file are
@@ -86,7 +92,7 @@ collector, when written, is PowerShell 5.1 with no modules.
 
 **POSIX sh, not bash.** The shebang is `#!/bin/sh` and the script must run
 unchanged under bash 3.2 (macOS `/bin/sh`), dash, busybox ash, FreeBSD and
-OpenBSD sh, and `zsh --emulate sh`. Concretely:
+OpenBSD sh, posh (the pdksh lineage), and `zsh --emulate sh`. Concretely:
 
 - No arrays, no `local`, no `[[ ]]`, no `read -d`, no `mapfile`, no
   `${var,,}`, no `${var:0:3}`, no `$'...'`, no `function` keyword, no
@@ -100,7 +106,14 @@ OpenBSD sh, and `zsh --emulate sh`. Concretely:
   prepended to the worker programs.
 - Globs with spaces are expanded with `IFS` set to newline only; see
   `expand_glob`. Pattern matching uses `case`.
-- `shellcheck -s sh` must be clean apart from info-level notices.
+- pdksh-derived shells end a `$(...)` at the first `)`, even a `case`
+  pattern's inside a here-document. Write `case` patterns inside command
+  substitutions as `(pattern)`, and read a here-document into a variable
+  with `heredoc_var`, not `VAR=$(cat <<'EOF' ...)`.
+- `shellcheck -s sh` with the repository's `.shellcheckrc` (every optional
+  check on, four disabled with reasons), `checkbashisms -p` and a
+  `shfmt -ln posix` parse must be clean on every sh file; see "Quality
+  gates".
 
 **Windows PowerShell 5.1, not PowerShell 7.** `Collect-AgentArtifacts.ps1`
 must run under the PowerShell that ships with Windows 10, 11 and Server 2016+,
@@ -235,6 +248,9 @@ rules are different from the collectors'.
   symlinks from an archive. The `text` column carries the full event text by
   default; `--max-text-length` is the analyst's choice when a shorter CSV is
   wanted.
+- **Lint and types.** ruff (lint and format) and pyright in standard mode
+  must be clean; see "Quality gates". Fix a finding rather than suppress
+  it, and give any `# noqa` or `# pyright: ignore` a reason.
 - **Tests.** `analyzer/tests/run.sh` must pass. Add a fixture and a test
   class for every parser, and a detection test for every new input shape.
 
@@ -524,10 +540,11 @@ And from the October 2026 round:
 ## Validation and testing
 
 CI (`.github/workflows/ci.yml`) runs the catalog drift test, shellcheck, the
-sh smoke test under sh, dash, bash, busybox ash and zsh, the PowerShell smoke
-test under PowerShell 7 on Linux and Windows PowerShell 5.1 on Windows, and
-the analyzer tests on Python 3.10, 3.12 and 3.13. Run the same locally before
-committing a change to the collector:
+sh smoke test under sh, dash, bash, busybox ash, zsh and posh, the PowerShell
+smoke test under PowerShell 7 on Linux and Windows PowerShell 5.1 on
+Windows, the analyzer tests on Python 3.10, 3.12 and 3.13, and a lint job
+with the quality gates below. Run the same locally before committing a
+change to the collector:
 
 ```sh
 cd collectors
@@ -537,9 +554,17 @@ tests/smoke.sh dash
 tests/smoke.sh bash
 tests/smoke.sh ash        # busybox
 printf '#!/bin/sh\nexec zsh --emulate sh "$@"\n' > /tmp/zsh-sh && chmod +x /tmp/zsh-sh && tests/smoke.sh /tmp/zsh-sh
+tests/smoke.sh posh
 tests/catalog-sync.sh
 pwsh -NoProfile -File tests/smoke.ps1
 cd ../analyzer && tests/run.sh
+cd ..
+# quality gates, from the repository root (see "Quality gates")
+uvx ruff@0.16.10 check . && uvx ruff@0.16.10 format --check .
+uvx --from pyright==1.1.414 --with zstandard pyright
+npx -y markdownlint-cli2@0.23.3 "**/*.md"
+shfmt -ln posix $(shfmt -f .) >/dev/null && shellcheck -s sh $(shfmt -f .) && checkbashisms -p $(shfmt -f .)
+pwsh -NoProfile -Command '$r = @("collectors/Collect-AgentArtifacts.ps1","collectors/tests/smoke.ps1") | ForEach-Object { Invoke-ScriptAnalyzer -Path $_ -Settings collectors/PSScriptAnalyzerSettings.psd1 }; $r | Format-Table -AutoSize; exit @($r).Count'
 ```
 
 For a change to the PowerShell collector, also run the test under real
@@ -584,6 +609,55 @@ afterwards; it contains your own credentials.
 The test uses `python3` only for JSON validation and the hash cross-check, and
 skips those checks when it is absent. Never add a `python3` requirement to the
 collector itself.
+
+### Quality gates
+
+Every gate runs in the CI `lint` job and in `.githooks/pre-commit` (enable
+once per clone with `git config core.hooksPath .githooks`). The versions are
+pinned in the workflow's `env` block and at the top of the hook; change both
+and this list together. Run the commands from the repository root.
+
+| Gate | Version | Local command | Configuration |
+| --- | --- | --- | --- |
+| ruff lint | 0.16.10 | `uvx ruff@0.16.10 check .` | `ruff.toml`; `analyzer/pyproject.toml` extends it |
+| ruff format | 0.16.10 | `uvx ruff@0.16.10 format --check .` | `ruff.toml` (line length 100) |
+| pyright, standard mode, Python 3.10 | 1.1.414 | `uvx --from pyright==1.1.414 --with zstandard pyright` | `pyrightconfig.json` |
+| markdownlint | markdownlint-cli2 0.23.3 | `npx -y markdownlint-cli2@0.23.3 "**/*.md"` | `.markdownlint-cli2.jsonc` |
+| shfmt POSIX parse | 3.14.1 | `shfmt -ln posix $(shfmt -f .) >/dev/null` | none; never pass `-w` |
+| shellcheck | 0.11.0 | `shellcheck -s sh $(shfmt -f .)` | `.shellcheckrc` |
+| checkbashisms | devscripts v2.26.13 | `checkbashisms -p $(shfmt -f .)` | none |
+| PSScriptAnalyzer | 1.25.0 | the `pwsh` line in the block above | `collectors/PSScriptAnalyzerSettings.psd1` |
+| Dependabot alerts | gh | `gh api "repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/dependabot/alerts?state=open" -q length` | `.github/dependabot.yml` |
+
+- `shfmt -f .` lists the sh files by shebang as well as extension, so the
+  hook script, `lab/lab.sh` and `analyzer/tests/run.sh` are checked too.
+  `posh` (apt package `posh`) runs the smoke test in CI and in the block
+  above.
+- pyright is run with zstandard installed in CI and without it by the
+  hook; both must report 0 errors. The nine `import zstandard` lines carry
+  `# pyright: ignore[reportMissingImports]` because the package is an
+  optional, lazily imported dependency; a per-line ignore keeps the check
+  for every other import.
+- shellcheck, shfmt and checkbashisms are not on PyPI or npm: install the
+  release binaries (CI downloads them and checks their sha256), and
+  checkbashisms as the single `scripts/checkbashisms.pl` from the devscripts
+  tag, or `apt install devscripts`. PSScriptAnalyzer installs with
+  `pwsh -NoProfile -Command 'Install-Module PSScriptAnalyzer -Scope CurrentUser -RequiredVersion 1.25.0 -Force'`.
+- The tree was reformatted once with `ruff format` in a commit of its
+  own, listed in `.git-blame-ignore-revs`; enable it locally with
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+- The hook runs each gate only when a file of its kind is staged (Python
+  or `pyproject.toml`, Markdown, sh by shebang, `.ps1` or `.psd1`, or that
+  gate's configuration file), then checks the whole working tree as CI
+  does. A missing `uvx`, `npx`, `shfmt`, `shellcheck`, `checkbashisms`,
+  `pwsh` or PSScriptAnalyzer module fails the commit with an install hint
+  rather than skipping the gate.
+- The Dependabot check runs last on every commit and refuses it when the
+  repository has open Dependabot alerts, printing each alert's severity,
+  package and summary and the URL of the alerts page. When `gh` is missing,
+  not authenticated, offline or denied access it prints a warning on stderr
+  and allows the commit, so offline work is never blocked. Set
+  `SKIP_DEPENDABOT_CHECK=1` to skip it in an emergency.
 
 ## Conventions
 

@@ -578,6 +578,7 @@ tests/smoke.sh dash
 tests/smoke.sh bash
 printf '#!/bin/sh\nexec busybox ash "$@"\n' > /tmp/ash && chmod +x /tmp/ash && tests/smoke.sh /tmp/ash
 printf '#!/bin/sh\nexec zsh --emulate sh "$@"\n' > /tmp/zsh-sh && chmod +x /tmp/zsh-sh && tests/smoke.sh /tmp/zsh-sh
+tests/smoke.sh posh
 shellcheck -s sh -S warning collect-agent-artifacts.sh
 tests/catalog-sync.sh   # the five tables, --list output and the analyzer copy agree
 pwsh -File tests/smoke.ps1
@@ -625,9 +626,10 @@ if they differ. When `pwsh` is on the `PATH` it also compares `--list` with
 identical to `--list`. The repository's pre-commit hook in `.githooks/`
 (enable it once per clone with `git config core.hooksPath .githooks`)
 refuses a commit that stages either collector or the analyzer copy while the
-copy is stale or the tables differ. CI (`.github/workflows/ci.yml`) runs the
+copy is stale or the tables differ; it also runs the linters described under
+"Quality gates" in AGENTS.md. CI (`.github/workflows/ci.yml`) runs the
 drift test and shellcheck, the sh smoke test under sh, dash, bash, busybox
-ash and zsh, the PowerShell smoke test under PowerShell 7 on Linux and
+ash, zsh and posh, a lint job, the PowerShell smoke test under PowerShell 7 on Linux and
 Windows PowerShell 5.1 on Windows, and the analyzer tests, on every push to
 `main` and every pull request.
 
