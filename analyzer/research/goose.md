@@ -180,7 +180,7 @@ INSERT INTO usage_ledger(session_id,created_timestamp,model,input_tokens,output_
 
 Legacy `20260301_090000.jsonl`:
 
-```
+```jsonl
 {"description":"old chat","working_dir":"/home/alice/old","created_at":"2026-03-01T09:00:00Z","updated_at":"2026-03-01T09:00:10Z","extension_data":{},"message_count":1}
 {"id":"m1","role":"user","created":1772355600,"content":[{"type":"text","text":"hello"}]}
 ```

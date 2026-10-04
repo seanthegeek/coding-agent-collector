@@ -9,11 +9,11 @@ and the collector's own validation on Linux and Windows.
 ## 1. Source and evidence level
 
 Formats below come from the shells' manuals: bash (`HISTFILE`,
-`HISTTIMEFORMAT`, https://www.gnu.org/software/bash/manual/html_node/Bash-History-Facilities.html),
-zsh (`HISTFILE`, `EXTENDED_HISTORY`, https://zsh.sourceforge.io/Doc/Release/Options.html#History),
-fish (https://fishshell.com/docs/current/interactive.html#history-search),
+`HISTTIMEFORMAT`, <https://www.gnu.org/software/bash/manual/html_node/Bash-History-Facilities.html>),
+zsh (`HISTFILE`, `EXTENDED_HISTORY`, <https://zsh.sourceforge.io/Doc/Release/Options.html#History>),
+fish (<https://fishshell.com/docs/current/interactive.html#history-search>),
 PowerShell PSReadLine (`Get-PSReadLineOption` `HistorySavePath`,
-https://learn.microsoft.com/powershell/module/psreadline/get-psreadlineoption).
+<https://learn.microsoft.com/powershell/module/psreadline/get-psreadlineoption>).
 Confirmed on the author's Linux and Windows workstation (file names only).
 
 ## 2. Per-user storage

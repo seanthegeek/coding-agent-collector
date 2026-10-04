@@ -67,6 +67,7 @@ serialiser [`index.ts:26-42`](https://github.com/sourcegraph/cody-public-snapsho
 `agent`, `processes`, `subMessages`, `content`.
 
 Agentic tool use appears two ways:
+
 - `processes[]` (`ProcessingStep`,
   [`messages.ts:92-140`](https://github.com/sourcegraph/cody-public-snapshot/blob/8e20ac6c1460c08b0db581c0204658112a246eda/lib/shared/src/chat/transcript/messages.ts#L92-L140)):
   `type` (`tool`, `confirmation`, `step`), `id`, `title`,

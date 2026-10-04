@@ -7,12 +7,15 @@
 ## 2. Per-user storage
 
 [`main.js`](https://github.com/github/copilot.vim/blob/a12fd5672110c8aa7e3c8419e28c96943ca179be/copilot-language-server/dist/main.js) `function Alt()` ("getXdgConfigPath"):
-```
+
+```text
 XDG_CONFIG_HOME set and absolute → $XDG_CONFIG_HOME/github-copilot
 win32                            → %USERPROFILE%\AppData\Local\github-copilot
 else                             → $HOME/.config/github-copilot
 ```
+
 So macOS and Linux use the XDG config dir `~/.config/github-copilot` (no Library path), Windows uses `AppData\Local`. The only relocation variable is `XDG_CONFIG_HOME`. Files written there (same function's caller in [`main.js`](https://github.com/github/copilot.vim/blob/a12fd5672110c8aa7e3c8419e28c96943ca179be/copilot-language-server/dist/main.js)):
+
 - `apps.json`: current store, object keyed `"<host>:<githubAppId>"` → `{user, oauth_token, githubAppId}`.
 - `hosts.json`: legacy store keyed by host → `{user, oauth_token}`; on startup entries are copied into `apps.json` and `hosts.json` is deleted (`writeFile(join(l,"apps.json"))` then `rm(join(l,"hosts.json"),{force:true})`).
 - `versions.json` not present in this bundle (0 hits).

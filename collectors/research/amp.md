@@ -11,7 +11,7 @@
 
 Path resolution in the CLI code has no platform branching, so the layout is identical on Linux, macOS and Windows (B, `amp.strings16`):
 
-```
+```text
 fzt=process.env.XDG_DATA_HOME||join(home,".local/share")
 dzt=process.env.XDG_CONFIG_HOME||join(home,".config")
 tg =join(fzt,"amp")                    # data dir
@@ -22,22 +22,26 @@ F6t=join(process.env.XDG_CACHE_HOME??join(home,".cache"),"amp"), us=F6t   # cach
 One auxiliary module (ripgrep download) differs: data = `~/.local/share/amp` even when `XDG_DATA_HOME` is set on win32/darwin, and cache = `%LOCALAPPDATA%\amp` on win32 (`La=...` in `amp.strings`). Only `<that cache>/bin/<rg>` is written there (`It.join(Pt,"bin")`).
 
 Config `~/.config/amp/` (B+D `cli_settings.md:10-14`):
+
 - `settings.json` or `settings.jsonc` (`.jsonc` fallback string "Settings file not found, falling back to .jsonc"); overridable by `--settings-file` / `AMP_SETTINGS_FILE`.
 - `AGENTS.md` and also `~/.config/AGENTS.md`, `~/.config/AGENT.md` (`customize_agents-md.md:38`, `"~/.config/AGENT.md"` in code).
 - `skills/` (`join(home,".config","amp","skills")`), `plugins/*.ts` (`customize_plugins`), `obelisk-app.env` (orb sandbox only).
 - Shared agent dirs also read: `~/.config/agents/skills/`, `~/.agents/skills/` (`customize_skills.md:36-38`).
 
 Data `~/.local/share/amp/` (B):
+
 - `secrets.json` (`Fnt(H)=join(H.dataDir,VCr)`, `VCr="secrets.json"`), `accounts.json` (`join(H,"accounts.json")` in class `DGe`), `accounts/<identityKey>-<server>/secrets.json` for non-legacy multi-account (`join(dirname(H),"accounts",ED.directoryName,basename(H))`; `dataDir:join(tg,"accounts")`).
 - `history.jsonl` prompt history, entries `{text, cwd}` (`rgr=join(Dit,"history.jsonl")`, `EiH(H){return H.text.length+(H.cwd?.length??0)}`; migrates from `history.json`).
 - `device-id.json`, `guest-id`, `net/` (Amp Net sockets), `oauth/locks`, `orb-services/ad-hoc-services.json`, `runner/`, `daemon/`, `ide/` (IDE auth tokens: schema has `authToken`).
 
 Cache `~/.cache/amp/` (B+D):
+
 - `logs/cli.log` (10 MB rotate, 2 files), `logs/threads/<T-id>.log` per-thread logs, 7-day prune (`KGe=join(us,"logs"),LV=join(KGe,"threads"),JQ=join(KGe,"cli.log")`, `Y_$=604800000`), `logs/headless.log`, `logs/orb-services/`, `logs/orb-provider/`.
 - `terminal/<threadId>/history` terminal-tool shell history (`iO(us,"terminal",threadId)`).
 - `bin/rg` downloaded ripgrep, `pids/`, `portal-speed-test/latest.json`, `runner-desktop/<runner-id>/` compositor state (`cli_runners.md:84`), `desktop/` (orb desktop logs), `obelisk-runs/`.
 
 Installer home `~/.amp/` (`AMP_HOME`, S `amp-install.sh:5-6`; B `join(home,".amp")`):
+
 - `bin/amp`, `bin/amp-desktop-helper/<ver>/`, `bin/waymote/<ver>/` (`cli_runners.md:58,78`), `signing-key.pub`, `amp-install-signature.minisign`.
 - `oauth/<server>-client.json` MCP OAuth client registrations (`join(HOME||USERPROFILE,".amp","oauth")`, `getClientInfoPath`).
 - `claude-diagnostics/<T-id>/sessions/` copies of Claude Code session files when Amp drives Claude Code as an external agent (`join(home,".amp","claude-diagnostics",thread,"sessions")`).

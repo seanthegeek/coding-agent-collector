@@ -40,6 +40,7 @@ pi session format version 3
 `custom`, `custom_message`, `label`, `session_info` ([:53-153](https://github.com/earendil-works/pi/blob/845d6ff1f6643aba440341cce877ce1c43ebbc39/packages/coding-agent/src/core/session-manager.ts#L53-L153)).
 
 `message.message` ([packages/ai/src/types.ts:393-431](https://github.com/earendil-works/pi/blob/845d6ff1f6643aba440341cce877ce1c43ebbc39/packages/ai/src/types.ts#L393-L431)):
+
 - `user`: `content` string or `text`/`image` parts, `timestamp` (Unix ms).
 - `assistant`: `content[]` of `text`, `thinking` (`thinking`), `toolCall`
   (`id`, `name`, `arguments` object) ([:338-366](https://github.com/earendil-works/pi/blob/845d6ff1f6643aba440341cce877ce1c43ebbc39/packages/ai/src/types.ts#L338-L366)); `provider`, `model`,

@@ -41,7 +41,7 @@ the host.
 
 ## Repository layout
 
-```
+```text
 collectors/
   collect-agent-artifacts.sh   the macOS/Linux/BSD collector, single POSIX sh file
   Collect-AgentArtifacts.ps1   the Windows collector, single PowerShell 5.1 file
@@ -379,7 +379,7 @@ commit (`https://github.com/<owner>/<repo>/blob/<full sha>/<path>#L<n>`), and
 never rely on memory. Grep terms that
 find the paths module quickly:
 
-```
+```text
 homedir  XDG  APPDATA  LOCALAPPDATA  "Application Support"  .config/  .local/share
 .local/state  .cache  sessions  history  checkpoint  snapshot  worktree  sqlite  .db
 auth  token  credential  secrets  keyring  keychain  cache  bin  node_modules

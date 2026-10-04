@@ -12,6 +12,7 @@
 Home resolution (B): `getFactoryHome(){return FACTORY_HOME_OVERRIDE ?? HOME ?? USERPROFILE}`, `getFactoryDirName(){return ".factory"}` (`.factory-dev` in dev builds); helper `Je(r,...)=join(home,".factory",r,...)`. Same layout on Linux, macOS and Windows (`droid-cli_settings.md:21-22`: `~/.factory/settings.json`, `%USERPROFILE%\.factory\settings.json`). The known top-level directory list in the binary: `Sq=["missions","missionsV2","repl-runs","specs","sessions","logs","cache","artifacts","temp","snapshots","crons","skills","droids","commands","plugins","updates","mermaid","automations","software-factory","worktree-setups","state","telemetry","generated-images"]`.
 
 `~/.factory/` files and directories:
+
 - `settings.json`, `settings.local.json` (D `droid-cli_settings.md:28-33`), legacy `config.json` with `custom_models` (`model-independence_byok.md:46`), `mcp.json` (`harness_mcp.md:164`), `hooks.json` (`harness_hooks.md:20`), `org-managed-settings.json`, `host.json`, `computer.json` (B list `bf`).
 - `sessions/`: transcripts `sessions/<projectKey>/<sessionId>.jsonl` with sidecar `<sessionId>.settings.json`; legacy flat `sessions/<id>.jsonl` and `sessions/btw/<id>.jsonl` (B, `CREATE TABLE sessions` comment; `sessionFileExists`). `projectKey` = `"-" + realpath(cwd)` with leading `/` removed and every `/` → `-` (B, function `Ji`), e.g. `sessions/-Users-enoreyes-code-work-myapp/*.jsonl` (help text). `sessions/.favorites`.
 - `cache/session-index/index.db` SQLite (`En(e)=join(e,"cache","session-index","index.db")`; tables `sessions(session_id, project_key, cwd, title, org_id, owner, mission, …)`, `session_ingest`, `meta`), `cache/session-discovery-index.json`, `cache/feature-flags.json`, `cache/changelog.json`, `cache/sounds/*.wav`.
@@ -23,6 +24,7 @@ Home resolution (B): `getFactoryHome(){return FACTORY_HOME_OVERRIDE ?? HOME ?? U
 ## 3. Credentials
 
 All under `~/.factory/` (B, class `Ne`, `IH()` maps list `Uf` onto `join(home,".factory")`):
+
 - `auth.v2.file` encrypted credentials; key in OS keyring (`keytar`, service "Factory CLI", account `auth-encryption-key`) with marker `auth.v2.keyring`; macOS alternative `security` CLI (`login-keychain-v2`); when the keyring is unavailable or `disableKeyring` is set the key is written to `auth.v2.key` ("auth.v2.file exists but auth.v2.key is missing"). Legacy `auth.encrypted`, and legacy plaintext `auth.json` (still in the cleanup list `["auth.json","config.json","mcp.json","settings.json"]`).
 - `prem-auth/<sha256(origin)>/credentials.json` for Prem deployments.
 - `mcp-oauth.v2.file` + `mcp-oauth.v2.key` MCP OAuth tokens (D `harness_mcp.md:177`: keyring "or a fallback file").

@@ -43,6 +43,7 @@ object ([conversation-history.ts:150-156](https://github.com/twinnydotdev/twinny
 `messages[]` are `ChatCompletionMessage`: the OpenAI-style
 `ChatCompletionMessageParam` from `fluency.js` (`role`, `content`) plus
 Twinny fields ([types.ts:50-76](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/common/types.ts#L50-L76)):
+
 - `role`: `user` or `assistant` ([src/common/constants/misc.ts:8-11](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/common/constants/misc.ts#L8-L11);
   user turns [chat.tsx:496-503](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/webview/chat.tsx#L496-L503), replies
   [src/extension/chat/generation.ts:151-157](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/extension/chat/generation.ts#L151-L157)). The system prompt sits

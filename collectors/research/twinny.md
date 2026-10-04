@@ -40,6 +40,7 @@ UI state (`chatMessage` draft, `contextItems`, `selection`,
 goes to `workspaceStorage/<id>/state.vscdb` under the same key.
 
 **`globalStorage/rjmacarthy.twinny/`** holds only:
+
 - `twinny-providers.json`, the provider list including `apiKey`, written only
   when the setting `twinny.providerStorageLocation` is `file` (default
   `globalState`) ([store.ts:37-41](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/extension/providers/store.ts#L37-L41), [141-171](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/extension/providers/store.ts#L141-L171);
@@ -53,6 +54,7 @@ goes to `workspaceStorage/<id>/state.vscdb` under the same key.
 No chat, embedding or symmetry data is written there.
 
 **`~/.twinny`** from `os.homedir()` on every OS (no platform branching):
+
 - `templates/*.hbs`: editable prompt templates, defaults copied in on first
   run ([src/index.ts:186](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/index.ts#L186);
   [src/extension/templates/provider.ts:18](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/extension/templates/provider.ts#L18), [68-80](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/extension/templates/provider.ts#L68-L80), [157](https://github.com/twinnydotdev/twinny/blob/9339bd108e60781ec4d693fbec3f0bc7a0d7d3e6/src/extension/templates/provider.ts#L157)).

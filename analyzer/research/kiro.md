@@ -47,7 +47,7 @@ the same schema, to any user-chosen path; `/load` appends `.json` if missing
 
 Migrations ([`C/database/mod.rs:67-76`](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/database/mod.rs#L67-L76), SQL in [`C/database/sqlite_migrations/`](https://github.com/aws/amazon-q-developer-cli/tree/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/database/sqlite_migrations)):
 
-```
+```text
 000 CREATE TABLE migrations (id INTEGER PRIMARY KEY, version INTEGER NOT NULL, migration_time INTEGER NOT NULL);
 001 CREATE TABLE history (id INTEGER PRIMARY KEY, command TEXT, shell TEXT, pid INTEGER, session_id TEXT, cwd TEXT, time INTEGER, in_ssh INTEGER, in_docker INTEGER, hostname TEXT, exit_code INTEGER);
 002 ALTER TABLE history DROP COLUMN in_ssh; DROP COLUMN in_docker;

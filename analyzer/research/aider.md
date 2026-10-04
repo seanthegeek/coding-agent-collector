@@ -92,7 +92,7 @@ Rows: one per `#### ` block (user), per assistant run, per `> ` run
 
 Fixture `.aider.chat.history.md`:
 
-```
+```markdown
 # aider chat started at 2026-10-02 12:00:00
 
 #### rename foo to bar  

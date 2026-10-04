@@ -3,6 +3,7 @@
 ## 1. Source and evidence level
 
 Closed source. Evidence, strongest first:
+
 - L1 shipped bundle: Cursor Agent CLI `2026.10.01-e373342`, `agent-cli-package.tar.gz` from `downloads.cursor.com/lab/.../linux/x64/` (URL from `https://cursor.com/install`, saved as `scratchpad/npm/cursor-install.sh:78-131`), extracted to `scratchpad/npm/cursor-agent/dist-package/`. Minified webpack chunks keep module names, so citations are `<chunk>.js` plus the original module path.
 - L2 official docs: cursor.com/docs `cli/reference/configuration`, `context/rules`, `context/mcp`, `agent/hooks`, `context/ignore-files`.
 - L3 forum.cursor.com threads 2825, 167641, 169582, 172127.
@@ -14,6 +15,7 @@ Closed source. Evidence, strongest first:
 IDE (VS Code fork, see vscode.md for the generic layout): `~/Library/Application Support/Cursor/User`, `%APPDATA%\Cursor\User`, `~/.config/Cursor/User` (forum 2825, 169582; cursaves; extracurricular). Chats and agent runs live in `User/globalStorage/state.vscdb` table `cursorDiskKV` (`composerData:<id>`, `bubbleId:<composer>:<bubble>`, `checkpointId:*`, `messageRequestContext:*`, `composer.content.<hash>`, `agentKv:blob:*`) and `ItemTable` (`composer.composerData` on <=2.6, `composer.composerHeaders` on 3.0+, legacy `workbench.panel.aichat.view.aichat.chatdata`, `aiService.prompts`) (cursaves; forum 2825, 167641). The file is never vacuumed and reaches 30-125 GB (forum 167641, 169582, 172127); `state.vscdb.backup` sits beside it. `User/workspaceStorage/<md5>/workspace.json` and `state.vscdb` as in VS Code.
 
 CLI data root `~/.cursor` (`CURSOR_DATA_DIR` override; `index.js` module `../cursor-config/dist/paths.js`, function `c`). Config root for `cli-config.json` is `CURSOR_CONFIG_DIR`, else `$XDG_CONFIG_HOME/cursor`, else `~/.cursor` (same module, function `a`; docs cli/reference/configuration). Contents found in the bundle:
+
 - `projects/<sanitized cwd>/` where the name is the path with every non-alphanumeric run replaced by `-` (`../utils/dist/workspace-paths.js` function `s`; `paths.js` function `d` truncates to 84 chars plus a 7-hex sha256 suffix, falling back to `/tmp/.cursor` when the home path is too long). Inside: `agent-transcripts/` (`*.jsonl`, older `*.txt`), `terminals/` (terminal captures), `agent-tools/` (tool outputs over 51,380,224 bytes), `agent-notes/shared` and `agent-notes/<agent>`, `mcps/`, `mcp-auth.json`, `mcp-approvals.json`, `mcp-cache.json`, `.workspace-trusted` (`index.js` ignore list `!projects/*/...`; `./src/mcp/project-paths.ts`; `./src/workspace/approval.tsx`).
 - `chats/<md5(resolved cwd)>/<sessionId>/store.db` plus `meta.json` (`7000.index.js` `./src/state/index.ts` functions `a`,`i`; `./src/state/chat-session-meta.ts` schema v1 with `createdAtMs`, `updatedAtMs`, `cwd`, `hasConversation`, `isSubagent`). `store.db` tables `meta(key,value)` and `blobs(id,data)` (codeburn 986).
 - `acp-sessions/<id>/store.db` and `meta.json` (`6136.index.js`).

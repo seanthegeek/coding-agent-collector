@@ -165,6 +165,7 @@ Fixtures. `threads.db` (`data` is the zstd of the JSON below,
 INSERT INTO threads(id,parent_id,folder_paths,folder_paths_order,summary,updated_at,data_type,data,created_at)
 VALUES ('6f1c0b2e-1111-4bbb-8ccc-000000000001',NULL,'/home/alice/proj','0','Fix flaky test','2026-03-01T09:01:05.000000000+00:00','zstd',X'<zstd>','2026-03-01T09:00:00.000000000+00:00');
 ```
+
 ```json
 {"version":"0.3.0","title":"Fix flaky test","updated_at":"2026-03-01T09:01:05Z",
  "initial_project_snapshot":{"worktree_snapshots":[{"worktree_path":"/home/alice/proj","git_state":{"remote_url":"git@github.com:alice/proj.git","head_sha":"abc123","current_branch":"main","diff":null}}],"timestamp":"2026-03-01T09:00:00Z"},

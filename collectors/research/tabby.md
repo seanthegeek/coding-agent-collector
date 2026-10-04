@@ -54,6 +54,7 @@ The webserver (and so the database) runs unless the hidden
 **Client `~/.tabby-client/agent`**, used by `tabby-agent`, the language
 server behind the VS Code, IntelliJ, Vim and Eclipse plugins, from
 `os.homedir()` on every OS:
+
 - `config.toml`: `[server] endpoint`, `token`, request headers, proxy
   ([clients/tabby-agent/src/config/configFile.ts:19-28](https://github.com/TabbyML/tabby/blob/21b29048d7bcf6b94f9f482f2d0fd05efadfd19f/clients/tabby-agent/src/config/configFile.ts#L19-L28), [161-164](https://github.com/TabbyML/tabby/blob/21b29048d7bcf6b94f9f482f2d0fd05efadfd19f/clients/tabby-agent/src/config/configFile.ts#L161-L164)).
 - `data.json`: `anonymousId`, cached server-provided config per endpoint,

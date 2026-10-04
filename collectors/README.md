@@ -51,7 +51,7 @@ sudo ./collect-agent-artifacts.sh -u alice,bob --no-secrets -o /var/tmp/ir
 
 When the run finishes, the collector prints a summary on stdout:
 
-```
+```text
 archive:    /var/tmp/ir/host01_20261003T165531Z_agent-artifacts.tar.gz
 size:       55959669
 sha256:     19c47a0e...
@@ -389,7 +389,7 @@ under user `docker`. Progress lines go to stderr unless `-q` is given. The
 exit code is `0` once the walk has run, including when homes or Docker data
 roots were unreadable.
 
-```
+```jsonl
 {"type":"host","host":"host01","collector":"1.6.0","mode":"live","at":"2026-10-04T16:31:54Z","users_scanned":3,"users_unreadable":0,"docker_volumes":3}
 {"type":"agent","host":"host01","user":"alice","agent":"claude-code","files":6,"bytes":318,"first":"2026-09-15T01:02:03Z","last":"2026-10-04T16:31:11Z","projects":29,"evidence":".claude,.claude.json*"}
 {"type":"agent","host":"host01","user":"docker","agent":"agent-zero","files":2,"bytes":63,"first":"2026-10-04T16:31:11Z","last":"2026-10-04T16:31:11Z","projects":0,"evidence":"*a0_usr"}
@@ -443,7 +443,7 @@ The output directory receives five files named
 `<host>_<UTC time>_agent-artifacts`. In the host name, characters other
 than `A-Za-z0-9._-` become `-`:
 
-```
+```text
 host_20261003T165531Z_agent-artifacts.tar.gz          the archive
 host_20261003T165531Z_agent-artifacts.tar.gz.sha256   its hash, as "<hex>  <file name>" (sha256sum format)
 host_20261003T165531Z_agent-artifacts.manifest.jsonl  the manifest (the archive holds a copy)
@@ -461,7 +461,7 @@ the archive's size and hash.
 
 Inside the archive (the sh collector's tar members start with `./`):
 
-```
+```text
 fs/<original path>          collected files, mirroring the source filesystem
 manifest.jsonl
 collection.json

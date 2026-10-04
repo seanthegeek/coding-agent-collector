@@ -7,6 +7,7 @@ Closed source; no package inspected. Evidence is **DFIR write-ups and press**: p
 ## 2. Per-user storage
 
 macOS (native Swift app, not sandboxed):
+
 - `~/Library/Application Support/com.openai.chat/` app data. Conversations originally plain JSON in `conversations-{uuid}/`; since 1.2024.171 in `conversations-v2-{uuid}/`, encrypted (pvieito; 9to5mac). Expect also Apple-standard `~/Library/Caches/com.openai.chat/`, `~/Library/Preferences/com.openai.chat.plist`, `~/Library/HTTPStorages/com.openai.chat/` (standard macOS layout for a non-sandboxed bundle id; not cited by a write-up, medium).
 Windows (MSIX packaged WebView2/Electron-style app):
 - `%LOCALAPPDATA%\Packages\OpenAI.ChatGPT-Desktop_2p2nqsd0c76g0\LocalCache\Roaming\ChatGPT\` root (garr3ttmjo).

@@ -1,0 +1,22 @@
+// markdownlint-cli2 configuration for every *.md file in the repository.
+// Run with: npx -y markdownlint-cli2@0.23.3 "**/*.md"
+{
+  "config": {
+    "default": true,
+    // Prose is wrapped near 78 columns, but tables, links with commit-pinned
+    // URLs and code lines cannot be wrapped, so line length is only noise.
+    "MD013": false,
+    // The changelogs follow Keep a Changelog: every release repeats the
+    // same "Added", "Changed" and "Fixed" subheadings. Duplicates are only
+    // an error between siblings under the same parent heading.
+    "MD024": { "siblings_only": true },
+    // Several research documents quote exact line prefixes and YAML
+    // indentation inside code spans (`#### `, `> `, `  when: <epoch>`).
+    // The spaces are the point; trimming them would change the claim.
+    "MD038": false
+  },
+  // Skip everything git ignores (build output, caches) as well as
+  // dependency trees that npx or a virtualenv might leave behind.
+  "gitignore": true,
+  "ignores": ["**/node_modules/**", ".ruff_cache/**", "**/.venv/**"]
+}

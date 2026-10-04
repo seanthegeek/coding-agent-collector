@@ -13,6 +13,7 @@
 Layout is the same on Linux, macOS and Windows except the platform data dir.
 
 Kiro CLI home `~/.kiro` (override `KIRO_HOME`, docs reference/settings; binary help "Defaults to KIRO_HOME/.kiro/sessions"):
+
 - `settings/cli.json`, `settings/permissions.yaml`, `settings/mcp.json`, `settings/lsp.json` (docs; binary), `settings.json` mentioned in the binary's prompt text.
 - `agents/*.json` (legacy 2.x profiles as `*.json.bak`), `prompts/`, `steering/` with `steering/AGENTS.md`, `skills/`, `hooks/`, `workflows/`, `powers/installed/<name>/{plugin.json,skills/,mcp.json}` (docs configuration, custom-agents, powers, permissions).
 - `sessions/cli/<id>.json` header with `session_id`, `cwd` plus `<id>.jsonl` conversation (tokscale `:4, 13, 134-135`); `sessions/<workspace-hash>/sess_<uuid>/session.json` (`workspacePaths`, `modelId`, `createdAt`) and `messages.jsonl`, written by the IDE and the CLI's v3 session store (tokscale `:8-9, 171-179, 569-590`; codeburn; binary `sess_<uuid>`); `session-index/<hash>.jsonl`; `workspace-roots/<hash(root)>/.trust-migration.json` with key `root` and `permissions.yaml` (issue 11282; docs permissions).

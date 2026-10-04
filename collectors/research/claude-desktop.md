@@ -7,6 +7,7 @@ Closed Electron app; no package inspected. Evidence: **official docs** claude.co
 ## 2. Per-user storage
 
 Standard build (docs MCP debugging; data-storage note that 3p "is separate from standard Claude Desktop"):
+
 - macOS `~/Library/Application Support/Claude/` (e.g. `developer_settings.json`, `claude_desktop_config.json`), logs `~/Library/Logs/Claude/` (`mcp*.log`).
 - Windows `%APPDATA%\Claude\` with logs in `%APPDATA%\Claude\logs\` (MCP debugging doc).
 - Linux: official `.deb` exists (claude-desktop-debian 3.0.0 "repackages that official Linux .deb"); config at `~/.config/Claude/claude_desktop_config.json` (README). This is the XDG config dir, no `~/.local/share` use reported.
@@ -14,6 +15,7 @@ Standard build (docs MCP debugging; data-storage note that 3p "is separate from 
 Enterprise/3p build (data-storage doc table): macOS `~/Library/Application Support/Claude-3p/` + `~/Library/Logs/Claude-3p/`; Windows `%LOCALAPPDATA%\Claude-3p\` (logs inside; earlier releases used `%APPDATA%\Claude-3p\`, migrated on first launch); Linux `~/.config/Claude-3p/` (logs inside).
 
 Contents of the application-data directory (data-storage doc, documented for 3p; the same layout names appear in standard builds per the issues above):
+
 - `ant-did` device id; `configLibrary/_meta.json`, `<id>.json`.
 - `local-agent-mode-sessions/`: Cowork and Chat history, one `local_<uuid>.json` plus a working dir per session, scoped by account and org id; `uploads/`, `outputs/`, `audit.jsonl` (HMAC-chained event log) with `.audit-key`; `.../cowork_account_settings.json`; `.../memory/CLAUDE.md` and `memory/memory/*.md`; `.../spaces/<projectId>/memory/`.
 - `claude-code-sessions/`: Code session records (working folder, settings, title, summary); transcripts are in `~/.claude/projects/`.

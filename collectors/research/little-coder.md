@@ -44,6 +44,7 @@ file's basename, so it matches a `sessions/` JSONL file
 
 **`~/.config/little-coder/`**, or `$XDG_CONFIG_HOME/little-coder`, using
 `HOME` or `USERPROFILE`, so `~/.config` on macOS and Windows too:
+
 - `models.json`, the user's provider override (`LITTLE_CODER_MODELS_FILE`
   wins) ([little-coder.mjs:46-56](https://github.com/itayinbarr/little-coder/blob/89d4fa0af864230527ab75d12604ed0eb320e6df/bin/little-coder.mjs#L46-L56); [.pi/extensions/llama-cpp-provider/config.ts:75-82](https://github.com/itayinbarr/little-coder/blob/89d4fa0af864230527ab75d12604ed0eb320e6df/.pi/extensions/llama-cpp-provider/config.ts#L75-L82)).
 - `extensions/`, user extensions loaded on every launch

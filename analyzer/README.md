@@ -178,7 +178,7 @@ with no user, and `detect only`.
 `timeline` writes three files into `-o`, creating the directory if needed,
 and writes them even when no rows were produced:
 
-```
+```text
 timeline.csv    one row per turn, tool call, tool result or system event
 sessions.csv    one row per session with first and last timestamp and counts
 detect.json     the detect --json object without its homes and files keys
@@ -285,7 +285,7 @@ it), `users` (distinct host and user pairs, `docker` included) and
 
 ## Options
 
-```
+```text
 analyze-agent-artifacts detect INPUT [--json] [--files] [common options]
 analyze-agent-artifacts timeline INPUT -o DIR [--max-text-length N] [--include-thinking] [--agent NAME]... [common options]
 analyze-agent-artifacts inventory [-o FILE] INPUT...

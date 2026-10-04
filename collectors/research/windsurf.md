@@ -3,6 +3,7 @@
 ## 1. Source and evidence level
 
 Closed source. docs.windsurf.com now 307-redirects to docs.devin.ai (observed on `/windsurf/cascade/mcp` and `/troubleshooting/windsurf-common-issues`).
+
 - L2 official docs: docs.devin.ai `desktop/devin-desktop-faq`, `desktop/cascade/mcp`, `desktop/cascade/memories`, `desktop/cascade/workflows`, `desktop/cascade/hooks`, `desktop/troubleshooting/windsurf-common-issues`, `cli/reference/commands` (credentials.toml wording from search snippet of that page).
 - L3 vendor tracker: Exafunction/codeium issue 295 (`.windsurf\extensions` on Windows).
 - L4 community source read locally (`scratchpad/npm/community/`): wookat/DevCleaner `conversation.rs`, Cosmos-0118/AgentSweep `rules.toml`, vinzdg/codenotch `DevinCredentials.swift`, jlcodes99/cockpit-tools `windsurf_account.rs`; Exafunction/windsurf.nvim `lua/codeium/api.lua`.
@@ -16,6 +17,7 @@ Extensions: `~/.windsurf/extensions/` legacy (read-only after migration), `~/.de
 Cascade transcripts for hooks: `~/.windsurf/transcripts/{trajectory_id}.jsonl` (docs cascade/hooks, `transcript_path`). Post-rename `~/.devin/transcripts` is unverified.
 
 Central Codeium dir `~/.codeium/` on every OS (FAQ: "not changing in this release"; Windows `C:\Users\<u>\.codeium\windsurf\cascade` per troubleshooting page):
+
 - `windsurf/cascade/` conversation history as `<uuid>.pb` protobuf files; deleting the dir clears chat history (troubleshooting page; DevCleaner `conversation.rs:1199-1229`). `ItemTable` keys `cascade.chatdata`, `cascade.conversations`, `cascade.*`, `windsurf.cascadeViewContainerId.*` in `state.vscdb` hold view state (DevCleaner `:41-85`).
 - `windsurf/memories/` auto memories plus `windsurf/memories/global_rules.md` (docs memories); `windsurf/global_workflows/*.md` (docs workflows); `windsurf/skills/`; `windsurf/hooks.json` (IDE) and `hooks.json` (JetBrains plugin) (docs hooks); `windsurf/mcp_config.json` and `mcp_config.json`, `user_settings.pb`, `windsurf/user_settings.pb`, `installation_id` (FAQ; AgentSweep 1107-1113).
 - `windsurf/database/`, `database/` "local Cascade/Windsurf database", `windsurf/code_tracker/`, `windsurf/codemaps/`, `brain/`, `recipes/`, `context_state/`, `windsurf/implicit/`, `implicit/`, `windsurf/native_storage_migrations.lock`, `ws-browser/`, `ws-browser-profile/` (AgentSweep 1078-1149, labels only).

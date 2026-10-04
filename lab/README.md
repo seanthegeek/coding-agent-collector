@@ -55,7 +55,7 @@ message when they are missing. Once the Ollama container exists, `build`,
 `collect` needs the sandbox container to exist, not to be running. It writes
 to `DIR`, by default `lab/out/<UTC stamp>/`:
 
-```
+```text
 image/        home/agent/..., etc/passwd, root/.ollama (when the Ollama container exists)
 collection/   the collector's archive, manifest, summary, log and .sha256
 analysis/     timeline.csv, sessions.csv and detect.json from the analyzer
