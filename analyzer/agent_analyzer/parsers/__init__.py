@@ -20,6 +20,7 @@ from .opencode import OpenCodeParser
 from .kilo_code import KiloCodeParser
 from .cline import ClineParser
 from .roo_code import RooCodeParser
+from .tabby import TabbyParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -38,6 +39,7 @@ ALL: List[Parser] = [
     KiloCodeParser(),
     ClineParser(),
     RooCodeParser(),
+    TabbyParser(),
 ]
 
 

@@ -95,6 +95,7 @@ agents and which have parsers.
 | `kilo-code` | `.local/share/kilo/kilo*.db` and `opencode-*.db` plus the same JSON trees under `.local/share/kilo` (OpenCode parser, Kilo paths), and pre-migration VS Code tasks `<globalStorage>/kilocode.kilo-code/tasks/<id>/api_conversation_history.json` | Source at 76bcfd4, synthetic fixture |
 | `cline` | `<editor>/User/globalStorage/saoudrizwan.claude-dev/` and `.cline/data/`: `tasks/<id>/ui_messages.json` (preferred), `api_conversation_history.json` (only when `ui_messages.json` is absent; inherits the task start time), `task_metadata.json`, `state/taskHistory.json`; SDK `.cline/data/sessions/<id>/<id>.json` and `*.messages.json`, `.cline/data/db/sessions.db` | Source at 39ff2359, synthetic fixture; see `research/cline.md` |
 | `roo-code` | `<editor>/User/globalStorage/rooveterinaryinc.roo-cline/` and `.vscode-mock/global-storage/`: the Cline task files plus `tasks/<id>/history_item.json` and `tasks/_index.json` | Source at b867ec91, synthetic fixture; see `research/roo-code.md` |
+| `tabby` | Server-side: `.tabby/ee/db.sqlite` or `dev-db.sqlite` (SQLite with WAL sidecars; `threads`, `thread_messages`, `user_events`, thread owner from `users.email`; secret columns never read), the pre-migration backups `ee/db.backup-YYYYMMDD.sqlite` (may hold threads since deleted), and the completion event log `.tabby/events/YYYY-MM-DD.json` (full prompt and generated text). Project is the attached repository URL; no local path is recorded | Source at 21b2904, synthetic fixture; see `research/tabby.md` |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
@@ -112,7 +113,7 @@ parser's agent, so `--agent aider` also includes a repository's
 
 Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
-`augment`, `ollama`, `pearai`, `cody`, `twinny`, `tabby`,
+`augment`, `ollama`, `pearai`, `cody`, `twinny`,
 `open-interpreter`, `openhands`, `pi`, `little-coder`, `letta`, `hermes`,
 `openclaw`, `nanobot`, `agent-zero`, `shellgpt` and `local-deep-research`,
 plus the `shared` and `shell-history` entries, which are not agents.

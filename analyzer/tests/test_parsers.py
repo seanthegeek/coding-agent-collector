@@ -176,6 +176,7 @@ class TimelineTests(ParserBase):
             "crush", "goose",
             "zed", "vscode",
             "cline", "roo-code",
+            "tabby",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -1529,3 +1530,101 @@ class RooCodeTests(ParserBase):
         self.assertEqual(len(rows), 10)
         self.assertEqual(rows[-1].turn_type, "system")
         self.assertIn("parser:", rows[-1].text)
+
+
+from agent_analyzer.parsers.tabby import TabbyParser
+from fixtures import TABBY_BACKUP_REL, TABBY_EVENTS_REL, TABBY_REL, TABBY_SECRETS
+
+
+class TabbyTests(ParserBase):
+    def test_rows(self):
+        rows = self.rows_for(TabbyParser(), TABBY_REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "assistant", "system"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.git_branch, r.model), ("h1", "alice", "tabby", "", ""))
+            self.assertTrue(r.source_file.endswith(TABBY_REL), r.source_file)
+        start, user, asst, select = rows
+        for r in (start, user, asst):
+            self.assertEqual((r.session_id, r.project_path), ("7", "https://github.com/acme/app"))
+        self.assertEqual((start.timestamp_utc, start.text),
+                         ("2026-10-01T10:00:00.000Z",
+                          "thread start | owner alice@example.com (Alice) | relevant questions: How is the cache invalidated?"))
+        self.assertEqual((user.text, user.source_line),
+                         ("Where is the cache cleared? [attachments: client_code src/cache.rs:10]", 1))
+        self.assertEqual((asst.timestamp_utc, asst.text),
+                         ("2026-10-01T10:00:02.000Z",
+                          "In `clear()` in src/cache.rs. [attachments: code https://github.com/acme/app@abc123 src/cache.rs:10]"))
+        self.assertEqual((select.session_id, select.timestamp_utc, select.text),
+                         ("cmpl-7f3a", "2026-10-01T10:00:01.000Z",
+                          "select choice 0 | user=alice@example.com (Alice) | view=view-1 | elapsed=1377ms"))
+
+    def test_thinking_opt_in(self):
+        # Tabby stores no reasoning; the flag must not invent rows.
+        self.assertEqual(len(self.rows_for(TabbyParser(), TABBY_REL, include_thinking=True)),
+                         len(self.rows_for(TabbyParser(), TABBY_REL)))
+
+    def test_backup_and_event_log(self):
+        rows = self.rows_for(TabbyParser(), TABBY_BACKUP_REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "system", "user", "assistant"])
+        self.assertIn("backup database", rows[0].text)
+        self.assertTrue(all(r.source_file.endswith(TABBY_BACKUP_REL) for r in rows))
+        self.assertEqual({(r.session_id, r.project_path) for r in rows[1:]}, {("3", "https://github.com/acme/ops")})
+        self.assertIn("ephemeral", rows[1].text)
+        self.assertEqual(rows[3].text, "Run `select * from users`. [attachments: code https://github.com/acme/ops db.sql]")
+        rows = self.rows_for(TabbyParser(), TABBY_EVENTS_REL)
+        self.assertEqual([(r.turn_type, r.session_id) for r in rows],
+                         [("system", "cmpl-7f3a"), ("user", "cmpl-7f3a"), ("assistant", "cmpl-7f3a"),
+                          ("system", "cmpl-7f3a"), ("system", "")])
+        self.assertEqual(rows[0].text, "completion | user=1 | language=python | file=app/math.py | client=tabby-agent/1.9")
+        self.assertEqual((rows[1].text, rows[1].timestamp_utc, rows[1].project_path),
+                         ("def add(a, b):", "2025-10-01T10:00:00.123Z", "https://github.com/acme/app"))
+        self.assertEqual(rows[2].text, "return a + b")
+        self.assertEqual((rows[3].text, rows[3].timestamp_utc),
+                         ("select choice 0 | user=1 | view=view-1 | elapsed=1377ms", "2025-10-01T10:00:01.500Z"))
+        self.assertEqual(rows[4].text, "chat_completion")
+
+    def test_config_and_sidecars_not_wanted(self):
+        p = TabbyParser()
+        seen = set()
+        for a in self.col.artifacts:
+            if a.agent == "tabby":
+                seen.add(a.rel)
+                self.assertEqual(p.wants(a), a.rel in (TABBY_REL, TABBY_BACKUP_REL, TABBY_EVENTS_REL), a.rel)
+        self.assertIn(".tabby/config.toml", seen)
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / TABBY_EVENTS_REL)
+        rows = self.rows_for(TabbyParser(), TABBY_EVENTS_REL)
+        self.assertEqual(len(rows), 6)
+        self.assertEqual((rows[-1].turn_type, rows[-1].text), ("system", "parser: 1 unparseable line(s), first at line 4"))
+
+    def test_bad_payload_is_reported_not_fatal(self):
+        import sqlite3
+        con = sqlite3.connect(str(self.home / TABBY_REL))
+        con.execute("INSERT INTO user_events(user_id,kind,created_at,payload) VALUES(1,'view','2026-10-01 10:00:05','{\"view\":')")
+        con.commit()
+        con.close()
+        rows = self.rows_for(TabbyParser(), TABBY_REL)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "assistant", "system", "system"])
+        self.assertIn("payload did not parse", rows[-1].text)
+
+    def test_secret_columns_never_reach_output(self):
+        for rel in (TABBY_REL, TABBY_BACKUP_REL):
+            for r in self.rows_for(TabbyParser(), rel):
+                for value in r.as_list():
+                    for secret in TABBY_SECRETS:
+                        self.assertNotIn(secret, str(value))
+        out = self.tmp / "out"
+        buf = io.StringIO()
+        import contextlib
+        with contextlib.redirect_stdout(buf):
+            rc = cli.main(["timeline", str(self.tmp / "home"), "-o", str(out), "--host", "h1", "--agent", "tabby"])
+        self.assertEqual(rc, 0, buf.getvalue())
+        produced = [p for p in out.rglob("*") if p.is_file()]
+        self.assertTrue(produced)
+        for p in produced:
+            data = p.read_bytes()
+            for secret in TABBY_SECRETS:
+                self.assertNotIn(secret.encode(), data, p)
+        for secret in TABBY_SECRETS:
+            self.assertNotIn(secret, buf.getvalue())
