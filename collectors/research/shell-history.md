@@ -53,26 +53,7 @@ Not applicable; the collector does not parse histories. The analyzer's
 planned shell-history parser will extract `cd` targets and agent invocations
 with timestamps where the shell records them.
 
-## 7. Catalog review
-
-Current lines, all confirmed:
-
-```
-shell-history|.bash_history
-shell-history|.zsh_history
-shell-history|.zsh_sessions
-shell-history|.sh_history
-shell-history|.history
-shell-history|.local/share/fish/fish_history
-shell-history|.config/fish/fish_history
-shell-history|AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt
-```
-
-To add: `shell-history|.local/share/powershell/PSReadLine/ConsoleHost_history.txt`
-for PowerShell 7 on Linux and macOS; `shell-history|.bash_sessions` for
-macOS Terminal's per-session bash history (same mechanism as `.zsh_sessions`).
-
-## 8. Confidence
+## 7. Confidence
 
 High for every format listed; they are documented and stable. Only bash with
 `HISTTIMEFORMAT`, zsh with `EXTENDED_HISTORY` and fish carry timestamps; the

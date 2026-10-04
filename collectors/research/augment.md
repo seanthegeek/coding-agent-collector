@@ -94,33 +94,7 @@ pair). Exact JSON key path inside the session file is not verifiable
 without a live file. `daemon/<hash>/state.json` keys the workspace by a
 truncated sha256 and is not reversible.
 
-## 7. Catalog review
-
-Home: `.augment`: confirmed.
-
-Project: `.augment`, `.augment-guidelines`, `.augmentignore`: confirmed.
-Missing `.augment-plugin`.
-
-Excluded: `.augment/binaries`, `vfs`, `knowledgebase`, `uploads`,
-`worktrees`: confirmed. Missing `plugins/marketplaces`.
-
-Credential: `.augment/session.json`: confirmed. Missing settings files that
-embed MCP env.
-
-Add:
-
-```
-project|.augment-plugin
-.augment/plugins/marketplaces
-.augment/settings.json
-.augment/settings.local.json
-```
-
-Doubtful: `.augment/settings*.json` as credential globs also match project
-`.augment/settings.json` because credential globs cross `/`; that is the
-intent.
-
-## 8. Confidence
+## 7. Confidence
 
 High (bundle literal): `~/.augment` root, `session.json` and its fields,
 `sessions/<id>.json`, `prompt-history.jsonl`, the five large dirs,

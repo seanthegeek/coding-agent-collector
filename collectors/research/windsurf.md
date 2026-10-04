@@ -47,30 +47,6 @@ Env: `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `WINDSURF_API_KEY` (docs).
 
 Not determinable from available evidence. Memories are "associated with the workspace they were created in" (docs memories) but the key is inside the files; `cascade/*.pb` is protobuf without a published schema; `~/.windsurf/transcripts/*.jsonl` content fields are not documented beyond `type`/`status`. Fall back to `User/workspaceStorage/*/workspace.json` in the Windsurf and Devin data dirs.
 
-## 7. Catalog review
-
-- `windsurf|.codeium` confirmed. `windsurf|.windsurf/extensions/extensions.json` confirmed (FAQ, issue 295). `windsurf|.config/devin`, `AppData/Roaming/devin` confirmed (docs mcp; cli credentials). `Windsurf/User` and `Devin/User` on three platforms confirmed (FAQ).
-- `project|.windsurf`, `.windsurfrules`, `.devin` confirmed.
-- Excludes `.codeium/windsurf/implicit` doubtful-but-reasonable (L4 label only), `.codeium/*/bin`, `.codeium/bin`, `.windsurf/extensions` confirmed.
-- Secret `.codeium/config.json` confirmed.
-- Missing: `~/.windsurf/transcripts` (Cascade transcripts, the single most valuable new source), `~/.devin`, Devin CLI data dir, IDE `logs`.
-
-Add:
-```
-windsurf|.windsurf
-windsurf|.devin
-windsurf|.local/share/devin
-windsurf|Library/Application Support/Windsurf/logs
-windsurf|.config/Windsurf/logs
-windsurf|AppData/Roaming/Windsurf/logs
-windsurf|Library/Application Support/Devin/logs
-windsurf|.config/Devin/logs
-windsurf|AppData/Roaming/Devin/logs
-windsurf|.windsurf-server/data/User
-windsurf|.devin-server/data/User
-```
-and drop `windsurf|.windsurf/extensions/extensions.json` in favour of `.windsurf` plus the exclusion. Project: `project|.devinignore`, `project|.windsurfignore`, `project|.codeiumignore`. Excludes: `.devin/extensions`, `.codeium/ws-browser`, `.codeium/ws-browser-profile`, `.codeium/implicit`, `AppData/Local/devin/bin`. Secrets: `.local/share/devin/credentials.toml`, `AppData/Roaming/devin/credentials.toml`, `.codeium/mcp_config.json`, `.codeium/windsurf/mcp_config.json`, `.config/devin/mcp_config.json`, `AppData/Roaming/devin/mcp_config.json`.
-
-## 8. Confidence
+## 7. Confidence
 
 High: IDE data dirs old and new, extensions dirs, `~/.codeium/windsurf/{cascade,memories,global_workflows,mcp_config.json,hooks.json,bin}`, `windsurfAuthStatus`, `credentials.toml`, project directories (all L2 or two independent L4 sources). Medium: `.pb` naming (one L4 tool), `~/.windsurf/transcripts` existence post-rename, `implicit` size, `database`/`code_tracker`/`codemaps` content. Not determined: Devin CLI session/log directory, `.pb` schema, whether `~/.devin/transcripts` replaces `~/.windsurf/transcripts`, `windsurf-next` beta paths, Windows `%LOCALAPPDATA%` use beyond `devin\bin`.

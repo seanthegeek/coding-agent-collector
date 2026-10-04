@@ -7,7 +7,7 @@ Kilo has since moved to an OpenCode-derived store
 
 ## 1. Source
 
-cline/cline at `39ff2359f7e08231281539696e48a166ce49270c`, Apache-2.0. Open
+cline/cline at [`39ff2359f7e08231281539696e48a166ce49270c`](https://github.com/cline/cline/commit/39ff2359f7e08231281539696e48a166ce49270c), Apache-2.0. Open
 source. Applies to the VS Code extension (`saoudrizwan.claude-dev`), the CLI
 and JetBrains, all through the `sdk/` packages.
 
@@ -15,10 +15,10 @@ and JetBrains, all through the `sdk/` packages.
 
 Legacy task layout, one directory per task. Root is VS Code
 `globalStorage/saoudrizwan.claude-dev/` for the extension
-(`apps/vscode/src/core/storage/disk.ts:190-194`) or `~/.cline/data/` for CLI
-and JetBrains (`apps/vscode/src/sdk/legacy-state-reader.ts:24-29`); env
-`CLINE_DATA_DIR` or `CLINE_DIR` overrides. Files (`disk.ts:17-36`,
-`legacy-state-reader.ts:42-72`): `tasks/<taskId>/api_conversation_history.json`
+([`apps/vscode/src/core/storage/disk.ts:190-194`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/core/storage/disk.ts#L190-L194)) or `~/.cline/data/` for CLI
+and JetBrains ([`apps/vscode/src/sdk/legacy-state-reader.ts:24-29`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/sdk/legacy-state-reader.ts#L24-L29)); env
+`CLINE_DATA_DIR` or `CLINE_DIR` overrides. Files ([`disk.ts:17-36`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/core/storage/disk.ts#L17-L36),
+[`legacy-state-reader.ts:42-72`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/sdk/legacy-state-reader.ts#L42-L72)): `tasks/<taskId>/api_conversation_history.json`
 (JSON array), `ui_messages.json` (JSON array), `context_history.json`,
 `task_metadata.json`, `settings.json`; index `state/taskHistory.json` (JSON
 array of `HistoryItem`); `globalState.json`, `secrets.json`,
@@ -26,71 +26,71 @@ array of `HistoryItem`); `globalState.json`, `secrets.json`,
 string (`HistoryItem.id`).
 
 SDK session layout, current on all hosts: `~/.cline/data/sessions/<sessionId>/`
-(`sdk/packages/shared/src/storage/paths.ts:179-192`) holding
+([`sdk/packages/shared/src/storage/paths.ts:179-192`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/shared/src/storage/paths.ts#L179-L192)) holding
 `<sessionId>.json` (manifest), `<sessionId>.messages.json`,
-`<sessionId>.compaction.json` (`sdk/packages/core/src/services/session-artifacts.ts:75-94`);
+`<sessionId>.compaction.json` ([`sdk/packages/core/src/services/session-artifacts.ts:75-94`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/services/session-artifacts.ts#L75-L94));
 subagent transcripts in the same directory as `<agentId>.messages.json` or
-`<agentId>__<teamTaskId>.messages.json` (`:34-57,132-144`). `sessionId` is
-`${Date.now()}_${nanoid(5)}` (`session/services/persistence-service.ts:109`).
+`<agentId>__<teamTaskId>.messages.json` ([`:34-57`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/services/session-artifacts.ts#L34-L57),[`132-144`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/services/session-artifacts.ts#L132-L144)). `sessionId` is
+`${Date.now()}_${nanoid(5)}` ([`session/services/persistence-service.ts:109`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/session/services/persistence-service.ts#L109)).
 Fallback index `sessions/sessions.index.json`
-(`session/services/file-session-service.ts:63`). SQLite in `~/.cline/data/db/`
+([`session/services/file-session-service.ts:63`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/session/services/file-session-service.ts#L63)). SQLite in `~/.cline/data/db/`
 (section 5). Hook audit `~/.cline/data/logs/hooks.jsonl`
-(`hooks/hook-file-hooks.ts:647`).
+([`hooks/hook-file-hooks.ts:647`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/hooks/hook-file-hooks.ts#L647)).
 
 ## 3. Record schema
 
-`api_conversation_history.json` is `Anthropic.MessageParam[]` (`disk.ts:155`):
+`api_conversation_history.json` is `Anthropic.MessageParam[]` ([`disk.ts:155`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/core/storage/disk.ts#L155)):
 `{role: "user"|"assistant", content: string | [{type:"text",text} |
 {type:"tool_use",id,name,input} | {type:"tool_result",tool_use_id,content,is_error?}
 | {type:"thinking",thinking} | {type:"image",source:{type:"base64",media_type,data}}]}`
-(block handling `apps/vscode/src/sdk/legacy-task-handling.ts:13-45`). No
+(block handling [`apps/vscode/src/sdk/legacy-task-handling.ts:13-45`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/sdk/legacy-task-handling.ts#L13-L45)). No
 timestamps. Legacy tool calls are mostly XML inside text blocks, not
 `tool_use`.
 
-`ui_messages.json` is `ClineMessage[]` (`apps/vscode/src/shared/ExtensionMessage.ts:178-208`):
+`ui_messages.json` is `ClineMessage[]` ([`apps/vscode/src/shared/ExtensionMessage.ts:178-208`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/shared/ExtensionMessage.ts#L178-L208)):
 `ts` (ms, also the identity), `type: "ask"|"say"`, `ask?`, `say?`, `text?`,
 `reasoning?`, `images?`, `files?`, `partial?`, `conversationHistoryIndex?`,
 `lastCheckpointHash?`, `modelInfo?: {modelId, providerId, mode}`
-(`shared/messages/metrics.ts`). Asks `:210-228` (followup,
+([`shared/messages/metrics.ts`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/shared/messages/metrics.ts)). Asks [`:210-228`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/shared/ExtensionMessage.ts#L210-L228) (followup,
 plan_mode_respond, act_mode_respond, command, command_output,
 completion_result, tool, api_req_failed, resume_task, use_mcp_server,
-new_task, condense, ...); says `:230-266` (task, error, api_req_started,
+new_task, condense, ...); says [`:230-267`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/shared/ExtensionMessage.ts#L230-L267) (task, error, api_req_started,
 api_req_finished, text, reasoning, completion_result, user_feedback, command,
 command_output, tool, browser_action*, mcp_server_request_started,
 mcp_server_response, checkpoint_created, hook_status, subagent, compaction,
 ...). `text` is JSON for `say`/`ask` `"tool"` (`ClineSayTool {tool, path,
-diff, content, regex, filePattern}`, `:269-294`), `"api_req_started"`
+diff, content, regex, filePattern}`, [`:269-294`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/shared/ExtensionMessage.ts#L269-L294)), `"api_req_started"`
 (`ClineApiReqInfo {request, tokensIn, tokensOut, cacheWrites, cacheReads,
-cost, cancelReason}`, `:370-379`) and `"use_mcp_server"` (`{serverName, type,
-toolName, arguments, uri}`, `:346-352`).
+cost, cancelReason}`, [`:370-379`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/shared/ExtensionMessage.ts#L370-L379)) and `"use_mcp_server"` (`{serverName, type,
+toolName, arguments, uri}`, [`:346-352`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/shared/ExtensionMessage.ts#L346-L352)).
 
-`HistoryItem` (`apps/vscode/src/shared/HistoryItem.ts:1-26`): `id, ulid?, ts,
+`HistoryItem` ([`apps/vscode/src/shared/HistoryItem.ts:1-26`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/shared/HistoryItem.ts#L1-L26)): `id, ulid?, ts,
 task, tokensIn, tokensOut, cacheWrites?, cacheReads?, totalCost, size?,
 cwdOnTaskInitialization?, modelId?, apiProvider?, isLegacy?`.
 
-`task_metadata.json` (`core/context/context-tracking/ContextTrackerTypes.ts:28-32`):
+`task_metadata.json` ([`core/context/context-tracking/ContextTrackerTypes.ts:28-32`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/core/context/context-tracking/ContextTrackerTypes.ts#L28-L32)):
 `files_in_context[{path, record_state, record_source, cline_read_date,
 cline_edit_date}]`, `model_usage[{ts, model_id, model_provider_id, mode}]`,
 `environment_history[{ts, os_name, os_version, host_name, cline_version}]`.
 
-SDK manifest `<id>.json` (`sdk/packages/core/src/session/models/session-manifest.ts:6-28`):
+SDK manifest `<id>.json` ([`sdk/packages/core/src/session/models/session-manifest.ts:6-28`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/session/models/session-manifest.ts#L6-L28)):
 `version:1, session_id, source, pid, started_at (ISO 8601), ended_at?,
 exit_code?, status (idle|running|pending|completed|failed|cancelled,
 shared/src/session/records.ts:1-15), interactive, provider, model, cwd,
 workspace_root, team_name?, enable_tools, enable_spawn, enable_teams,
 prompt?, metadata?{title,...}, messages_path?`.
 
-SDK `<id>.messages.json` (`services/session-data.ts:334-359,281-294`):
+SDK `<id>.messages.json` ([`services/session-data.ts:334-359`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/services/session-data.ts#L334-L359),[`281-294`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/services/session-data.ts#L281-L294)):
 `{version:1, updated_at (ISO), agent:"lead"|"subagent"|"teammate",
 sessionId, taskType?, origin{source, mode, sessionId, parentThreadId?,
 subagent?, version?, trigger?}, system_prompt?, messages:
-MessageWithMetadata[]}`. Message (`sdk/packages/shared/src/llms/messages.ts:130-165`):
+MessageWithMetadata[]}`. Message ([`sdk/packages/shared/src/llms/messages.ts:130-165`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/shared/src/llms/messages.ts#L130-L165)):
 `role: "user"|"assistant"`, `content: string|ContentBlock[]`, `id?`, `agent?`,
 `sessionId?`, `metadata?` (keys seen at call sites: `displayOnly`,
 `displayRole`, `kind`, `userRunSpan`, `checkpoint`), `modelInfo?{id, provider,
 family?}`, `metrics?{inputTokens, outputTokens, cacheReadTokens,
-cacheWriteTokens, cost}`, `ts?` (ms epoch, `session-data.ts:196`). Blocks
-(`messages.ts:19-125`): `text{text}`, `tool_use{id, call_id?, name, input}`,
+cacheWriteTokens, cost}`, `ts?` (ms epoch, [`session-data.ts:196`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/services/session-data.ts#L196)). Blocks
+([`messages.ts:19-125`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/shared/src/llms/messages.ts#L19-L125)): `text{text}`, `tool_use{id, call_id?, name, input}`,
 `tool_result{tool_use_id, name, content, is_error?}`, `thinking{thinking,
 signature?}`, `redacted_thinking{data}`, `image{data, mediaType}`,
 `file{content, path}`, `media`.
@@ -108,13 +108,13 @@ Legacy: directory name = `HistoryItem.id`; workspace =
 XML text). SDK: `messages.json.sessionId` = manifest `session_id` =
 `sessions.session_id`; workspace = manifest `cwd` or `workspace_root`;
 `tool_use.id` pairs with `tool_result.tool_use_id`. VS Code merges the legacy
-and SDK lists (`apps/vscode/src/sdk/sdk-task-history.ts:413-424`), stamping
+and SDK lists ([`apps/vscode/src/sdk/sdk-task-history.ts:413-424`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/sdk/sdk-task-history.ts#L413-L424)), stamping
 `metadata.legacyTask`.
 
 ## 5. SQLite stores
 
-`~/.cline/data/db/sessions.db` (`paths.ts:240-249`;
-`shared/src/db/sqlite-db.ts:188-273`): `sessions(session_id, source, pid,
+`~/.cline/data/db/sessions.db` ([`paths.ts:240-249`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/shared/src/storage/paths.ts#L240-L249);
+[`shared/src/db/sqlite-db.ts:188-273`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/shared/src/db/sqlite-db.ts#L188-L273)): `sessions(session_id, source, pid,
 started_at, ended_at, exit_code, status, status_lock, interactive, provider,
 model, cwd, workspace_root, team_name, enable_*, parent_session_id,
 parent_agent_id, agent_id, conversation_id, is_subagent, prompt,
@@ -122,9 +122,9 @@ metadata_json, transcript_path, hook_path, messages_path, updated_at)`,
 `subagent_spawn_queue`, `schedules(prompt, system_prompt, ...)`,
 `schedule_executions`. `db/session-search.db`: `indexed_sessions` plus FTS5
 `session_search(session_id, document_id, ordinal, role, started_at,
-workspace_root, title, content)` (`session/search/session-history-search.ts:123-153,196`),
+workspace_root, title, content)` ([`session/search/session-history-search.ts:123-153`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/session/search/session-history-search.ts#L123-L153),[`196`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/session/search/session-history-search.ts#L196)),
 a full-text copy of every transcript. `teams/teams.db`
-(`services/storage/sqlite-team-store.ts:210-330`): `team_events(payload_json)`,
+([`services/storage/sqlite-team-store.ts:210-330`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/services/storage/sqlite-team-store.ts#L210-L330),[`431-445`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/core/src/services/storage/sqlite-team-store.ts#L431-L445)): `team_events(payload_json)`,
 `team_tasks`, `team_runs`, `team_mailbox(data_json)`,
 `team_mission_log(data_json)`.
 
@@ -134,14 +134,14 @@ Three generations coexist on disk: VS Code globalStorage tasks,
 `~/.cline/data/tasks` with `state/taskHistory.json`, and
 `~/.cline/data/sessions/<id>/`. The VS Code to file migration of state and
 secrets uses the sentinel `__migrationVersion`
-(`hosts/vscode/vscode-to-file-migration.ts:11-31`); task files are not moved.
+([`hosts/vscode/vscode-to-file-migration.ts:11-31`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/hosts/vscode/vscode-to-file-migration.ts#L11-L31)); task files are not moved.
 SDK files carry `version: 1`. Legacy tasks resumed in the SDK get
 `metadata.legacyTask: true`. `sessions.db` has ALTER-based column migrations
-(`sqlite-db.ts:275-324`).
+([`sqlite-db.ts:275-340`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/sdk/packages/shared/src/db/sqlite-db.ts#L275-L340)).
 
 ## 7. Secrets
 
-`secrets.json` keys (`apps/vscode/src/shared/storage/state-keys.ts`
+`secrets.json` keys ([`apps/vscode/src/shared/storage/state-keys.ts`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/shared/storage/state-keys.ts)
 SECRETS_KEYS): `apiKey, clineApiKey, clineAccountId, openRouterApiKey,
 awsAccessKey, awsSecretKey, awsSessionToken, openAiApiKey, geminiApiKey, ...,
 mcpOAuthSecrets, openai-codex-oauth-credentials, ocaRefreshToken`. Also
@@ -190,4 +190,4 @@ manifest and `MessageWithMetadata` fields, `sessions.db` columns. Medium:
 exact `metadata` keys in SDK messages (collected from call sites, not a
 schema); whether the VS Code extension now writes new tasks to
 `~/.cline/data/sessions` rather than globalStorage (code reads both;
-`legacyExtensionStorageDir` is the globalStorage path, `SdkController.ts:505`).
+`legacyExtensionStorageDir` is the globalStorage path, [`SdkController.ts:505`](https://github.com/cline/cline/blob/39ff2359f7e08231281539696e48a166ce49270c/apps/vscode/src/sdk/SdkController.ts#L505)).

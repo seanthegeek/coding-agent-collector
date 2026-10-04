@@ -7,53 +7,53 @@ relative to the clone.
 
 ## 1. Source
 
-charmbracelet/crush at `ca6ae26ce016b980407ce32f012a467ec10c1e2f`,
-Functional Source License 1.1 with MIT future license (`LICENSE.md`). Open
+charmbracelet/crush at [`ca6ae26ce016b980407ce32f012a467ec10c1e2f`](https://github.com/charmbracelet/crush/commit/ca6ae26ce016b980407ce32f012a467ec10c1e2f),
+Functional Source License 1.1 with MIT future license ([`LICENSE.md`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/LICENSE.md)). Open
 source.
 
 ## 2. Transcript stores
 
-Per project: `<project>/.crush/crush.db` (`internal/config/config.go:25`
-default `.crush`; `internal/db/connect.go:93` `crush.db`). The data
-directory is found by walking up from the cwd (`internal/config/load.go:590-593`)
-and can be overridden by `data_directory` (`config.go:470`). The global
+Per project: `<project>/.crush/crush.db` ([`internal/config/config.go:25`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/config/config.go#L25)
+default `.crush`; [`internal/db/connect.go:93`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/connect.go#L93) `crush.db`). The data
+directory is found by walking up from the cwd ([`internal/config/load.go:590-593`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/config/load.go#L590-L593))
+and can be overridden by `data_directory` ([`config.go:470`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/config/config.go#L470)). The global
 registry `~/.local/share/crush/projects.json` (Windows
-`%LOCALAPPDATA%\crush\projects.json`; `load.go:1259-1278`,
-`internal/projects/projects.go:14,31-33`) maps each project `path` to its
+`%LOCALAPPDATA%\crush\projects.json`; [`load.go:1259-1278`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/config/load.go#L1259-L1278),
+[`internal/projects/projects.go:14`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/projects/projects.go#L14),[`31-33`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/projects/projects.go#L31-L33)) maps each project `path` to its
 `data_dir`. One `messages` row per message; parts are a JSON array in the
 `parts` column.
 
 ## 3. Record schema
 
-`internal/db/migrations/20250424200609_initial.sql`.
+[`internal/db/migrations/20250424200609_initial.sql`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/migrations/20250424200609_initial.sql).
 
-`sessions` (`:4-14` plus ALTERs): `id` (uuid; task sub-sessions use the tool
-call id, `internal/session/session.go:103,117`), `parent_session_id`,
+`sessions` ([`:4-14`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/migrations/20250424200609_initial.sql#L4-L14) plus ALTERs): `id` (uuid; task sub-sessions use the tool
+call id, [`internal/session/session.go:103`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/session/session.go#L103),[`117`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/session/session.go#L117)), `parent_session_id`,
 `title`, `message_count`, `prompt_tokens`, `completion_tokens`, `cost`,
 `updated_at`, `created_at` (epoch seconds, `strftime('%s','now')`,
-`internal/db/sql/sessions.sql:22-23`), `summary_message_id`, `todos` JSON,
+[`internal/db/sql/sessions.sql:22-23`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/sql/sessions.sql#L22-L23)), `summary_message_id`, `todos` JSON,
 `channel`.
 
-`messages` (`:47-57` plus ALTERs; `internal/db/models.go:29-44`): `id`
-uuid (`internal/message/message.go:206`), `session_id`, `role` in
-`assistant|user|system|tool` (`internal/message/content.go:20-27`), `parts`
-JSON, `model`, `provider` (`20250627000000_add_provider_to_messages.sql`),
+`messages` ([`:47-57`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/migrations/20250424200609_initial.sql#L47-L57) plus ALTERs; [`internal/db/models.go:29-44`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/models.go#L29-L44)): `id`
+uuid ([`internal/message/message.go:206`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/message.go#L206)), `session_id`, `role` in
+`assistant|user|system|tool` ([`internal/message/content.go:20-27`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go#L20-L27)), `parts`
+JSON, `model`, `provider` ([`20250627000000_add_provider_to_messages.sql`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/migrations/20250627000000_add_provider_to_messages.sql)),
 `created_at`, `updated_at`, `finished_at` (seconds, copied from the `finish`
-part's `time`, `message.go:435-439`), `is_summary_message`, `prism_model_id`,
+part's `time`, [`message.go:435-439`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/message.go#L435-L439)), `is_summary_message`, `prism_model_id`,
 `prism_model_name`, `prism_*_savings`.
 
-`parts` is `[{"type":...,"data":{...}}]` (`message.go:613-629`). Types and
-`data` keys (`content.go`): `text`: `text`, `hidden?` (`:70-74`);
+`parts` is `[{"type":...,"data":{...}}]` ([`message.go:613-629`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/message.go#L613-L629)). Types and
+`data` keys ([`content.go`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go)): `text`: `text`, `hidden?` ([`:70-74`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go#L70-L74));
 `reasoning`: `thinking`, `signature`, `thought_signature`, `tool_id`,
-`responses_data`, `started_at`, `finished_at` (seconds; `:55-63`);
+`responses_data`, `started_at`, `finished_at` (seconds; [`:55-63`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go#L55-L63));
 `tool_call`: `id`, `name`, `input` (JSON string), `provider_executed`,
-`finished` (`:109-115`); `tool_result`: `tool_call_id`, `name`, `content`,
-`data` (base64 media), `mime_type`, `metadata`, `is_error` (`:119-127`);
+`finished` ([`:109-115`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go#L109-L115)); `tool_result`: `tool_call_id`, `name`, `content`,
+`data` (base64 media), `mime_type`, `metadata`, `is_error` ([`:119-127`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go#L119-L127));
 `finish`: `reason` in `end_turn|max_tokens|tool_use|canceled|error|content_filter|unknown`,
-`time` (seconds), `message?`, `details?` (`:33-49,131-136`);
-`shell_command`: `command`, `output`, `exit_code` (`:142-146`); `image_url`:
+`time` (seconds), `message?`, `details?` ([`:33-49`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go#L33-L49),[`131-136`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go#L131-L136));
+`shell_command`: `command`, `output`, `exit_code` ([`:142-146`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go#L142-L146)); `image_url`:
 `url`, `detail`; `binary`: untagged Go fields `Path`, `MIMEType`, `Data`
-(`:93-97`).
+([`:93-97`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/content.go#L93-L97)).
 
 Other tables: `files` (session file snapshots: `path`, `content`,
 `version`), `read_files`, `mcp_enabled_servers`, `mcp_disabled_servers`. No
@@ -64,18 +64,18 @@ project path, cwd or git branch column anywhere.
 `messages.session_id → sessions.id`; `sessions.parent_session_id` for
 sub-agents. `tool_call` parts live in the assistant message; the result is a
 separate `role='tool'` message with a `tool_result` part
-(`internal/agent/agent.go:1032-1038`), joined on
+([`internal/agent/agent.go:1032-1038`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/agent/agent.go#L1032-L1038)), joined on
 `tool_result.data.tool_call_id = tool_call.data.id`. Project path is the
 parent directory of the `.crush` holding the database, or `projects.json`
 `projects[].path` / `data_dir`.
 
 ## 5. SQLite specifics
 
-`journal_mode=WAL` (`connect.go:20`) with Go defaults (auto-checkpoint at
+`journal_mode=WAL` ([`connect.go:20`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/connect.go#L20)) with Go defaults (auto-checkpoint at
 1000 pages), so a copy without `crush.db-wal` loses recent messages.
-`secure_delete=ON` (`connect.go:25`) zeroes deleted rows. Writes are
-debounced about 33 ms (`message.go:21`) and serialised on one connection
-(`connect.go:142`). No encryption or compression.
+`secure_delete=ON` ([`connect.go:25`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/connect.go#L25)) zeroes deleted rows. Writes are
+debounced about 33 ms ([`message.go:21`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/message/message.go#L21)) and serialised on one connection
+([`connect.go:142`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/db/connect.go#L142)). No encryption or compression.
 
 ## 6. Format versions
 
@@ -84,7 +84,7 @@ Goose migrations only (12 files); no JSON era, no version field;
 
 ## 7. Secrets
 
-`crush.json` `providers.<name>.api_key` (`config.go:102`) at
+`crush.json` `providers.<name>.api_key` ([`config.go:102`](https://github.com/charmbracelet/crush/blob/ca6ae26ce016b980407ce32f012a467ec10c1e2f/internal/config/config.go#L102)) at
 `~/.config/crush/`, `~/.local/share/crush/` and `<project>/.crush/`.
 `reasoning.signature` and `thought_signature` are opaque provider blobs. Tool
 input and output can contain pasted tokens.

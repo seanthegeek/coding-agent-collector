@@ -10,77 +10,77 @@ Claude-Code-style record stream with `uuid`, `parentUuid`, `cwd` and
 
 ## 1. Source
 
-QwenLM/qwen-code at `2c591ecc08a6fa080342f9b1b9f7f43215178cbb` (2026-10-03),
+QwenLM/qwen-code at [`2c591ecc08a6fa080342f9b1b9f7f43215178cbb`](https://github.com/QwenLM/qwen-code/commit/2c591ecc08a6fa080342f9b1b9f7f43215178cbb) (2026-10-03),
 version 0.24.7, Apache-2.0. Open source.
 
 ## 2. Transcript files
 
 Base directory `~/.qwen`, overridable by `$QWEN_HOME`
-(`core/src/config/storage.ts:193-202`) or the `runtimeOutputDir` setting
-(128-130).
+([`core/src/config/storage.ts:193-202`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/config/storage.ts#L193-L202)) or the `runtimeOutputDir` setting
+([128-130](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/config/storage.ts#L128-L130)).
 
 - Session: `~/.qwen/projects/<sanitizeCwd(cwd)>/chats/<sessionId>.jsonl`,
-  one file per session (storage.ts:619-623; `utils/paths.ts:388-392`: every
+  one file per session ([storage.ts:619-623](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/config/storage.ts#L619-L623); [`utils/paths.ts:388-392`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/utils/paths.ts#L388-L392): every
   character outside `[a-zA-Z0-9]` becomes `-`, Windows lower-cased;
-  `services/chatRecordingService.ts:1305,1318-1321`). `sessionId` is a UUID;
+  [`services/chatRecordingService.ts:1305`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L1305),[`1318-1321`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L1318-L1321)). `sessionId` is a UUID;
   listing accepts `/^[0-9a-fA-F-]{32,36}\.jsonl$/`
-  (`services/sessionService.ts:459`). Archived sessions move to
-  `chats/archive/` (sessionService.ts:949-951).
+  ([`services/sessionService.ts:459`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/sessionService.ts#L459)). Archived sessions move to
+  `chats/archive/` ([sessionService.ts:949-951](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/sessionService.ts#L949-L951)).
 - Sidecars in the same directory: `<sessionId>.runtime.json`
-  (storage.ts:733-740; snake_case keys, `startedAt` epoch seconds,
-  `utils/runtimeStatus.ts:46-60`), `<sessionId>.worktree.json`
-  (`worktreeSessionService.ts:38`), `<sessionId>.ledger.jsonl` prompt ledger
-  (sessionService.ts:1043-1046).
+  ([storage.ts:733-740](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/config/storage.ts#L733-L740); snake_case keys, `startedAt` epoch seconds,
+  [`utils/runtimeStatus.ts:46-60`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/utils/runtimeStatus.ts#L46-L60)), `<sessionId>.worktree.json`
+  ([`worktreeSessionService.ts:38`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/worktreeSessionService.ts#L38)), `<sessionId>.ledger.jsonl` prompt ledger
+  ([sessionService.ts:1043-1046](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/sessionService.ts#L1043-L1046)).
 - `~/.qwen/tmp/<sha256(cwd)>/`: `logs.json`, `checkpoint-<tag>.json`,
   `checkpoints/`, `shell_history`, `tool-results/`
-  (storage.ts:625-633,742-744,772-774; `core/logger.ts:14,203-204,693`;
-  `paths.ts:368-373`).
+  ([storage.ts:625-633](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/config/storage.ts#L625-L633),[742-744](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/config/storage.ts#L742-L744),[772-774](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/config/storage.ts#L772-L774); [`core/logger.ts:14`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/core/logger.ts#L14),[`203-204`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/core/logger.ts#L203-L204),[`693`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/core/logger.ts#L693);
+  [`paths.ts:368-373`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/utils/paths.ts#L368-L373)).
 - Managed-engine sessions: same `.jsonl` location plus
-  `~/.qwen/resources/<sessionId>/` (`utils/sessionStorageUtils.ts:806-816`).
+  `~/.qwen/resources/<sessionId>/` ([`utils/sessionStorageUtils.ts:806-816`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/utils/sessionStorageUtils.ts#L806-L816)).
 
 ## 3. Record schema
 
-Every line is a `ChatRecord` (`services/chatRecordingService.ts:336-521`):
-`uuid`, `parentUuid: string|null`, `sessionId`, `timestamp` (ISO 8601, 1490),
+Every line is a `ChatRecord` ([`services/chatRecordingService.ts:336-521`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L336-L521)):
+`uuid`, `parentUuid: string|null`, `sessionId`, `timestamp` (ISO 8601, [1490](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L1490)),
 `type: 'user'|'assistant'|'tool_result'|'system'`, `subtype?` (36 values,
-354-389, including `chat_compression`, `slash_command`, `custom_title`,
+[354-389](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L354-L389), including `chat_compression`, `slash_command`, `custom_title`,
 `session_model`, `rewind`, `turn_result`, `branch_checkpoint`,
-`managed_session_header_v1`), `provenance?` (270-276), `cwd`, `version` (CLI
-version, 1501), `gitBranch?` (1502-1510 via `getGitBranch(cwd)`),
+`managed_session_header_v1`), `provenance?` ([270-276](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L270-L276)), `cwd`, `version` (CLI
+version, [1501](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L1501)), `gitBranch?` ([1502-1510](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L1502-L1510) via `getGitBranch(cwd)`),
 `promptId?`, `daemonPromptId?`, `message?: Content` (`{role, parts}`),
 `usageMetadata?`, `model?`, `contextWindowSize?`, `toolCallResult?:
 Partial<ToolCallResponseInfo> & {status?}`, `systemPayload?`, `agentId?`,
 `agentName?`, `isSidechain?`, `agentRunId?`, `agentRound?`, `forkedFrom?:
-{sessionId, messageUuid}`. Base fields are set at 1474-1504; `parentUuid`
+{sessionId, messageUuid}`. Base fields are set at [1474-1504](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L1474-L1504); `parentUuid`
 is the previous record's uuid.
 
 - user: `message = {role:'user', parts:[{text}]}`, optional `systemPayload:
   UserPromptRecordPayload {displayText, hookContext, attachmentReferences?,
-  resourceLinks?}` (542-557), `promptId` (2281-2304).
+  resourceLinks?}` ([542-557](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L542-L557)), `promptId` ([2281-2304](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L2281-L2304)).
 - assistant: `model`, `message = {role:'model', parts}` whose parts carry
   `text`, `thought: true` text, and `functionCall {id, name, args}`;
-  `usageMetadata`, `contextWindowSize` (2575-2611).
+  `usageMetadata`, `contextWindowSize` ([2575-2611](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L2575-L2611)).
 - tool_result: `message = {role:'user', parts:[{functionResponse:{id, name,
   response}}]}` plus `toolCallResult {callId, responseParts, resultDisplay,
   error, errorType, executionStatus, contentLength, status}`
-  (`core/turn.ts:219-246`; status values `core/coreToolScheduler.ts:710`,
-  the same seven strings as Gemini) (2741-2840).
+  ([`core/turn.ts:219-246`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/core/turn.ts#L219-L246); status values [`core/coreToolScheduler.ts:710`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/core/coreToolScheduler.ts#L710),
+  the same seven strings as Gemini) ([2741-2840](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L2741-L2840)).
 - system payloads of interest: `ChatCompressionRecordPayload {info,
-  compressedHistory: Content[], promptIds?}` (610-621),
-  `SlashCommandRecordPayload {phase, rawCommand, sentToModel?}` (628-644),
-  `SessionModelRecordPayload {modelId, authType, baseUrl?}` (703-708),
+  compressedHistory: Content[], promptIds?}` ([610-621](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L610-L621)),
+  `SlashCommandRecordPayload {phase, rawCommand, sentToModel?}` ([628-644](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L628-L644)),
+  `SessionModelRecordPayload {modelId, authType, baseUrl?}` ([703-708](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L703-L708)),
   `TurnResultRecordPayload {promptId, state, startedAt?, endedAt, promptText?,
-  resultText?}` (949-965), `RewindRecordPayload {truncatedCount}` (837-839).
+  resultText?}` ([949-965](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L949-L965)), `RewindRecordPayload {truncatedCount}` ([837-839](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/chatRecordingService.ts#L837-L839)).
 
 `logs.json` adds `type: 'model_switch'` with `message` = JSON
-`ModelSwitchEvent {fromModel, toModel, reason, context?}` (logger.ts:16-33).
-`checkpoint-<tag>.json` is a raw `Content[]` array (logger.ts:726), Gemini's
+`ModelSwitchEvent {fromModel, toModel, reason, context?}` ([logger.ts:16-33](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/core/logger.ts#L16-L33)).
+`checkpoint-<tag>.json` is a raw `Content[]` array ([logger.ts:726](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/core/logger.ts#L726)), Gemini's
 legacy shape.
 
 ## 4. Joins
 
 Session = file = `sessionId` on every record; `cwd` and `gitBranch` on every
-record (the lister reads the first record, sessionService.ts:1184-1197). Tool
+record (the lister reads the first record, [sessionService.ts:1184-1197](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/sessionService.ts#L1184-L1197)). Tool
 call `message.parts[].functionCall.id` joins `tool_result.toolCallResult.callId`
 and `message.parts[].functionResponse.id`. Turns group by `promptId`, the
 tree by `parentUuid`, subagents by `isSidechain` and `agentId`, forks by
@@ -95,20 +95,20 @@ None; all stores are JSON or JSONL text.
 `version` on every record is the CLI version. Managed-engine transcripts
 begin with `subtype:'managed_session_header_v1'` (`{formatVersion,
 minimumReader, sessionKey, engine:'managed', ...}`,
-`managed-runtime/managed-session-records.ts:220-229`) followed by
-`managed_session_event_v1` and `commit_v1` records (209-241); detector
-`sessionStorageUtils.ts:827,920-958`. `logs.json` and `checkpoint-*.json`
+[`managed-runtime/managed-session-records.ts:220-229`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/managed-runtime/managed-session-records.ts#L220-L229)) followed by
+`managed_session_event_v1` and `commit_v1` records ([209-241](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/managed-runtime/managed-session-records.ts#L209-L241)); detector
+[`sessionStorageUtils.ts:827`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/utils/sessionStorageUtils.ts#L827),[`920-958`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/utils/sessionStorageUtils.ts#L920-L958). `logs.json` and `checkpoint-*.json`
 are the inherited Gemini legacy formats.
 
 ## 7. Secrets
 
-`~/.qwen/oauth_creds.json` (storage.ts:16; `qwen/qwenOAuth2.ts:41`),
-`mcp-oauth-tokens.json` (206), `.qwen-extension-git-credentials.json`
-(`extension/extension-git-credentials.ts:20`). `session_model.systemPayload.baseUrl`
+`~/.qwen/oauth_creds.json` ([storage.ts:16](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/config/storage.ts#L16); [`qwen/qwenOAuth2.ts:41`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/qwen/qwenOAuth2.ts#L41)),
+`mcp-oauth-tokens.json` ([206](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/config/storage.ts#L206)), `.qwen-extension-git-credentials.json`
+([`extension/extension-git-credentials.ts:20`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/extension/extension-git-credentials.ts#L20)). `session_model.systemPayload.baseUrl`
 is an endpoint, not a key. `tool_result.toolCallResult.responseParts` and
 `message.parts[].functionResponse.response` hold raw tool output;
 `UserPromptRecordPayload.hookContext` is hook stdout. Session registry
-records contain an `ipcToken` (`services/session-registry.ts:235`); location
+records contain an `ipcToken` ([`services/session-registry.ts:235`](https://github.com/QwenLM/qwen-code/blob/2c591ecc08a6fa080342f9b1b9f7f43215178cbb/packages/core/src/services/session-registry.ts#L235)); location
 not traced.
 
 ## 8. Parser plan

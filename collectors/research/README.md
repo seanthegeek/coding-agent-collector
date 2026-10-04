@@ -4,15 +4,15 @@ One document per catalog agent, named after the agent as it appears in
 `collect-agent-artifacts.sh --list`, recording where that agent stores state
 on each OS, which files are credentials, which subtrees are large or
 worthless, which files it writes inside projects, and where it records the
-project path. Each document ends with a review of the agent's current catalog
-lines, every line marked confirmed, doubtful or wrong with the evidence, and
-the lines the research proposes to add. These documents are the evidence
-behind the `CATALOG`, `PROJECT_CATALOG`, `EXCLUDES` and `SECRET_GLOBS` tables;
-the collectors README table summarises the evidence level. How transcripts
-are encoded is the analyzer's concern and lives in `analyzer/research/`.
+project path, ending with the confidence in each finding. These documents
+are the evidence behind the `CATALOG`, `PROJECT_CATALOG`, `EXCLUDES` and
+`SECRET_GLOBS` tables; the collectors README table summarises the evidence
+level. How transcripts are encoded is the analyzer's concern and lives in
+`analyzer/research/`.
 
 Evidence levels, best first: source code at a named commit with file and
-line; the shipped package or binary (`npm pack`, extracted bundles, binary
+line, where each citation links to that line at that commit so the link
+stays correct after the file changes upstream; the shipped package or binary (`npm pack`, extracted bundles, binary
 strings); official documentation; vendor forums and issue trackers; published
 write-ups. Each document says which level each claim rests on. Where a
 document mentions `scratchpad/...`, that is the research session's working
@@ -50,24 +50,28 @@ the repositories, package versions and URLs named beside it.
 | `windsurf` | [windsurf.md](windsurf.md) | official docs, community write-ups | rebrand to Devin in progress; new `.windsurf/transcripts` |
 | `zed` | [zed.md](zed.md) | source, crate sources | Flatpak install paths not covered |
 
-The catalog revision that applied these documents' section 7 proposals is
-collector version 1.3.0 (issue 24). Items the documents mark as optional or
-low value were left out; the section 7 lists remain the record of what was
-considered.
+Collector version 1.3.0 (issue 24, commit 88678a0) applied the catalog
+lines these documents proposed. Each document originally ended with a review
+of the catalog lines current at the time and the lines to add; those
+sections described a catalog that has since moved on and were removed, so
+the tables in the scripts are the record of what was adopted and that
+commit's history is the record of what was considered.
 
 Findings that cut across agents, from the October 2026 round:
 
 - Remote development hosts matter. `.vscode-server*/data/User`,
   `.cursor-server/data/User` and the Windsurf and Kiro equivalents hold the
   same chat and extension state as the desktop `User` directory, on the WSL
-  or SSH host rather than the workstation. None is in the catalog yet.
-- Several exclusions swallow evidence: `.factory/cache` (session index),
-  `.kiro/powers` (skills and MCP configuration), `.kilocode/worktrees` (wrong
-  path), and probably `.local/share/goose/apps` (agent-written output).
+  or SSH host rather than the workstation. All are in the catalog since
+  1.3.0.
+- Several exclusions swallowed evidence: `.factory/cache` (session index),
+  `.kiro/powers` (skills and MCP configuration) and `.kilocode/worktrees`
+  (wrong path) were narrowed or corrected in 1.3.0;
+  `.local/share/goose/apps` (agent-written output) is not excluded.
 - Credentials are moving into OS keyrings with encrypted file fallbacks
   (Gemini CLI, Claude Code, Amp, Factory Droid), so the plaintext files in the
   catalog are increasingly legacy. The fallbacks still appear on headless
   hosts and in WSL, which is where collections usually run.
 - Nearly every tool now has a per-project ignore file and a plugin or skill
-  marketplace clone directory; the proposed additions in each document's
-  section 7 are tracked in the catalog revision issue.
+  marketplace clone directory; the ignore files are project entries and the
+  clone directories are exclusions since 1.3.0.

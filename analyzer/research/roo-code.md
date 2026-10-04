@@ -6,9 +6,9 @@ differences listed here. Paths cited are relative to the clone.
 
 ## 1. Source
 
-RooCodeInc/Roo-Code at `b867ec9145750d0ae1ff7f02d35406e9bf2a0b16`,
+RooCodeInc/Roo-Code at [`b867ec9145750d0ae1ff7f02d35406e9bf2a0b16`](https://github.com/RooCodeInc/Roo-Code/commit/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16),
 Apache-2.0. Open source. Applies to the VS Code extension
-(`RooVeterinaryInc.roo-cline`, `src/package.json:2,5`) and the CLI
+(`RooVeterinaryInc.roo-cline`, [`src/package.json:2`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/package.json#L2),[`5`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/package.json#L5)) and the CLI
 (`apps/cli`).
 
 ## 2. Transcript files
@@ -16,44 +16,44 @@ Apache-2.0. Open source. Applies to the VS Code extension
 VS Code: `globalStorage/rooveterinaryinc.roo-cline/tasks/<taskId>/` with
 `api_conversation_history.json`, `ui_messages.json`, `task_metadata.json`,
 `history_item.json`; index `tasks/_index.json`
-(`src/shared/globalFileNames.ts:1-9`). The root can be redirected by the
-setting `roo-cline.customStoragePath` (`src/utils/storage.ts:14-48`). CLI
-root: `~/.vscode-mock/global-storage/` (`apps/cli/src/lib/task-history/index.ts:8`;
-`packages/vscode-shim/src/utils/paths.ts:8,61-62`), plus
+([`src/shared/globalFileNames.ts:1-9`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/shared/globalFileNames.ts#L1-L9)). The root can be redirected by the
+setting `roo-cline.customStoragePath` ([`src/utils/storage.ts:14-48`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/utils/storage.ts#L14-L48)). CLI
+root: `~/.vscode-mock/global-storage/` ([`apps/cli/src/lib/task-history/index.ts:8`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/apps/cli/src/lib/task-history/index.ts#L8);
+[`packages/vscode-shim/src/utils/paths.ts:8`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/packages/vscode-shim/src/utils/paths.ts#L8),[`65-66`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/packages/vscode-shim/src/utils/paths.ts#L65-L66)), plus
 `~/.vscode-mock/workspace-storage/<hash>/`, `logs/`, and
-`global-storage/secrets.json` (`vscode-shim/src/storage/SecretStorage.ts:47`).
+`global-storage/secrets.json` ([`vscode-shim/src/storage/SecretStorage.ts:47`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/packages/vscode-shim/src/storage/SecretStorage.ts#L47)).
 `~/.roo` holds CLI config and global rules only
-(`apps/cli/src/lib/storage/config-dir.ts:5`). The legacy transcript name
+([`apps/cli/src/lib/storage/config-dir.ts:5`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/apps/cli/src/lib/storage/config-dir.ts#L5)). The legacy transcript name
 `claude_messages.json` is read and then deleted on upgrade
-(`src/core/task-persistence/apiMessages.ts:73-91`).
+([`src/core/task-persistence/apiMessages.ts:73-91`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/core/task-persistence/apiMessages.ts#L73-L91)).
 
 ## 3. Record schema
 
 `api_conversation_history.json` is the Anthropic `MessageParam[]` shape as
-in Cline (`apiMessages.ts:12`), extended with `ts` (ms), `isSummary`, `id`,
+in Cline ([`apiMessages.ts:12`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/core/task-persistence/apiMessages.ts#L12)), extended with `ts` (ms), `isSummary`, `id`,
 `type:"reasoning"`, `summary`, `encrypted_content`, `reasoning_details`,
 `reasoning_content`, `condenseId`, `condenseParent`, `truncationId`,
-`truncationParent`, `isTruncationMarker` (`apiMessages.ts:13-37`). Tool calls
+`truncationParent`, `isTruncationMarker` ([`apiMessages.ts:13-37`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/core/task-persistence/apiMessages.ts#L13-L37)). Tool calls
 are mostly XML inside text blocks.
 
-`ui_messages.json` (`packages/types/src/message.ts:249-274`): `ts, type, ask,
+`ui_messages.json` ([`packages/types/src/message.ts:249-274`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/packages/types/src/message.ts#L249-L274)): `ts, type, ask,
 say, text, images, partial, reasoning, conversationHistoryIndex,
 checkpoint{}, progressStatus, contextCondense{cost, prevContextTokens,
 newContextTokens, summary, condenseId}, contextTruncation, isProtected,
-apiProtocol, isAnswered`. Asks `:27-40`; says `:144-174` add
+apiProtocol, isAnswered`. Asks [`:27-40`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/packages/types/src/message.ts#L27-L40); says [`:144-174`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/packages/types/src/message.ts#L144-L174) add
 `subtask_result`, `checkpoint_saved`, `condense_context`,
 `codebase_search_result`, `api_req_retried`. `ClineSayTool`
-(`packages/types/src/vscode-extension-host.ts:693-760`) adds `appliedDiff`,
+([`packages/types/src/vscode-extension-host.ts:693-760`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/packages/types/src/vscode-extension-host.ts#L693-L760)) adds `appliedDiff`,
 `codebaseSearch`, `newTask`, `switchMode`, `finishTask`, `batchFiles[]`;
-`ClineApiReqInfo` (`:780-790`) adds `apiProtocol`. No model name appears
+`ClineApiReqInfo` ([`:780-790`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/packages/types/src/vscode-extension-host.ts#L780-L790)) adds `apiProtocol`. No model name appears
 anywhere in Roo transcripts; `HistoryItem.apiConfigName` is a profile name.
 
-`HistoryItem` (`packages/types/src/history.ts:7-29`): `id, rootTaskId?,
+`HistoryItem` ([`packages/types/src/history.ts:7-29`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/packages/types/src/history.ts#L7-L29)): `id, rootTaskId?,
 parentTaskId?, number, ts, task, tokensIn, tokensOut, totalCost, size?,
 workspace?, mode?, apiConfigName?, status?, delegatedToId?, childIds?, ...`.
 `_index.json` is `{version:1, updatedAt, entries: HistoryItem[]}`
-(`TaskHistoryStore.ts:14-18`). `task_metadata.json` holds only
-`files_in_context` (`src/core/context-tracking/FileContextTracker.ts:117-135`).
+([`TaskHistoryStore.ts:14-18`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/core/task-persistence/TaskHistoryStore.ts#L14-L18)). `task_metadata.json` holds only
+`files_in_context` ([`src/core/context-tracking/FileContextTracker.ts:117-135`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/core/context-tracking/FileContextTracker.ts#L117-L135)).
 
 Timestamps are millisecond epochs. No git branch is recorded.
 
@@ -72,7 +72,7 @@ None. The VS Code side keeps secrets in SecretStorage (`state.vscdb`).
 
 `claude_messages.json` became `api_conversation_history.json` (deleted on
 read); globalState `taskHistory` became `history_item.json` plus
-`_index.json` with `version: 1` (`TaskHistoryStore.ts:320-360`).
+`_index.json` with `version: 1` ([`TaskHistoryStore.ts:320-360`](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/core/task-persistence/TaskHistoryStore.ts#L320-L360)).
 `.roo-code` has no references in current source and is legacy only.
 
 ## 7. Secrets

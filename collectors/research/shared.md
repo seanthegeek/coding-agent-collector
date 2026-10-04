@@ -47,22 +47,7 @@ None; these are small text files.
 
 Not applicable.
 
-## 7. Catalog review
-
-Current lines, all confirmed by the readers cited above:
-
-```
-shared|.agents
-shared|.config/AGENTS.md
-shared|.config/agents
-shared|.env
-```
-
-Credential glob `.env` confirmed. Nothing to add. Note for the analyzer: a
-directory holding only `shared` matches is treated as a project, not a
-home.
-
-## 8. Confidence
+## 7. Confidence
 
 High. The only judgement is attribution: a `shared` match says several agents
 may have read the file, not which one did.

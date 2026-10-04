@@ -8,47 +8,47 @@ catalog collects. Paths cited are relative to the microsoft/vscode clone.
 
 ## 1. Source
 
-microsoft/vscode at `d7622a529314a4abcefd7ca9e3d7344bc9ccba9e`, MIT
-(`LICENSE.txt`). Open source. The Copilot Chat extension itself is closed;
+microsoft/vscode at [`d7622a529314a4abcefd7ca9e3d7344bc9ccba9e`](https://github.com/microsoft/vscode/commit/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e), MIT
+([`LICENSE.txt`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/LICENSE.txt)). Open source. The Copilot Chat extension itself is closed;
 the `modelId`, `agent.id` and `responderUsername` string values in the
 fixture are therefore invented.
 
 ## 2. Transcript files
 
-`common/model/chatSessionStore.ts`, under the user data directory
+[`common/model/chatSessionStore.ts`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts), under the user data directory
 (`~/.config/Code/`, `Library/Application Support/Code/`,
 `AppData/Roaming/Code/`, likewise for Insiders and VSCodium):
 
 - Workspace: `User/workspaceStorage/<hash>/chatSessions/<sessionId>.jsonl`
   (1.109 and later, an append log) or `<sessionId>.json` (before 1.109, flat
-  JSON) (`:72-73`, `:731-741`). Log mode is the default
+  JSON) ([`:72-73`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L72-L73), [`:731-741`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L731-L741)). Log mode is the default
   (`getValue('chat.useLogSessionStorage') !== false`, registered nowhere
   else).
 - Empty window: `User/globalStorage/emptyWindowChatSessions/<sessionId>.jsonl|json`
-  (`:72`); older `User/workspaceStorage/no-workspace/chatSessions/*.json`
-  (`:75-76`, `:714-729`).
+  ([`:72`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L72)); older `User/workspaceStorage/no-workspace/chatSessions/*.json`
+  ([`:75-76`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L75-L76), [`:714-729`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L714-L729)).
 - Transferred: `User/globalStorage/transferredChatSessions/<sessionId>.json`
-  (`:78`, `:745-750`).
+  ([`:78`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L78), [`:745-750`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L745-L750)).
 
 One file is one chat session.
 
 ## 3. Record schema
 
-`common/model/chatModel.ts`. Top level `ISerializableChatData3`
-`:2196-2227`: `version: 3`, `sessionId`, `creationDate` (ms epoch),
+[`common/model/chatModel.ts`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatModel.ts). Top level `ISerializableChatData3`
+[`:2196-2227`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatModel.ts#L2196-L2227): `version: 3`, `sessionId`, `creationDate` (ms epoch),
 `initialLocation`, `requests: ISerializableChatRequestData[]`,
 `responderUsername`, `customTitle?`, `hasPendingEdits?`, `inputState?`,
 `repoData?`, `pendingRequests?`, `workingDirectory?` (URI string). Written in
-that order by `storageSchema` (`chatSessionOperationLog.ts:284-296`).
+that order by `storageSchema` ([`chatSessionOperationLog.ts:203-216`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionOperationLog.ts#L203-L216)).
 
-`ISerializableChatRequestData` `:2037-2094`, one user turn plus response:
+`ISerializableChatRequestData` [`:2037-2094`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatModel.ts#L2037-L2094), one user turn plus response:
 `requestId`, `timestamp?` (ms, request start), `message: string | {text,
-parts[]}` (`requestParser/chatParserTypes.ts:20-23`), `variableData:
+parts[]}` ([`requestParser/chatParserTypes.ts:20-23`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/requestParser/chatParserTypes.ts#L20-L23)), `variableData:
 {variables: [{id, name, fullName?, value, range?}]}`
-(`attachments/chatVariableEntries.ts:63-75`), `agent?: {id, name, fullName?,
-extensionId, ...}` (`participants/chatAgents.ts:63-71`), `modelId?`
-(user-selected model id, `chatServiceImpl.ts:1291`), `modeInfo?: {kind,
-telemetryModeId: 'ask'|'agent'|'edit'|'custom'|...}` (`chatModel.ts:394-401`),
+([`attachments/chatVariableEntries.ts:63-75`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/attachments/chatVariableEntries.ts#L63-L75)), `agent?: {id, name, fullName?,
+extensionId, ...}` ([`participants/chatAgents.ts:63-71`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/participants/chatAgents.ts#L63-L71)), `modelId?`
+(user-selected model id, [`chatServiceImpl.ts:1291`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/chatService/chatServiceImpl.ts#L1291)), `modeInfo?: {kind,
+telemetryModeId: 'ask'|'agent'|'edit'|'custom'|...}` ([`chatModel.ts:394-401`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatModel.ts#L394-L401)),
 `response: SerializedChatResponsePart[]`, `responseId?`,
 `responseTimestamp?` (ms), `result?: {errorDetails?, timings?, metadata?}`,
 `modelState?`, `vote?`, `followups?`, `usedContext?`, `contentReferences?`,
@@ -57,24 +57,24 @@ telemetryModeId: 'ask'|'agent'|'edit'|'custom'|...}` (`chatModel.ts:394-401`),
 `requestSource?`, `terminalExecutionId?`, `confirmation?`, deprecated
 `isHidden?`, `isCanceled?`.
 
-Response parts (`:2064`): a bare `IMarkdownString` `{value, isTrusted?, ...}`
-for assistant text (`chatSessionOperationLog.ts:45`); objects keyed by
+Response parts ([`:2064`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatModel.ts#L2064)): a bare `IMarkdownString` `{value, isTrusted?, ...}`
+for assistant text ([`chatSessionOperationLog.ts:45`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionOperationLog.ts#L45)); objects keyed by
 `kind`: `"thinking"` `{value?: string|string[], id?, reasoningDurationMs?}`
-(`chatService.ts:635-644`); `"toolInvocationSerialized"` `{toolCallId,
+([`chatService.ts:635-644`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/chatService/chatService.ts#L635-L644)); `"toolInvocationSerialized"` `{toolCallId,
 toolId, invocationMessage, pastTenseMessage?, isComplete, isConfirmed,
 resultDetails?` (URI[] or `{input: string, output: [...], isError?}`,
-`tools/languageModelToolsService.ts:283-290`), `resultError?`,
+[`tools/languageModelToolsService.ts:283-290`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/tools/languageModelToolsService.ts#L283-L290)), `resultError?`,
 `toolSpecificData?` (`{kind:'terminal', commandLine:{original,
-userEdited?}, cwd?}` `chatService.ts:686-700`; `{kind:'input', rawInput}`
-`:847-850`), `subAgentInvocationId?}` (`chatService.ts:1196-1215`); plus
+userEdited?}, cwd?}` [`chatService.ts:686-700`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/chatService/chatService.ts#L686-L700); `{kind:'input', rawInput}`
+[`:847-850`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/chatService/chatService.ts#L847-L850)), `subAgentInvocationId?}` ([`chatService.ts:1196-1215`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/chatService/chatService.ts#L1196-L1215)); plus
 `textEditGroup`, `codeblockUri`, `progressMessage`, `confirmation`,
-`undoStop`, `inlineReference` and others (`chatSessionOperationLog.ts:62-95`).
+`undoStop`, `inlineReference` and others ([`chatSessionOperationLog.ts:62-95`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionOperationLog.ts#L62-L95)).
 Tool call and result are the same object: the call is `toolCallId`, `toolId`
 and `toolSpecificData`, the result is `resultDetails`, `resultError` and
 `isComplete`. No git branch field; `repoData` is unspecified here.
 
-JSONL framing (`common/model/objectMutationLog.ts:196-215`, read
-`:340-385`): each line is `{"kind":0,"v":<full session>}` (Initial),
+JSONL framing ([`common/model/objectMutationLog.ts:196-215`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/objectMutationLog.ts#L196-L215), read
+[`:340-385`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/objectMutationLog.ts#L340-L385)): each line is `{"kind":0,"v":<full session>}` (Initial),
 `{"kind":1,"k":[path...],"v":...}` (Set), `{"kind":2,"k":[...],"v":[items],
 "i"?:index}` (Push; `i` truncates from that index) or `{"kind":3,"k":[...]}`
 (Delete). Replay in order to rebuild the object; `k` is a path of keys and
@@ -84,33 +84,33 @@ array indexes, for example `["requests",3,"response"]`.
 
 `workspaceStorage/<hash>/workspace.json` is `{"folder": "<file URI>"}` or
 `{"workspace": "<.code-workspace URI>"}`
-(`platform/storage/electron-main/storageMain.ts:416,472-474`); the agents
+([`platform/storage/electron-main/storageMain.ts:416`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/platform/storage/electron-main/storageMain.ts#L416),[`472-474`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/platform/storage/electron-main/storageMain.ts#L472-L474)); the agents
 window also records `workingDirectory` in the session. Tool call and result
 share one object; `toolCallId` is the join key to extension telemetry.
 `agent.id` and `responderUsername` identify the participant (Copilot).
 
 ## 5. SQLite stores
 
-`state.vscdb` (`ItemTable(key, value)`, `base/parts/storage/node/storage.ts:73`)
+`state.vscdb` (`ItemTable(key, value)`, [`base/parts/storage/node/storage.ts:73`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/base/parts/storage/node/storage.ts#L73))
 in `workspaceStorage/<hash>/` and `globalStorage/`
-(`storageMain.ts:285,353,415`). Keys: `interactive.sessions` is the legacy
+([`storageMain.ts:285`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/platform/storage/electron-main/storageMain.ts#L285),[`353`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/platform/storage/electron-main/storageMain.ts#L353),[`415`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/platform/storage/electron-main/storageMain.ts#L415)). Keys: `interactive.sessions` is the legacy
 JSON blob of all sessions from before the file store
-(`chatServiceImpl.ts:67,341`, migrated by `chatSessionStore.ts:611-633`);
+([`chatServiceImpl.ts:67`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/chatService/chatServiceImpl.ts#L67),[`341`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/chatService/chatServiceImpl.ts#L341), migrated by [`chatSessionStore.ts:611-633`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L611-L633));
 `chat.ChatSessionStore.index` is `{version:1, entries:{<sessionId>:{sessionId,
 title, lastMessageDate (ms), timing:{created, lastRequestStarted,
 lastRequestEnded}, workingDirectory?, isEmpty?, isExternal?, ...}}}`
-(`:36,780-836`); `ChatSessionStore.transferIndex` (`:37`).
+([`:39`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L39),[`780-836`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L780-L836)); `ChatSessionStore.transferIndex` ([`:40`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L40)).
 
 ## 6. Format versions
 
 `version` absent means v1, `2` adds `computedTitle`, `3` adds `customTitle`;
-`normalizeSerializableChatData` (`chatModel.ts:2422-2461`) fills a missing
+`normalizeSerializableChatData` ([`chatModel.ts:2422-2461`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatModel.ts#L2422-L2461)) fills a missing
 `sessionId` or `creationDate` (defaulting to one year ago). `message` may be
-a plain string in old data (`:2069`); `response` may be a string or string[]
-(`chatSessionStore.ts:688-699`). Storage moved from `state.vscdb` to `.json`
+a plain string in old data ([`:2069`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatModel.ts#L2069)); `response` may be a string or string[]
+([`chatSessionStore.ts:688-699`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L688-L699)). Storage moved from `state.vscdb` to `.json`
 to `.jsonl` (1.109 and later); flat `.json` is still read as a fallback
-(`:653-675`). `isConfirmed` was boolean before 1.104; `source` was undefined
-before 1.104 (`chatService.ts:1204-1209`).
+([`:653-675`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/model/chatSessionStore.ts#L653-L675)). `isConfirmed` was boolean before 1.104; `source` was undefined
+before 1.104 ([`chatService.ts:1204-1209`](https://github.com/microsoft/vscode/blob/d7622a529314a4abcefd7ca9e3d7344bc9ccba9e/src/vs/workbench/contrib/chat/common/chatService/chatService.ts#L1204-L1209)).
 
 ## 7. Secrets
 

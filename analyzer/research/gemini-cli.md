@@ -6,97 +6,97 @@ Paths cited are relative to the repository clone.
 
 ## 1. Source
 
-google-gemini/gemini-cli at `fb972b2f87fe7d5b06d37eac711490162d98de2c`
+google-gemini/gemini-cli at [`fb972b2f87fe7d5b06d37eac711490162d98de2c`](https://github.com/google-gemini/gemini-cli/commit/fb972b2f87fe7d5b06d37eac711490162d98de2c)
 (2026-10-02), version 0.64.0-nightly.20260929, Apache-2.0. Open source.
 
 ## 2. Transcript files
 
-Base directory `~/.gemini` (`packages/core/src/config/storage.ts:54-60`);
+Base directory `~/.gemini` ([`packages/core/src/config/storage.ts:54-60`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L54-L60));
 under the macOS `SANDBOX=sandbox-exec` sandbox it is `~/.cache/.gemini`
-(storage.ts:97-101). The project identifier is now a slug, not a hash:
+([storage.ts:97-101](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L97-L101)). The project identifier is now a slug, not a hash:
 `~/.gemini/projects.json` maps `{ "projects": { "<abs path>": "<slug>" } }`
-(storage.ts:289-299; `projectRegistry.ts:16-18,304-316,414-421`; slug is the
+([storage.ts:289-299](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L289-L299); [`projectRegistry.ts:16-18`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/projectRegistry.ts#L16-L18),[`304-316`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/projectRegistry.ts#L304-L316),[`414-421`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/projectRegistry.ts#L414-L421); slug is the
 lower-cased basename with non-alphanumeric runs replaced by `-`, suffixed
 `-1`, `-2` on collision). Each slug directory carries a marker
 `~/.gemini/tmp/<slug>/.project_root` whose content is the absolute project
-path (projectRegistry.ts:24,372-412). Legacy `tmp/<sha256(projectRoot)>`
+path ([projectRegistry.ts:24](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/projectRegistry.ts#L24),[372-412](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/projectRegistry.ts#L372-L412)). Legacy `tmp/<sha256(projectRoot)>`
 directories are copied to the slug directory on first run and left in place
-(storage.ts:310-324; `storageMigration.ts:20-52`; `utils/paths.ts:318-320`),
+([storage.ts:310-324](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L310-L324); [`storageMigration.ts:20-52`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storageMigration.ts#L20-L52); [`utils/paths.ts:318-320`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/utils/paths.ts#L318-L320)),
 so both may exist.
 
 - Session: `~/.gemini/tmp/<slug>/chats/session-<YYYY-MM-DDTHH-MM>-<shortId8>.jsonl`,
-  one file per session (`services/chatRecordingService.ts:757-799`; prefix
-  `chatRecordingTypes.ts:12`). Collisions insert `-1-`, `-2-` before the
-  short id (795-797). Subagent sessions: `chats/<parentSessionId>/<sessionId>.jsonl`
-  (763-791).
+  one file per session ([`services/chatRecordingService.ts:757-799`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L757-L799); prefix
+  [`chatRecordingTypes.ts:12`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts#L12)). Collisions insert `-1-`, `-2-` before the
+  short id ([795-797](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L795-L797)). Subagent sessions: `chats/<parentSessionId>/<sessionId>.jsonl`
+  ([763-791](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L763-L791)).
 - Legacy session: same name with `.json`, one JSON object
-  (`ConversationRecord`) (1566-1616); on resume it is re-emitted into a
-  sibling `.jsonl` (708-735).
+  (`ConversationRecord`) ([1566-1616](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L1566-L1616)); on resume it is re-emitted into a
+  sibling `.jsonl` ([708-735](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L708-L735)).
 - Prompt history: `~/.gemini/tmp/<slug>/logs.json`, JSON array of `LogEntry`
-  (`core/logger.ts:15,21-27,148-149,229-233`).
+  ([`core/logger.ts:15`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L15),[`21-27`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L21-L27),[`148-149`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L148-L149),[`229-233`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L229-L233)).
 - `/chat save` checkpoints: `tmp/<slug>/checkpoint-<encodeURIComponent(tag)>.json`
-  (logger.ts:285-295,329-343; `cli/.../chatCommand.ts:142`).
+  ([logger.ts:285-295](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L285-L295),[329-343](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L329-L343); [`cli/.../chatCommand.ts:142`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/cli/src/ui/commands/chatCommand.ts#L142)).
 - Tool checkpoints: `tmp/<slug>/checkpoints/<ISO ts with : and . replaced>-<basename>-<tool>.json`
-  (`utils/checkpointUtils.ts:59-66,130-141`; storage.ts:364-366), backed by a
-  shadow git repository at `~/.gemini/history/<slug>` (storage.ts:326-330;
-  `gitService.ts:74-75`).
+  ([`utils/checkpointUtils.ts:59-66`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/utils/checkpointUtils.ts#L59-L66),[`130-141`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/utils/checkpointUtils.ts#L130-L141); [storage.ts:364-366](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L364-L366)), backed by a
+  shadow git repository at `~/.gemini/history/<slug>` ([storage.ts:326-330](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L326-L330);
+  [`gitService.ts:74-75`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/gitService.ts#L74-L75)).
 - Optional activity log: `tmp/<slug>/logs/session-<sessionId>.jsonl`
-  (`cli/src/utils/activityLogger.ts:693-699`). Schema not examined.
+  ([`cli/src/utils/activityLogger.ts:693-699`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/cli/src/utils/activityLogger.ts#L693-L699)). Schema not examined.
 - Externalised large tool output: `tmp/<slug>/tool-outputs/`
-  (`utils/fileUtils.ts:799,814`); shell history `tmp/<slug>/shell_history`
-  (storage.ts:480-482).
+  ([`utils/fileUtils.ts:799`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/utils/fileUtils.ts#L799),[`814`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/utils/fileUtils.ts#L814)); shell history `tmp/<slug>/shell_history`
+  ([storage.ts:480-482](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L480-L482)).
 
 ## 3. Record schema
 
-Session JSONL (`services/chatRecordingTypes.ts`). Line 1 is
-`PartialMetadataRecord` (156-165): `sessionId`, `projectHash` (sha256 of the
+Session JSONL ([`services/chatRecordingTypes.ts`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts)). Line 1 is
+`PartialMetadataRecord` ([156-165](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts#L156-L165)): `sessionId`, `projectHash` (sha256 of the
 project path), `startTime`, `lastUpdated` (ISO 8601), `summary?`,
 `directories?: string[]`, `kind?: 'main'|'subagent'`. Later lines are one of
-(discriminated at `chatRecordingService.ts:79-95`):
+(discriminated at [`chatRecordingService.ts:79-95`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L79-L95)):
 
-- `MessageRecord` = `BaseMessageRecord & ConversationRecordExtra` (44-87):
+- `MessageRecord` = `BaseMessageRecord & ConversationRecordExtra` ([44-87](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts#L44-L87)):
   `id` (UUID), `timestamp` (ISO 8601 via `toISOString`,
-  chatRecordingService.ts:1022), `content: PartListUnion` (string, Part or
+  [chatRecordingService.ts:1022](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L1022)), `content: PartListUnion` (string, Part or
   Part[]), `displayContent?`, `type: 'user'|'info'|'error'|'warning'|'gemini'`.
   For `type:'gemini'` also `toolCalls?: ToolCallRecord[]`, `thoughts?:
-  {subject, description, timestamp}[]` (`utils/thoughtUtils.ts:7-10`),
-  `tokens?: {input, output, cached, thoughts?, tool?, total}` (19-26),
+  {subject, description, timestamp}[]` ([`utils/thoughtUtils.ts:7-10`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/utils/thoughtUtils.ts#L7-L10)),
+  `tokens?: {input, output, cached, thoughts?, tool?, total}` ([19-26](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts#L19-L26)),
   `model?: string`.
-- `ToolCallRecord` (54-67): `id`, `name`, `args: object`, `result?:
+- `ToolCallRecord` ([54-67](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts#L54-L67)): `id`, `name`, `args: object`, `result?:
   PartListUnion|null`, `status` from `CoreToolCallStatus` =
   `validating|scheduled|error|success|executing|cancelled|awaiting_approval`
-  (`scheduler/types.ts:26-34`), `timestamp`, `agentId?`, `displayName?`,
+  ([`scheduler/types.ts:26-34`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/scheduler/types.ts#L26-L34)), `timestamp`, `agentId?`, `displayName?`,
   `description?`, `resultDisplay?` (string or `FileDiff{fileDiff, fileName,
-  filePath, originalContent, newContent}`, `tools/tools.ts:935-966`),
+  filePath, originalContent, newContent}`, [`tools/tools.ts:935-966`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/tools/tools.ts#L935-L966)),
   `renderOutputAsMarkdown?`.
 - `{ "$set": {...metadata fields..., "memoryScratchpad"?, legacy "messages"?} }`
-  (149-154); `{ "$patch": { id?, content?, toolCalls?:[{id,result}], updates?,
-  removeIds?, orderIds? } }` (138-147); `{ "$rewindTo": "<message id>" }`
-  (123-125) drops that message and everything after it
-  (chatRecordingService.ts:305-335).
+  ([149-154](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts#L149-L154)); `{ "$patch": { id?, content?, toolCalls?:[{id,result}], updates?,
+  removeIds?, orderIds? } }` ([138-147](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts#L138-L147)); `{ "$rewindTo": "<message id>" }`
+  ([123-125](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts#L123-L125)) drops that message and everything after it
+  ([chatRecordingService.ts:305-335](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L305-L335)).
 
-Current code records model text only as `content` (geminiChat.ts:1652-1656)
+Current code records model text only as `content` ([geminiChat.ts:1652-1656](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/geminiChat.ts#L1652-L1656))
 with tool calls in `toolCalls`; the reader also accepts `functionCall` and
 `thought: true` parts inside `content` ("modern session",
-`utils/sessionUtils.ts:138-144`). No cwd and no git branch are stored in the
+[`utils/sessionUtils.ts:138-144`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/utils/sessionUtils.ts#L138-L144)). No cwd and no git branch are stored in the
 session file.
 
 `logs.json` `LogEntry`: `sessionId`, `messageId` (per-session counter),
-`timestamp` (ISO), `type: 'user'`, `message` (logger.ts:17-27). User prompts
+`timestamp` (ISO), `type: 'user'`, `message` ([logger.ts:17-27](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L17-L27)). User prompts
 only.
 
 `checkpoint-<tag>.json`: `{ "history": Content[], "authType"?: string }`
-(logger.ts:29-32). `checkpoints/*.json` `ToolCallData`: `history?`,
+([logger.ts:29-32](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L29-L32)). `checkpoints/*.json` `ToolCallData`: `history?`,
 `clientHistory?: Content[]`, `commitHash?`, `toolCall: {name, args}`,
-`messageId?` (equals `prompt_id`) (checkpointUtils.ts:15-24,130-139).
+`messageId?` (equals `prompt_id`) ([checkpointUtils.ts:15-24](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/utils/checkpointUtils.ts#L15-L24),[130-139](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/utils/checkpointUtils.ts#L130-L139)).
 
 ## 4. Joins
 
 Session = file; `sessionId` from line 1, overridden by any later
-`$set.sessionId`, which is rewritten on resume (chatRecordingService.ts:739).
+`$set.sessionId`, which is rewritten on resume ([chatRecordingService.ts:737](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L737)).
 A tool call and its result are the same `toolCalls[]` element (`id`,
 `result`, `status`); the whole gemini message is re-appended whenever its
-tool calls change (1125-1200, 989-1005), so a parser must keep the last
+tool calls change ([1118-1187](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L1118-L1187), [989-1005](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingService.ts#L989-L1005)), so a parser must keep the last
 record per `id` and apply `$patch` and `$rewindTo`. Project path: the
 `tmp/<slug>/.project_root` content or a `projects.json` reverse lookup;
 legacy hash directories have no reverse map (compare sha256 of known cwds).
@@ -111,15 +111,15 @@ binary.
 
 Hash directories became slug directories (copied, both remain); single-object
 `session-*.json` became `.jsonl`; `$set.messages` full-history checkpoints are
-deprecated (chatRecordingTypes.ts:150-153); `checkpoint-<tag>` moved from a
-raw array to `{history, authType}` (logger.ts:359-372); legacy un-encoded
-`checkpoint-<tag>.json` names (logger.ts:312-313). No explicit version field.
+deprecated ([chatRecordingTypes.ts:150-153](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/chatRecordingTypes.ts#L150-L153)); `checkpoint-<tag>` moved from a
+raw array to `{history, authType}` ([logger.ts:359-372](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L359-L372)); legacy un-encoded
+`checkpoint-<tag>.json` names ([logger.ts:312-313](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/core/logger.ts#L312-L313)). No explicit version field.
 
 ## 7. Secrets
 
-`~/.gemini/oauth_creds.json` (storage.ts:22,255-257), `mcp-oauth-tokens.json`,
-`a2a-oauth-tokens.json` (70-76), `gemini-credentials.json`
-(`services/fileKeychain.ts:20`), `google_accounts.json`. Checkpoints
+`~/.gemini/oauth_creds.json` ([storage.ts:22](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L22),[255-257](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L255-L257)), `mcp-oauth-tokens.json`,
+`a2a-oauth-tokens.json` ([70-76](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/config/storage.ts#L70-L76)), `gemini-credentials.json`
+([`services/fileKeychain.ts:20`](https://github.com/google-gemini/gemini-cli/blob/fb972b2f87fe7d5b06d37eac711490162d98de2c/packages/core/src/services/fileKeychain.ts#L20)), `google_accounts.json`. Checkpoints
 (`clientHistory`) and `toolCalls[].result` embed full tool output.
 
 ## 8. Parser plan

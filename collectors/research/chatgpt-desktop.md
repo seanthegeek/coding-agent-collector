@@ -34,24 +34,6 @@ None. The app does not write into repositories.
 
 Not applicable; conversations are chat transcripts without a workspace. If the Codex tab in the app records workspaces, it does so through the Codex app/CLI (`~/.codex/sessions` `cwd`, see codex-cli).
 
-## 7. Catalog review
-
-Current lines:
-- `chatgpt-desktop|Library/Application Support/com.openai.chat` — confirmed (pvieito, 9to5mac).
-- `chatgpt-desktop|AppData/Local/Packages/OpenAI.ChatGPT-Desktop_*/LocalCache/Roaming/ChatGPT` — confirmed (garr3ttmjo; wildcard covers the `_2p2nqsd0c76g0` publisher suffix).
-- exclude `*/Roaming/ChatGPT/{Cache,Code Cache,GPUCache,DawnGraphiteCache,DawnWebGPUCache}` — confirmed as standard Chromium dirs (medium).
-- secret `*/Roaming/ChatGPT/Network/Cookies*` — confirmed (standard; medium).
-
-Add:
-```
-chatgpt-desktop|Library/Caches/com.openai.chat             (optional; then exclude it)
-chatgpt-desktop|Library/Preferences/com.openai.chat.plist
-chatgpt-desktop|Library/HTTPStorages/com.openai.chat
-chatgpt-desktop|AppData/Local/Packages/OpenAI.ChatGPT-Desktop_*/LocalState
-exclude: Library/Caches/com.openai.chat
-secret: */Roaming/ChatGPT/Local State                       (OSCrypt key for Cookies)
-```
-
-## 8. Confidence
+## 7. Confidence
 
 High: macOS app-data dir and `conversations-v2-*` encryption (primary researcher post plus press); Windows root and IndexedDB/Local Storage paths (DFIR write-up). Medium: standard Chromium sibling directories and `Local State`; macOS Caches/Preferences/HTTPStorages (convention, uncited). Not determined: current (2026) macOS layout after the ChatGPT/Codex app merger; whether a `conversations-v3` or SQLite store exists; Windows `LocalState` contents; any Codex-specific data inside the ChatGPT app (the Codex desktop app writes to `~/.codex`, see codex-cli); the IndexedDB value schema.

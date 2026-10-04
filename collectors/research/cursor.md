@@ -45,22 +45,6 @@ Layout is identical on all OSes except the IDE app-data parent and the CLI `auth
 - `~/.cursor/projects/<name>` is the sanitized cwd (lossy: `/home/u/a-b` and `/home/u/a_b` collide).
 - IDE: `User/workspaceStorage/<id>/workspace.json` `folder`; `composerData` JSON has no reliable cwd.
 
-## 7. Catalog review
-
-- `cursor|.cursor` confirmed (bundle). `cursor|Library/Application Support/Cursor/User|logs`, `.config/Cursor/User|logs`, `AppData/Roaming/Cursor/User|logs` confirmed (L2-L4).
-- `project|.cursor`, `.cursorrules`, `.cursorignore` confirmed; `project|.cursorindexingignore` doubtful (legacy, no current evidence), harmless to keep.
-- Excludes `.cursor/extensions`, `.cursor/worktrees`, `*/Cursor/User/globalStorage/state.vscdb.backup` confirmed.
-- No cursor secret globs exist today: wrong by omission.
-
-Add:
-```
-cursor|.config/cursor
-cursor|AppData/Roaming/Cursor/auth.json
-cursor|.cursor-server/data/User
-cursor|.cursor_info
-```
-Excludes: `.cursor/plugins/marketplaces`, `.cursor-server/bin`, `.cursor-server/extensions`. Secret globs: `.cursor/auth.json`, `.config/cursor/auth.json`, `AppData/Roaming/Cursor/auth.json`, `.cursor/projects/*/mcp-auth.json`, `.cursor/mcp.json`, `.cursor_info`. Discovery: `.cursor/chats/*/*/meta.json` and `.cursor/acp-sessions/*/meta.json` key `cwd` (the former is already read).
-
-## 8. Confidence
+## 7. Confidence
 
 High: `~/.cursor` layout, chats/acp-sessions/store.db, projects sanitization, worktrees, hooks, ai-tracking, CLI `auth.json` and keychain logic (all L1 bundle); IDE app-data paths and `state.vscdb` keys (L3/L4, consistent across sources). Medium: `cursorAuth/*` keys (L4 only), `.cursor/extensions` and `.cursor-server` (convention plus L4). Low: `~/.cursor_info` (single L4 claim). Not determined: `store.db` blob encryption (`blobEncryptionKey` in `meta`, codeburn 986), whether Windows CLI uses `%APPDATA%\Cursor\auth.json` or the IDE's dir with the same name, and `.cursorindexingignore` status.

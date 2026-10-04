@@ -44,35 +44,6 @@ None written by the desktop app itself. Code sessions run Claude Code, which wri
 - `local-agent-mode-sessions/.../local_<uuid>.json` session state; `spaces/<projectId>/` for Cowork projects (docs). Exact key names undocumented.
 - `Local Storage/` holds "recent folders" (docs) in LevelDB.
 
-## 7. Catalog review
-
-Current lines:
-- `claude-desktop|Library/Application Support/Claude` — confirmed (MCP debugging doc).
-- `claude-desktop|Library/Application Support/Claude-3p`, `Library/Logs/Claude`, `Library/Logs/Claude-3p` — confirmed (data-storage, MCP docs).
-- `claude-desktop|.config/Claude` — confirmed (claude-desktop-debian README; official Linux .deb). `.config/Claude-3p` confirmed (docs).
-- `claude-desktop|AppData/Roaming/Claude` — confirmed (MCP docs `%APPDATA%\Claude`).
-- `claude-desktop|AppData/Roaming/Claude-3p` — confirmed as legacy location (docs note); `AppData/Local/Claude-3p` confirmed current.
-- exclude `*/Claude*/{Cache,Code Cache,GPUCache,DawnGraphiteCache,DawnWebGPUCache,claude-code,claude-code-vm,vm_bundles,sentry}` — confirmed by docs for the three app dirs; the Electron ones are standard names (medium).
-- secret `Library/Application Support/Claude*/config.json`, `.config/Claude*/config.json`, `AppData/Roaming/Claude*/config.json`, `AppData/Local/Claude*/config.json` — confirmed (issue 105, PR 6).
-- secret `.../Cookies*` — confirmed as a standard Electron artifact (medium).
-- secret `Library/Application Support/Claude*/host-creds-*.json`, `.../ccd-session-secrets/*` — confirmed by docs but only listed for macOS.
-
-Add:
-```
-secret: .config/Claude*/host-creds-*.json
-secret: .config/Claude*/ccd-session-secrets/*
-secret: AppData/Roaming/Claude*/host-creds-*.json
-secret: AppData/Roaming/Claude*/ccd-session-secrets/*
-secret: AppData/Local/Claude*/host-creds-*.json
-secret: AppData/Local/Claude*/ccd-session-secrets/*
-secret: */Claude*/Local State                     (OSCrypt key needed to decrypt config.json)
-secret: */Claude*/claude_desktop_config.json      (MCP env API keys)
-secret: */Claude*/local-agent-mode-sessions/*/.audit-key
-claude-desktop|Claude                             (~/Claude user outputs: artifacts, scheduled-task results)
-claude-desktop|Documents/Claude                   (legacy outputs dir)
-```
-Glob caution: `*/Claude*/...` must not match `ClaudeCode` system dirs or `.claude`; the existing patterns are anchored on the app-dir names so they are fine.
-
-## 8. Confidence
+## 7. Confidence
 
 High: app-dir and log locations per OS (docs), 3p layout and file names (docs), `config.json` token keys and OSCrypt scheme (two independent community reports plus docs statement on secure storage). Medium: that every 3p subdirectory name also appears in the standard build (docs say the two share a layout but document only 3p); Linux decryption key source. Not determined: file and key names inside `claude-code-sessions/`; whether standard builds on Windows have moved to `%LOCALAPPDATA%\Claude` as 3p did; IndexedDB schema.

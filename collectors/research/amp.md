@@ -67,37 +67,6 @@ Env relocation: `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `AMP_HOME`
 
 `~/.local/share/amp/history.jsonl`: JSONL, key `cwd` per entry (B, medium). `~/.cache/amp/logs/threads/<T-id>.log` lines carry a thread id; cwd content unverified. No local thread index.
 
-## 7. Catalog review
-
-Current:
-- `amp|.config/amp` — confirmed (B, D).
-- `amp|.local/share/amp` — confirmed, all OSes (B).
-- `amp|.cache/amp/logs` — confirmed (B); also on Windows since `us` has no platform branch.
-- `amp|AppData/Local/amp/logs` — doubtful: `%LOCALAPPDATA%\amp` receives only `bin/` (ripgrep); harmless but empty.
-- `project|.amp` — confirmed.
-- `.cache/amp/runner-desktop`, `.cache/amp/desktop` — confirmed (D, B).
-- `.local/share/amp/secrets.json`, `.local/share/amp/accounts.json` — confirmed (B).
-- `.config/amp/secrets.json` — wrong: no such path in the binary; harmless.
-
-Add:
-```
-amp|.amp
-amp|.config/AGENTS.md
-amp|.config/AGENT.md
-amp|.config/agents
-amp|.agents
-amp|.cache/amp/terminal
-project|.agents
-project|AGENTS.md
-.amp/bin
-.cache/amp/bin
-.cache/amp/obelisk-runs
-.local/share/amp/accounts/*/secrets.json
-.local/share/amp/ide/*
-.amp/oauth/*
-```
-Discovery: `~/.local/share/amp/history.jsonl` key `cwd`.
-
-## 8. Confidence
+## 7. Confidence
 
 High: config/data/cache resolution, `settings.json(c)`, `secrets.json`, `accounts.json`, `history.jsonl`, `logs/cli.log`, `logs/threads`, `~/.amp/bin`, `~/.amp/oauth`, keyring use, server-side threads. Medium: `history.jsonl` `cwd` key (inferred from size accounting and type); `accounts/<dir>/secrets.json` naming; `ide/` contents. Low: whether `AppData/Local/amp` ever holds anything but `bin`. Not determined: exact JSON schema of `secrets.json`/`accounts.json`; whether `claude-diagnostics` is created outside orb sandboxes; Windows keyring behaviour (Credential Manager via keyring-rs assumed).

@@ -37,37 +37,6 @@ Inside `~/.copilot` (docs table plus bundle):
 
 `session-state/<id>/workspace.yaml` persisted session cwd (app.js `workspaceLoadPersistedSessionCwd(FP(Wp(e,t),"workspace.yaml"))`); key name not visible in the JS (handled natively), grep for an absolute path. `permissions-config.json` is "organized by project location" (docs). `session-store.db` rows carry `session_id` and checkpoints (v2).
 
-## 7. Catalog review
-
-Current lines:
-- `copilot-cli|.copilot` — confirmed.
-- `project|.github/copilot-instructions.md` — confirmed.
-- No exclusions or secrets exist for copilot-cli.
-
-Add:
-```
-copilot-cli|.config/.copilot                 (pre-migration XDG config)
-copilot-cli|.local/state/.copilot            (pre-migration XDG state)
-copilot-cli|.cache/copilot                   (copilot-user-cache.json; pkg excluded)
-copilot-cli|Library/Caches/copilot
-copilot-cli|AppData/Local/copilot
-exclude: .copilot/pkg
-exclude: .cache/copilot/pkg
-exclude: Library/Caches/copilot/pkg
-exclude: AppData/Local/copilot/pkg
-exclude: .copilot/installed-plugins
-secret: .copilot/config.json
-secret: .copilot/mcp-oauth-config*
-secret: .copilot/mcp-config.json
-project|.github/copilot
-project|.github/instructions
-project|.github/mcp.json
-project|.github/hooks
-project|.github/skills
-project|.github/agents
-project|.github/lsp.json
-```
-
-## 8. Confidence
+## 7. Confidence
 
 High: config home and `COPILOT_HOME`, directory names (docs plus bundle), XDG migration list, pkg cache locations, log dir, keyring/plaintext token model. Medium: exact `session-state/<id>/` file set (`events.jsonl`, `workspace.yaml`, `plan.md` seen in code; `checkpoints`/`files` inferred from commands); `state/ide` vs `ide/` (local shows `ide/` at top level, code joins through a "state" resolver). Not determined: `workspace.yaml` key for cwd; `session-store.db` schema beyond `checkpoints(session_id, checkpoint_number)`; `config.json` token field name.

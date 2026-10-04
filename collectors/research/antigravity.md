@@ -129,48 +129,7 @@ in favour of `cache/projects.json`). No per-project database.
 - `conversation_summaries.db` and per-conversation `*.db`: see the analyzer
   schema notes (SQLite-only; v2 parser).
 
-## 7. Catalog review
-
-- `antigravity|.gemini/antigravity-cli`: confirmed (live, binary, docs).
-- `antigravity|.antigravity`: doubtful; no source names a `~/.antigravity`
-  dir (the VS Code-fork extensions dir is the only candidate). Keep as a
-  cheap probe.
-- `antigravity|.cache/antigravity`: confirmed to exist (live), low value.
-- `.config/Antigravity/User`, `Library/Application Support/Antigravity/User`,
-  `AppData/Roaming/Antigravity/User` and the three `/logs` lines: doubtful
-  for 2.x; the app dir is `Antigravity IDE` (two community sources). Keep
-  for pre-2.0 hosts.
-- exclude `.gemini/antigravity-cli/bin`: confirmed. `.antigravity/extensions`: doubtful (depends on the line above).
-- secret `*.gemini/antigravity-cli/antigravity-oauth-token`: confirmed (live; keyring fallback).
-
-Add:
-```
-antigravity|.gemini/antigravity-ide
-antigravity|.gemini/antigravity
-antigravity|.gemini/antigravity-backup
-antigravity|.gemini/config
-antigravity|.config/Antigravity IDE/User
-antigravity|.config/Antigravity IDE/logs
-antigravity|Library/Application Support/Antigravity IDE/User
-antigravity|Library/Application Support/Antigravity IDE/logs
-antigravity|AppData/Roaming/Antigravity IDE/User
-antigravity|AppData/Roaming/Antigravity IDE/logs
-project|.antigravityignore
-project|.agents
-# excluded
-.gemini/antigravity*/brain/*/.system_generated/worktrees
-AppData/Local/agy
-*/Antigravity IDE/User/globalStorage/*/Cache*     (if the VS Code cache rule does not already match)
-# discovery
-.gemini/antigravity-cli/history.jsonl         "workspace"
-.gemini/antigravity-cli/settings.json         "trustedWorkspaces"
-.gemini/antigravity-cli/cache/projects.json   object keys
-.gemini/config/projects/*.json                "workspace_paths" / "workspace_uris"
-```
-Note `.gemini/config` is currently swept by `gemini-cli|.gemini` and
-attributed to Gemini CLI; the nested entry fixes attribution.
-
-## 8. Confidence
+## 7. Confidence
 
 High: the CLI layout (live plus binary literals), keyring service and file
 fallback, `~/.gemini/config` contents, `antigravity-ide/conversations` and

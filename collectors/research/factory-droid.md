@@ -31,7 +31,7 @@ All under `~/.factory/` (B, class `Ne`, `IH()` maps list `Uf` onto `join(home,".
 
 ## 4. Exclusions
 
-`.factory/updates`, `.factory/bin`, `.factory/tools`, `.factory/snapshots`, `.factory/worktrees`, `.factory/generated-images`, `.factory/cache/sounds`, `.factory/software-factory/*/*/repos`, `.factory/software-factory/*/*/worktrees`, `.factory/temp` (see section 7 on `temp/env`).
+`.factory/updates`, `.factory/bin`, `.factory/tools`, `.factory/snapshots`, `.factory/worktrees`, `.factory/generated-images`, `.factory/cache/sounds`, `.factory/software-factory/*/*/repos`, `.factory/software-factory/*/*/worktrees`, `.factory/temp` (see section 3 on `temp/env`).
 
 ## 5. Project-local files
 
@@ -43,31 +43,6 @@ All under `~/.factory/` (B, class `Ne`, `IH()` maps list `Uf` onto `join(home,".
 - Directory name `sessions/<projectKey>` encodes cwd (ambiguous when the path contains `-`).
 - `cache/session-index/index.db` table `sessions`, columns `project_key`, `cwd`; `cache/session-discovery-index.json` entries `cwd`.
 
-## 7. Catalog review
-
-Current:
-- `factory-droid|.factory` — confirmed (B, D).
-- `project|.factory` — confirmed. `project|.droid.yaml` — doubtful: legacy, docs only, absent from binary; harmless.
-- `.factory/updates`, `.factory/temp`, `.factory/worktrees`, `.factory/snapshots`, `.factory/generated-images` — confirmed as low-value or large (B). `.factory/temp` note: `temp/env/droid-env-*.sh` holds environment dumps; keep excluded for size/secrets unless env evidence is wanted.
-- `.factory/cache` — wrong as a whole: it swallows `cache/session-index/index.db` and `cache/session-discovery-index.json` (session→cwd index). Replace with `.factory/cache/sounds`.
-- `.factory/auth.json` — confirmed (legacy). `.factory/prem-auth/*/credentials.*` — confirmed. `.factory/mcp-oauth*` — confirmed (`mcp-oauth.v2.file`, `.key`).
-
-Add:
-```
-.factory/bin
-.factory/tools
-.factory/cache/sounds
-.factory/software-factory/*/*/repos
-.factory/software-factory/*/*/worktrees
-.factory/auth.v2.*
-.factory/auth.encrypted
-.factory/config.json
-.factory/temp/env/*
-project|.factory-plugin
-project|AGENTS.md
-```
-Remove `.factory/cache` from excludes. Discovery: `~/.factory/sessions/*/*.jsonl` and `~/.factory/sessions/*.jsonl` first line key `cwd`; v2 parser: `cache/session-index/index.db` `sessions.cwd`.
-
-## 8. Confidence
+## 7. Confidence
 
 High: `~/.factory` on all OSes, `FACTORY_HOME_OVERRIDE`, session layout and projectKey encoding, `index.db` path and columns, `auth.v2.*` and `mcp-oauth.v2.*` names, keyring-with-file-fallback, `state/history.json`, log file names, exclusion dirs. Medium: `software-factory` subtree sizes; `ide/` contents; `prem-auth` layout (from strings, matches prior finding). Low: whether `auth.json` is still written by 0.233.0 (only in cleanup list). Not determined: full transcript JSONL schema beyond the first line; Windows keyring backend (keytar → Credential Manager assumed); whether `%USERPROFILE%\bin\droid.exe` is the only Windows binary location.

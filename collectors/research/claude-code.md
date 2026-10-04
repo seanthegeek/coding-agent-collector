@@ -43,39 +43,6 @@ What holds evidence:
 - Transcript records: `projects/<key>/<id>.jsonl` lines carry `"cwd"`, `"sessionId"`, `"parentUuid"`, `"isSidechain"`, `"timestamp"`, `"type"` (cc:482870 parser, key counts in cc.strings). The dir key is lossy (dashes), so read `cwd` from the first record.
 - Claude Desktop `claude-code-sessions/` records each Code session's working folder (docs data-storage) and points back to `~/.claude/projects/`.
 
-## 7. Catalog review
-
-Current lines:
-- `claude-code|.claude` — confirmed (cc:472945).
-- `claude-code|.claude.json*` — confirmed (cc:477075 suffix variants, `.claude.json.backup` cc:483303).
-- `project|.claude`, `project|CLAUDE.md`, `project|CLAUDE.local.md`, `project|.mcp.json` — confirmed.
-- exclude `.claude/cache` — confirmed low value (gateway/model caches).
-- exclude `.claude/plugins/marketplaces`, `.claude/plugins/*/node_modules` — confirmed.
-- exclude `.claude/worktrees` — doubtful: worktrees are project-local `.claude/worktrees/`, not under home; the home glob matches nothing. Keep and add the project form.
-- secret `.claude/.credentials.json` — confirmed (docs /iam, cc:436315).
-
-Add:
-```
-claude-code|.local/share/claude            (installer metadata; versions excluded below)
-secret: .claude/.device-keys.json
-secret: .claude/hfi-auth.json
-secret: .claude/.session_ingress_token
-secret: .claude/remote/.oauth_token
-secret: .claude/remote/.api_key
-secret: .claude.json                       (sign-in session + MCP env)
-secret: .claude/settings.json              (apiKeyHelper, env keys) -- optional, collected anyway
-exclude: .claude/plugins/cache
-exclude: .claude/local/node_modules
-exclude: .claude/image-cache
-exclude: .claude/paste-cache
-exclude: .claude/chrome
-exclude: .local/share/claude/versions
-exclude: */.claude/worktrees
-exclude: */.claude/checkpoints
-project|.claude/scheduled_tasks.json       (covered by project|.claude already)
-```
-System dirs for a future `system` section: `/etc/claude-code`, `/Library/Application Support/ClaudeCode`, `C:/Program Files/ClaudeCode`.
-
-## 8. Confidence
+## 7. Confidence
 
 High: config-dir resolution, directory and file name sets, projects key scheme, transcript naming, keychain service construction, `.credentials.json`, managed paths, native installer paths (all from bundle literals plus docs, layout confirmed locally). Medium: exact keychain service string (built from `"Claude Code"` + `"-credentials"`; not seen as one literal), contents of `storage-v2`, `seed-admin`, `remote`, `systemd`, `daemon` (names only). Not determined: whether `.claude.json` suffix variants (`.claude<suffix>.json`) appear on normal installs; Windows-only paths beyond `%USERPROFILE%\.claude` (none found); size of `dump-prompts` in practice.

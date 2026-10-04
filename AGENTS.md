@@ -264,7 +264,9 @@ the evidence gathering is different.
 **2. Give each researcher the same brief.** It should contain: the current
 catalog lines for that tool (from `--list`), the repository to shallow-clone
 into the scratchpad, the grep terms to start with, and the instruction to
-cite file and line for every claim and never rely on memory. Grep terms that
+cite file and line for every claim, as a link to that line at the reviewed
+commit (`https://github.com/<owner>/<repo>/blob/<full sha>/<path>#L<n>`), and
+never rely on memory. Grep terms that
 find the paths module quickly:
 
 ```
@@ -309,7 +311,10 @@ records it.
 arrives and do not touch the script until all are in, so the tables change
 once. Then split every group report into one document per catalog agent,
 named exactly as the agent appears in `--list`, keeping the numbered section
-structure, the citations and the fixtures: path research (where state lives,
+structure, the citations and the fixtures, but dropping section 7 once its
+proposals are in the tables, so no committed document reviews a catalog
+that has moved on (the collector documents number confidence as section 7
+for that reason): path research (where state lives,
 credentials, exclusions, project files, discovery) goes to
 `collectors/research/<agent>.md`, record schema research (how transcripts
 are encoded and how a parser reads them) goes to
