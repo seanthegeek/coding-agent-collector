@@ -46,6 +46,8 @@ analyzer/
   tests/                       unittest suite with synthetic fixtures; tests/run.sh
   pyproject.toml               installable as analyze-agent-artifacts
   requirements.txt             third-party dependencies, none yet
+lab/                           Docker sandbox for running CLI agents against a scratch
+                               home and exporting it for the collector; see lab/README.md
 README.md                      project overview; points at the per-part READMEs
 AGENTS.md                      this file
 CLAUDE.md                      imports this file for Claude Code
@@ -238,7 +240,9 @@ find. The validation for every current entry is recorded in the table in
    in `collectors/README.md`, and close the matching GitHub issue.
 
 Every catalog entry has been validated against source, a shipped bundle, or
-official documentation; `collectors/research/<agent>.md` records the evidence
+official documentation. When a real-install check is wanted, run the tool in
+the `lab/` sandbox and point the collector at the exported home rather than
+installing it on the workstation (Linux layout only); `collectors/research/<agent>.md` records the evidence
 for each agent and the collectors README table summarises the level. Real-install checks
 exist for Claude Code, Antigravity CLI, Codex CLI, Copilot CLI and Ollama.
 Agents whose project paths live only in SQLite (Zed, Goose, OpenCode, Kilo

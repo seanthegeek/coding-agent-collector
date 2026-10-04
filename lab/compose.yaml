@@ -1,0 +1,58 @@
+# Agent lab: one sandboxed agent container, an optional Ollama service.
+# No host paths are mounted. API keys come from the shell environment or a
+# .env file next to this compose.yaml (gitignored). See README.md.
+name: agent-lab
+
+services:
+  agent:
+    build:
+      context: .
+      args:
+        NPM_AGENTS: ${NPM_AGENTS:-@anthropic-ai/claude-code @openai/codex @google/gemini-cli}
+        PIP_AGENTS: ${PIP_AGENTS:-}
+    image: agent-lab:latest
+    container_name: agent-lab
+    hostname: agent-lab
+    init: true
+    stdin_open: true
+    tty: true
+    user: agent
+    working_dir: /home/agent/work/sample
+    command: ["sleep", "infinity"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Bare names pass the host value through when it is set, else nothing.
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - GEMINI_API_KEY
+      - GOOGLE_API_KEY
+      - GH_TOKEN
+      - OPENROUTER_API_KEY
+      - OLLAMA_HOST=http://ollama:11434
+      - TERM=xterm-256color
+    volumes:
+      - agent-home:/home/agent
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 4g
+
+  ollama:
+    profiles: [ollama]
+    image: ollama/ollama:latest
+    container_name: agent-lab-ollama
+    hostname: agent-lab-ollama
+    volumes:
+      - ollama-models:/root/.ollama
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  agent-home:
+  ollama-models:

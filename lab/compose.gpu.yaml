@@ -1,0 +1,11 @@
+# Added by lab.sh when nvidia-smi works on the host. Needs the NVIDIA
+# Container Toolkit; on WSL2, Docker Desktop ships it.
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
