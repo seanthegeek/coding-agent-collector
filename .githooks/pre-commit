@@ -2,19 +2,12 @@
 # Fast checks before every commit. Enable once per clone with:
 #   git config core.hooksPath .githooks
 #
-# Only quick operations belong here: the catalog drift check, and one
-# Dependabot API query that CI cannot make (the workflow token cannot read
-# Dependabot alerts). The linters and tests run in CI; run them locally with
-# the commands in AGENTS.md "Quality gates".
-#
-# The Dependabot check only warns when gh is missing, not authenticated or
-# offline, so offline work is not blocked; SKIP_DEPENDABOT_CHECK=1 skips it.
+# Only quick operations belong here, currently the catalog drift check. The
+# linters and tests run in CI; run them locally with the commands in
+# AGENTS.md "Quality gates". Open Dependabot alerts are a release gate, not a
+# commit gate; see "Conventions" in AGENTS.md.
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
-
-warn() {
-  printf 'pre-commit: warning: %s\n' "$1" >&2
-}
 
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
 
@@ -33,30 +26,4 @@ if staged_match 'collectors/collect-agent-artifacts.sh\|collectors/Collect-Agent
   collectors/tests/catalog-sync.sh >/dev/null || { echo "pre-commit: catalog tables differ between the collectors; run collectors/tests/catalog-sync.sh" >&2; exit 1; }
 fi
 
-# Dependabot alerts, last.
-if [ "${SKIP_DEPENDABOT_CHECK:-}" = 1 ]; then
-  warn "Dependabot alert check skipped (SKIP_DEPENDABOT_CHECK=1)"
-elif ! command -v gh >/dev/null 2>&1; then
-  warn "gh not found; Dependabot alerts not checked"
-else
-  repo=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
-  count=
-  if [ -n "$repo" ]; then
-    count=$(gh api "repos/$repo/dependabot/alerts?state=open" -q length 2>/dev/null)
-  fi
-  case $count in
-    '' | *[!0-9]*)
-      warn "could not query Dependabot alerts (gh not authenticated, offline, or no access); not checked"
-      ;;
-    0) ;;
-    *)
-      echo "pre-commit: $count open Dependabot alert(s) on $repo:" >&2
-      gh api "repos/$repo/dependabot/alerts?state=open" \
-        -q '.[] | "\(.security_advisory.severity) \(.dependency.package.name) \(.security_advisory.summary)"' >&2
-      echo "pre-commit: view them at https://github.com/$repo/security/dependabot" >&2
-      echo "pre-commit: or skip this check in an emergency with SKIP_DEPENDABOT_CHECK=1" >&2
-      exit 1
-      ;;
-  esac
-fi
 exit 0

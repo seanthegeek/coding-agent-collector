@@ -626,8 +626,7 @@ if they differ. When `pwsh` is on the `PATH` it also compares `--list` with
 identical to `--list`. The repository's pre-commit hook in `.githooks/`
 (enable it once per clone with `git config core.hooksPath .githooks`)
 refuses a commit that stages either collector or the analyzer copy while the
-copy is stale or the tables differ, and checks for open Dependabot alerts;
-the linters run in CI only. CI (`.github/workflows/ci.yml`) runs the
+copy is stale or the tables differ; the linters run in CI only. CI (`.github/workflows/ci.yml`) runs the
 drift test and shellcheck, the sh smoke test under sh, dash, bash, busybox
 ash, zsh and posh, a lint job, the PowerShell smoke test under PowerShell 7 on Linux and
 Windows PowerShell 5.1 on Windows, and the analyzer tests, on every push to

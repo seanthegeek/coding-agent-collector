@@ -74,7 +74,7 @@ CLAUDE.md                      imports this file for Claude Code
 LICENSE                        Apache 2.0
 ruff.toml, pyrightconfig.json, .markdownlint-cli2.jsonc, .shellcheckrc
                                linter configuration; see "Quality gates"
-.githooks/pre-commit           the catalog drift check and the Dependabot alert check
+.githooks/pre-commit           the catalog drift check
 .github/                       CI workflow and Dependabot configuration
 ```
 
@@ -612,8 +612,8 @@ collector itself.
 
 ### Quality gates
 
-Every gate except the Dependabot check runs in the CI `lint` job, not in
-the pre-commit hook: the hook is reserved for fast operations (see below).
+Every gate runs in the CI `lint` job, not in the pre-commit hook: the hook
+is reserved for fast operations (see below).
 The versions are pinned in the workflow's `env` block; change it and this
 list together. Run the commands from the repository root before pushing.
 
@@ -627,7 +627,6 @@ list together. Run the commands from the repository root before pushing.
 | shellcheck | 0.11.0 | `shellcheck -s sh $(shfmt -f .)` | `.shellcheckrc` |
 | checkbashisms | devscripts v2.26.13 | `checkbashisms -p $(shfmt -f .)` | none |
 | PSScriptAnalyzer | 1.25.0 | the `pwsh` line in the block above | `collectors/PSScriptAnalyzerSettings.psd1` |
-| Dependabot alerts | gh | `gh api "repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/dependabot/alerts?state=open" -q length` | `.github/dependabot.yml` |
 
 - `shfmt -f .` lists the sh files by shebang as well as extension, so the
   hook script, `lab/lab.sh` and `analyzer/tests/run.sh` are checked too.
@@ -647,17 +646,9 @@ list together. Run the commands from the repository root before pushing.
   own, listed in `.git-blame-ignore-revs`; enable it locally with
   `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 - The pre-commit hook (`.githooks/pre-commit`, enabled once per clone with
-  `git config core.hooksPath .githooks`) holds only fast operations: the
-  catalog drift check, and the Dependabot check, which stays in the hook
-  because CI cannot make it (the workflow token cannot read Dependabot
-  alerts). Linters and tests belong in CI, never in the hook; a slow hook
-  gets bypassed.
-- The Dependabot check runs on every commit and refuses it when the
-  repository has open Dependabot alerts, printing each alert's severity,
-  package and summary and the URL of the alerts page. When `gh` is missing,
-  not authenticated, offline or denied access it prints a warning on stderr
-  and allows the commit, so offline work is never blocked. Set
-  `SKIP_DEPENDABOT_CHECK=1` to skip it in an emergency.
+  `git config core.hooksPath .githooks`) holds only fast operations, today
+  the catalog drift check. Linters, tests and network queries belong in CI
+  or the release checklist, never in the hook; a slow hook gets bypassed.
 
 ## Conventions
 
@@ -693,7 +684,13 @@ list together. Run the commands from the repository root before pushing.
   interfaces is called out in that entry. Work that lands between bumps
   goes under `## [Unreleased]` and moves into the next version's heading
   when it is bumped.
-- Once the bump commit is pushed, tag it `collector-vX.Y.Z` or
+- A release requires zero open Dependabot alerts. Before tagging, check
+  with `gh api "repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/dependabot/alerts?state=open" -q length`;
+  if it is not 0, resolve or dismiss each alert (with a reason in the
+  dismissal) before the tag. CI cannot enforce this, because the workflow
+  token cannot read Dependabot alerts, so it is part of the release step.
+  Dependabot itself is configured in `.github/dependabot.yml`.
+- Once the bump commit is pushed and its CI run is green, tag it `collector-vX.Y.Z` or
   `analyzer-vX.Y.Z` with an annotated tag and push the tag. The prefix is
   what distinguishes the two version sequences; never use a bare `vX.Y.Z`.
   Add the version's comparison link at the bottom of the changelog.
