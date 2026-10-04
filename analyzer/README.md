@@ -4,7 +4,7 @@ The analyst-side half of coding-agent-collector. It takes a collector archive,
 an extracted collection, or any loose directory tree, detects which AI coding
 agents left state in it, and parses the transcripts it knows how to read into
 one normalised CSV timeline. It never runs on the host under investigation, so
-unlike the collectors it may carry dependencies. It needs Python 3.9 or
+unlike the collectors it may carry dependencies. It needs Python 3.10 or
 later and the packages in `requirements.txt` (`pip install -r
 requirements.txt`): today only `zstandard`, for Zed threads, Codex and Open
 Interpreter `.jsonl.zst` rollouts and OpenClaw's compressed transcript rows.
@@ -340,7 +340,7 @@ with `sh` available it also runs the collector's `--inventory` on the fake
 image and reads that.
 Tests that need `zstandard`, the collector script, `sh` and `tar`, or
 permission to create symlinks are skipped, with the reason, when it is
-missing. CI runs the suite on Python 3.9 and 3.12 with `requirements.txt`
+missing. CI runs the suite on Python 3.10, 3.12 and 3.13 with `requirements.txt`
 installed.
 
 ## Adding a parser

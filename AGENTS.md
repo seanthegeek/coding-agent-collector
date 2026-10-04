@@ -195,11 +195,10 @@ without updating that README and noting it in the commit message.
 The analyzer runs on the analyst's workstation, never on the host, so the
 rules are different from the collectors'.
 
-- **Python 3.9 or later, standard library first.** Third-party packages are
+- **Python 3.10 or later, standard library first.** Third-party packages are
   allowed when a format needs them (protobuf, zstandard, a SQLite helper) and
-  go in both `requirements.txt` and `pyproject.toml`. Avoid syntax newer than
-  3.9: no `match`, no `X | Y` in annotations without
-  `from __future__ import annotations`.
+  go in both `requirements.txt` and `pyproject.toml`. Avoid syntax newer
+  than 3.10.
 - **The catalog is shared, not copied by hand.** `agent_analyzer/catalog.txt`
   is generated from `collect-agent-artifacts.sh --list`; both
   `collectors/tests/catalog-sync.sh` and the analyzer tests fail when it is
@@ -527,7 +526,7 @@ And from the October 2026 round:
 CI (`.github/workflows/ci.yml`) runs the catalog drift test, shellcheck, the
 sh smoke test under sh, dash, bash, busybox ash and zsh, the PowerShell smoke
 test under PowerShell 7 on Linux and Windows PowerShell 5.1 on Windows, and
-the analyzer tests on Python 3.9 and 3.12. Run the same locally before
+the analyzer tests on Python 3.10, 3.12 and 3.13. Run the same locally before
 committing a change to the collector:
 
 ```sh

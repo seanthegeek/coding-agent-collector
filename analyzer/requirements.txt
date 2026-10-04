@@ -1,4 +1,4 @@
-# The analyzer is standard library first (Python 3.9+). Third-party packages
+# The analyzer is standard library first (Python 3.10+). Third-party packages
 # are listed here only when a format needs them; keep pyproject.toml in step.
 # Parsers import them lazily and report undecodable records as system rows
 # when a package is missing.
