@@ -28,6 +28,7 @@ from .little_coder import LittleCoderParser
 from .letta import LettaParser
 from .hermes import HermesParser
 from .agent_zero import AgentZeroParser
+from .open_interpreter import OpenInterpreterParser
 
 ALL: List[Parser] = [
     ClaudeCodeParser(),
@@ -54,6 +55,7 @@ ALL: List[Parser] = [
     LettaParser(),
     HermesParser(),
     AgentZeroParser(),
+    OpenInterpreterParser(),
 ]
 
 

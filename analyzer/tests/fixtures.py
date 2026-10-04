@@ -148,6 +148,7 @@ def build_home(home: Path, with_noise: bool = True) -> Path:
     build_letta(home)
     build_hermes(home)
     build_agent_zero(home)
+    build_open_interpreter(home)
     if with_noise:
         (home / "Documents").mkdir(parents=True, exist_ok=True)
         (home / "Documents/notes.txt").write_text("not an agent file\n", encoding="utf-8")
@@ -1857,3 +1858,62 @@ def build_agent_zero(home: Path) -> None:
     (chat / "messages/1.txt").write_text(AGENT_ZERO_LONG + " (from file)", encoding="utf-8")
     (usr / "settings.json").write_text('{"chat_model_provider": "openrouter"}', encoding="utf-8")
     (usr / "secrets.env").write_text("API_KEY_OPENROUTER=not-real\n", encoding="utf-8")
+OI_SESSION = "0199a1b2-0000-7000-8000-000000000001"
+OI_IMPORTED = "0199a1b2-0000-7000-8000-000000000002"
+OI_ROLLOUT = ".openinterpreter/sessions/2026/10/01/rollout-2026-10-01T12-00-00-%s.jsonl" % OI_SESSION
+OI_ARCHIVED = ".openinterpreter/archived_sessions/2026/09/30/rollout-2026-09-30T08-00-00-%s.jsonl" % OI_IMPORTED
+
+
+def open_interpreter_rollout_records(cwd="/srv/proj"):
+    """research/open-interpreter.md section 8, with a reasoning item and a
+    task_complete event added."""
+    return [
+        {"timestamp": "2026-10-01T10:00:00.000Z", "type": "session_meta", "payload": {
+            "session_id": OI_SESSION, "id": OI_SESSION, "timestamp": "2026-10-01T10:00:00.000Z", "cwd": cwd,
+            "originator": "codex_cli_rs", "cli_version": "0.9.0", "source": "cli",
+            "model_provider": "kimi-for-coding", "git": {"branch": "main"}}},
+        {"timestamp": "2026-10-01T10:00:01.000Z", "type": "turn_context", "payload": {
+            "turn_id": "t1", "cwd": cwd, "approval_policy": "on-request",
+            "sandbox_policy": {"type": "workspace-write"}, "model": "kimi-k3"}},
+        {"timestamp": "2026-10-01T10:00:01.100Z", "type": "response_item", "payload": {
+            "type": "message", "role": "user", "content": [{"type": "input_text", "text": "list the files"}]}},
+        {"timestamp": "2026-10-01T10:00:02.000Z", "type": "response_item", "payload": {
+            "type": "reasoning", "summary": [{"type": "summary_text", "text": "run ls"}], "encrypted_content": "gAAA"}},
+        {"timestamp": "2026-10-01T10:00:03.000Z", "type": "response_item", "payload": {
+            "type": "function_call", "name": "Bash", "arguments": "{\"command\":\"ls\"}", "call_id": "call_1"}},
+        {"timestamp": "2026-10-01T10:00:04.000Z", "type": "response_item", "payload": {
+            "type": "function_call_output", "call_id": "call_1", "output": "README.md"}},
+        {"timestamp": "2026-10-01T10:00:05.000Z", "type": "response_item", "payload": {
+            "type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "One file: README.md"}]}},
+        {"timestamp": "2026-10-01T10:00:05.000Z", "type": "event_msg", "payload": {
+            "type": "task_complete", "turn_id": "t1", "duration_ms": 5000}},
+    ]
+
+
+def open_interpreter_imported_records(cwd="/srv/proj"):
+    """A thread written by /import from a Claude Code transcript."""
+    return [
+        {"timestamp": "2026-09-30T08:00:00.000Z", "type": "session_meta", "payload": {
+            "session_id": OI_IMPORTED, "id": OI_IMPORTED, "timestamp": "2026-09-30T08:00:00.000Z", "cwd": cwd,
+            "originator": "codex_cli_rs", "cli_version": "0.9.0", "source": "cli", "model_provider": "openai"}},
+        {"timestamp": "2026-09-30T08:00:00.000Z", "type": "response_item", "payload": {
+            "type": "message", "role": "user", "content": [{"type": "input_text", "text": "imported prompt"}]}},
+    ]
+
+
+def open_interpreter_ledger():
+    return {"records": [
+        {"source_path": "/home/alice/.claude/projects/-home-alice-proj/5b1c.jsonl", "content_sha256": "ab12cd34",
+         "imported_thread_id": OI_IMPORTED, "imported_at": 1790762400, "source_modified_at": 1790758800},
+    ]}
+
+
+def build_open_interpreter(home: Path) -> None:
+    oi = home / ".openinterpreter"
+    _jsonl(home / OI_ROLLOUT, open_interpreter_rollout_records())
+    _jsonl(home / OI_ARCHIVED, open_interpreter_imported_records())
+    _jsonl(oi / "history.jsonl", [{"session_id": OI_SESSION, "ts": 1790848801, "text": "list the files"}])
+    _jsonl(oi / "session_index.jsonl", [{"id": OI_SESSION, "thread_name": "ls", "updated_at": "2026-10-01T10:00:05Z"}])
+    (oi / "external_agent_session_imports.json").write_text(json.dumps(open_interpreter_ledger()), encoding="utf-8")
+    (oi / "config.toml").write_text('harness = "claude-code"\n', encoding="utf-8")
+    (oi / "auth.json").write_text('{"OPENAI_API_KEY": "sk-not-real"}', encoding="utf-8")

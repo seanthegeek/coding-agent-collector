@@ -80,7 +80,7 @@ agents and which have parsers.
 | Agent | Files | Validated against |
 | --- | --- | --- |
 | `claude-code` | `.claude/projects/<slug>/<session>.jsonl`, subagent transcripts under the session directory, `.claude/history.jsonl` | Real install, Claude Code 2.x, October 2026 |
-| `codex-cli` | `.codex/sessions/**/rollout-*.jsonl`, `.codex/history.jsonl` | Real install, Codex CLI, October 2026 |
+| `codex-cli` | `.codex/sessions/**/rollout-*.jsonl` and `archived_sessions/`, also as `.jsonl.zst` (needs `zstandard`), `.codex/history.jsonl` | Real install, Codex CLI, October 2026; archived and `.zst` rollouts from source at 3e23877, synthetic fixture |
 | `antigravity` | `.gemini/antigravity-cli/conversations/*.db` (SQLite of protobuf steps, with WAL sidecars), `conversation_summaries.db`, `history.jsonl` | Protobuf descriptors extracted from the shipped `agy` binary plus a real install, October 2026; see `research/antigravity.md` |
 | `qwen-code` | `.qwen/projects/<slug>/chats/<session>.jsonl` and `chats/archive/`, `.qwen/tmp/<hash>/logs.json` | Source at 2c591ec, synthetic fixture |
 | `kiro` | Amazon Q CLI `data.sqlite3` (`conversations` and legacy `history` tables) under `amazon-q/` or `kiro-cli/` in `.local/share`, `Library/Application Support` or `AppData/Local`; `/save` exports (`.json` with `conversation_id` and `history`). Kiro CLI `.kiro/sessions/` files are not parsed until their format is confirmed | Source at 15cc8f3, synthetic fixture |
@@ -103,6 +103,7 @@ agents and which have parsers.
 | `letta` | Letta Code `.letta/lc-local-backend/conversations/<key>/messages.jsonl` (pi session format), `.letta/transcripts/<agent>/<conversation>/transcript.jsonl` (project path from `sessions.jsonl` by time, a heuristic; skipped when the conversation's `messages.jsonl` is present), `.letta/sessions.jsonl` | Source at 77faf36, synthetic fixture; see `research/letta.md` |
 | `hermes` | `state.db` (SQLite with WAL sidecars; `sessions` and `messages`, rewound or compacted `active = 0` rows kept with a `[rewound]` prefix) and the fallback `sessions/<id>.jsonl` under `.hermes`, `.hermes_<suffix>`, `AppData/Local/hermes` and their `profiles/<name>/` homes | Source at 8b66a51, synthetic fixture |
 | `agent-zero` | `usr/chats/<ctxid>/chat.json` (UI log for timestamps, each agent's history for full text and model, `messages/<n>.txt` for long tool results; history-only turns without timestamps when the log was trimmed at 1000 items) under `agent-zero`, `agent-zero/<instance>` or `Desktop/agent-zero`, also the legacy `chats/<ctxid>.json` and `tmp/chats`; project path is the container path `/a0/usr/projects/<name>` | Source at e3051fb, synthetic fixture |
+| `open-interpreter` | Codex rollouts (Codex parser, Open Interpreter paths): `.openinterpreter/sessions/**/rollout-*.jsonl` and `archived_sessions/`, also as `.jsonl.zst`, `.openinterpreter/history.jsonl`, and `external_agent_session_imports.json` (one `system` row per `/import`ed thread, naming the Claude Code or Cursor source file; that thread's record times are import time) | Source at 2767e5f, synthetic fixture |
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out

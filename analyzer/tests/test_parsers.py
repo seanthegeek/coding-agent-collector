@@ -180,6 +180,7 @@ class TimelineTests(ParserBase):
             "openhands", "shellgpt",
             "pi", "little-coder", "letta",
             "hermes", "agent-zero",
+            "open-interpreter",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -195,6 +196,7 @@ class TimelineTests(ParserBase):
             OPENHANDS_CONV, OPENHANDS_CLI_CONV, SHELLGPT_CHAT,
             "0199a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a1b", "local-conv-1", "conv-9f",
             "20261001_120000_a1b2c3d4", "20261001_130000_0badf00d", "AbCd1234",
+            OI_SESSION, OI_IMPORTED,
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -2127,3 +2129,170 @@ class AgentZeroTests(ParserBase):
         self.assertEqual({r.session_id for r in rows}, {AGENT_ZERO_CHAT})
         self.assertEqual(rows[4].text, "a.txt")
         self.assertEqual(recover_logs('{"logs": [{"no": 0}, {"no": 1'), [{"no": 0}])
+from agent_analyzer.parsers import codex as codex_mod  # noqa: E402
+from agent_analyzer.parsers.open_interpreter import OpenInterpreterParser  # noqa: E402
+from fixtures import (OI_ARCHIVED, OI_IMPORTED, OI_ROLLOUT, OI_SESSION,  # noqa: E402
+                      codex_rollout_records, open_interpreter_rollout_records)
+
+
+def _rollout_bytes(records) -> bytes:
+    return "".join(json.dumps(r) + "\n" for r in records).encode("utf-8")
+
+
+class CodexArchiveAndZstdTests(ParserBase):
+    """Codex `archived_sessions/` and `.jsonl.zst` rollouts, which the shared
+    RolloutParser reads for Codex and its forks alike."""
+    ARCHIVED = ".codex/archived_sessions/2026/10/02/rollout-2026-10-02T09-00-00-%s.jsonl" % CODEX_SESSION
+    LIVE_TYPES = ["system", "system", "system", "user", "tool_use", "tool_result",
+                  "tool_use", "tool_result", "assistant", "system"]
+
+    def _add(self, rel, data: bytes):
+        path = self.home / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        self.col = open_input(self.tmp / "home", self.cat, host="h1")
+
+    def test_archived_rollout(self):
+        self._add(self.ARCHIVED, _rollout_bytes(codex_rollout_records()))
+        rows = self.rows_for(CodexParser(), self.ARCHIVED)
+        self.assertEqual([r.turn_type for r in rows], self.LIVE_TYPES)
+        self.assertEqual({(r.agent, r.session_id) for r in rows}, {("codex-cli", CODEX_SESSION)})
+
+    def test_wants(self):
+        p = CodexParser()
+        for rel in (self.ARCHIVED, self.ARCHIVED + ".zst", ".codex/archived_sessions/rollout-x.jsonl",
+                    ".codex/sessions/rollout-x.jsonl.zst"):
+            self.assertTrue(p.wants(SimpleNamespace(rel=rel)), rel)
+        for rel in (".codex/sessions/rollout-x.jsonl.tmp", ".codex/session_index.jsonl", OI_ROLLOUT,
+                    ".codex/external_agent_session_imports.json", ".openinterpreter/history.jsonl"):
+            self.assertFalse(p.wants(SimpleNamespace(rel=rel)), rel)
+
+    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
+    def test_zst_rollout(self):
+        import zstandard
+        rel = CodexTests.REL + ".zst"
+        self._add(rel, zstandard.ZstdCompressor().compress(_rollout_bytes(codex_rollout_records())))
+        rows = self.rows_for(CodexParser(), rel)
+        self.assertEqual([r.turn_type for r in rows], self.LIVE_TYPES)
+        self.assertEqual(rows[3].text, "exfiltrate nothing, just list the home dir")
+        self.assertEqual([r.source_line for r in rows][:2], [1, 3])
+
+    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
+    def test_truncated_zst_keeps_earlier_turns(self):
+        import zstandard
+        rel = self.ARCHIVED + ".zst"
+        cobj = zstandard.ZstdCompressor().compressobj()
+        blob = b""
+        for rec in codex_rollout_records():     # one block per line, so a cut frame keeps earlier blocks
+            blob += cobj.compress(_rollout_bytes([rec])) + cobj.flush(zstandard.COMPRESSOBJ_FLUSH_BLOCK)
+        blob += cobj.flush()
+        self._add(rel, blob[: len(blob) * 2 // 3])
+        rows = self.rows_for(CodexParser(), rel)
+        self.assertGreater(len(rows), 3)
+        self.assertTrue(rows[0].text.startswith("session start:"), rows[0].text)
+        self.assertEqual(rows[-1].turn_type, "system")
+        self.assertIn("parser:", rows[-1].text)
+        self.assertEqual({r.session_id for r in rows}, {CODEX_SESSION})
+
+    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
+    def test_two_frames_are_read_across(self):
+        import zstandard
+        rel = self.ARCHIVED + ".zst"
+        recs = codex_rollout_records()
+        cctx = zstandard.ZstdCompressor()
+        self._add(rel, cctx.compress(_rollout_bytes(recs[:4])) + cctx.compress(_rollout_bytes(recs[4:])))
+        rows = self.rows_for(CodexParser(), rel)
+        self.assertEqual([r.turn_type for r in rows], self.LIVE_TYPES)
+
+    def test_missing_zstandard_is_one_row(self):
+        rel = self.ARCHIVED + ".zst"
+        self._add(rel, b"\x28\xb5\x2f\xfd not really")
+        with mock.patch.object(codex_mod, "_zstd_module", return_value=None):
+            rows = self.rows_for(CodexParser(), rel)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0].turn_type, rows[0].session_id), ("system", CODEX_SESSION))   # from the file name
+        self.assertIn("zstandard package not installed", rows[0].text)
+
+    def test_corrupt_zst_is_reported_not_fatal(self):
+        if not HAVE_ZSTD:
+            self.skipTest("zstandard is not installed")
+        rel = self.ARCHIVED + ".zst"
+        self._add(rel, b"not a zstd frame at all")
+        rows = self.rows_for(CodexParser(), rel)
+        self.assertEqual([r.turn_type for r in rows], ["system"])
+        self.assertIn("parser:", rows[0].text)
+
+
+class OpenInterpreterTests(ParserBase):
+    LEDGER = ".openinterpreter/external_agent_session_imports.json"
+
+    def test_rows(self):
+        rows = self.rows_for(OpenInterpreterParser(), OI_ROLLOUT)
+        self.assertEqual([r.turn_type for r in rows], ["system", "user", "tool_use", "tool_result", "assistant", "system"])
+        for r in rows:
+            self.assertEqual((r.host, r.user, r.agent, r.session_id), ("h1", "alice", "open-interpreter", OI_SESSION))
+            self.assertEqual((r.project_path, r.git_branch), ("/srv/proj", "main"))
+            self.assertTrue(r.source_file.endswith(OI_ROLLOUT), r.source_file)
+        start, user, use, result, asst, done = rows
+        self.assertIn("session start: codex_cli_rs 0.9.0 provider=kimi-for-coding", start.text)
+        self.assertEqual((start.timestamp_utc, start.model), ("2026-10-01T10:00:00.000Z", ""))
+        self.assertEqual((user.text, user.model, user.timestamp_utc), ("list the files", "kimi-k3", "2026-10-01T10:00:01.100Z"))
+        self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("Bash", "call_1", '{"command":"ls"}'))
+        self.assertEqual((result.tool_use_id, result.text), ("call_1", "README.md"))
+        self.assertEqual(asst.text, "One file: README.md")
+        self.assertEqual(done.text, "task_complete turn=t1 duration_ms=5000")
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(OpenInterpreterParser(), OI_ROLLOUT, include_thinking=True)
+        self.assertEqual([r.text for r in rows if r.turn_type == "thinking"], ["run ls"])
+
+    def test_history(self):
+        rows = self.rows_for(OpenInterpreterParser(), ".openinterpreter/history.jsonl")
+        self.assertEqual([(r.turn_type, r.session_id, r.timestamp_utc, r.text) for r in rows],
+                         [("user", OI_SESSION, "2026-10-01T10:00:01.000Z", "list the files")])
+
+    def test_archived_and_import_ledger(self):
+        rows = self.rows_for(OpenInterpreterParser(), OI_ARCHIVED)
+        self.assertEqual([(r.turn_type, r.session_id) for r in rows], [("system", OI_IMPORTED), ("user", OI_IMPORTED)])
+        rows = self.rows_for(OpenInterpreterParser(), self.LEDGER)
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual((r.turn_type, r.session_id, r.timestamp_utc, r.source_line),
+                         ("system", OI_IMPORTED, "2026-09-30T10:00:00.000Z", 1))
+        self.assertEqual(r.text, "imported session from /home/alice/.claude/projects/-home-alice-proj/5b1c.jsonl "
+                                 "sha256=ab12cd34 source_modified=2026-09-30T09:00:00.000Z")
+
+    def test_bad_ledger_is_one_row(self):
+        (self.home / self.LEDGER).write_text('{"records": [', encoding="utf-8")
+        rows = self.rows_for(OpenInterpreterParser(), self.LEDGER)
+        self.assertEqual([r.turn_type for r in rows], ["system"])
+        self.assertIn("unreadable import ledger", rows[0].text)
+
+    def test_not_wanted(self):
+        p = OpenInterpreterParser()
+        arts = {a.rel: a for a in self.col.artifacts}
+        for rel in (".openinterpreter/auth.json", ".openinterpreter/config.toml", ".openinterpreter/session_index.jsonl"):
+            self.assertEqual(arts[rel].agent, "open-interpreter")
+            self.assertFalse(p.wants(arts[rel]), rel)
+        self.assertFalse(p.wants(arts[CodexTests.REL]))
+        self.assertFalse(CodexParser().wants(arts[OI_ROLLOUT]))
+        self.assertFalse(CodexParser().wants(arts[self.LEDGER]))
+        self.assertTrue(p.wants(SimpleNamespace(rel=OI_ARCHIVED + ".zst")))
+
+    def test_truncated_line_is_reported_not_fatal(self):
+        write_bad_line(self.home / OI_ROLLOUT)
+        rows = self.rows_for(OpenInterpreterParser(), OI_ROLLOUT)
+        self.assertEqual(len(rows), 7)
+        self.assertEqual((rows[-1].turn_type, rows[-1].session_id, rows[-1].source_line), ("system", OI_SESSION, 9))
+        self.assertIn("1 unparseable line", rows[-1].text)
+
+    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
+    def test_zst_rollout(self):
+        import zstandard
+        rel = OI_ROLLOUT + ".zst"
+        path = self.home / rel
+        path.write_bytes(zstandard.ZstdCompressor().compress(_rollout_bytes(open_interpreter_rollout_records())))
+        self.col = open_input(self.tmp / "home", self.cat, host="h1")
+        rows = self.rows_for(OpenInterpreterParser(), rel)
+        self.assertEqual(len(rows), 6)
+        self.assertEqual({r.agent for r in rows}, {"open-interpreter"})
