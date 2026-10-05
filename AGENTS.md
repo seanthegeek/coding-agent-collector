@@ -667,8 +667,14 @@ list together. Run the commands from the repository root before pushing.
 - Commit messages: imperative subject under 70 characters, body explaining
   why, ending with the `Co-Authored-By` line when an AI agent wrote the code.
 - Work on `main` directly for now; branch when a change spans several commits.
-- Outstanding work is tracked as GitHub issues labelled `enhancement`. File
-  one when you find something out of scope rather than widening a change.
+- Outstanding work is tracked as GitHub issues. File one when you find
+  something out of scope rather than widening a change, and label it by
+  what it is: `bug` for behaviour that is wrong, broken or contradicts the
+  documentation (a wrong exit status, a stale manifest value, a file
+  collected twice, a promise the code does not keep), `enhancement` for a
+  new feature, catalog entry or improvement to behaviour that already works
+  as documented. A missing feature is an enhancement; a documented feature
+  that misbehaves is a bug.
 - Documentation describes the code, not the intent. Every sentence that
   states an option, an output file, a field, a value a field can take, or a
   behaviour is checked against the code path that implements it before it
