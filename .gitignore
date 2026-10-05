@@ -11,3 +11,4 @@ analyzer/build/
 analyzer/dist/
 .venv/
 venv/
+.claude/
