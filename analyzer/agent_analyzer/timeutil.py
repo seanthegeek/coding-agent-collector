@@ -39,7 +39,7 @@ def to_utc(value: object) -> str:
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return _fmt(dt.astimezone(timezone.utc))
+        return format_utc(dt.astimezone(timezone.utc))
     except (ValueError, OverflowError, OSError):
         return ""
 
@@ -47,10 +47,10 @@ def to_utc(value: object) -> str:
 def _from_epoch(n: float) -> str:
     if n > 1e11:
         n = n / 1000.0
-    return _fmt(datetime.fromtimestamp(n, tz=timezone.utc))
+    return format_utc(datetime.fromtimestamp(n, tz=timezone.utc))
 
 
-def _fmt(dt: datetime) -> str:
+def format_utc(dt: datetime) -> str:
     return dt.strftime(OUT_FMT)[:-3] + "Z"
 
 

@@ -3,16 +3,17 @@
 The analyst-side half of coding-agent-collector. It takes a collector archive,
 an extracted collection, or any loose directory tree, detects which AI coding
 agents left state in it, and parses the transcripts it knows how to read into
-one normalised CSV timeline. It never runs on the host under investigation, so
+one normalised JSONL timeline. It never runs on the host under investigation, so
 unlike the collectors it may carry dependencies. It needs Python 3.10 or
 later and the packages in `requirements.txt` (`pip install -r
-requirements.txt`): today only `zstandard`, for Zed threads, Codex and Open
-Interpreter `.jsonl.zst` rollouts and OpenClaw's compressed transcript rows.
-Without it each such thread, rollout or row is reported as an undecodable
-`system` row and everything else still runs.
+requirements.txt`): `python-dateutil`, required, which reads the
+`--since` and `--until` times, and `zstandard`, optional, for Zed threads,
+Codex and Open Interpreter `.jsonl.zst` rollouts and OpenClaw's compressed
+transcript rows. Without `zstandard` each such thread, rollout or row is
+reported as an undecodable `system` row and everything else still runs.
 
 [CHANGELOG.md](CHANGELOG.md) lists what changed in each version, including
-changes to the `timeline.csv` and `sessions.csv` columns.
+changes to the `timeline.jsonl` and `sessions.jsonl` fields.
 
 ## Quick start
 
@@ -25,8 +26,15 @@ python3 -m agent_analyzer detect /cases/host01/host01_20261003T165531Z_agent-art
 # Build the timeline
 python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/analysis
 
-# Shorter rows for a spreadsheet
-python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/short --max-text-length 200
+# Every Bash command Claude Code ran, from the timeline
+jq -r 'select(.agent == "claude-code" and .tool_name == "Bash") | .text' /cases/host01/analysis/timeline.jsonl
+
+# Only 1 October 2026 (UTC), or only the last three days
+python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/oct1 --since 2026-10-01 --until 2026-10-01
+python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/recent --since 3d
+
+# Only events whose text mentions curl or wget, with the paired tool calls and results
+python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/net --match 'curl|wget' -i
 
 # A home directory copied off a host by other means, or a mounted image
 python3 -m agent_analyzer timeline /mnt/evidence -o /cases/host02/analysis --host host02
@@ -124,9 +132,9 @@ agents and which have parsers.
 
 The field names each parser relies on are listed in its module docstring
 under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
-unless `--include-thinking` is passed. The `text` column carries the full
-text of each event by default, so the timeline is a complete transcript, one
-event per row; `--max-text-length` shortens it for a spreadsheet view. History files are parsed even when the
+unless `--include-thinking` is passed. The `text` field carries the full
+text of each event, line breaks included, so the timeline is a complete
+transcript, one event per line. History files are parsed even when the
 matching session transcript exists, because they survive session deletion;
 filter on `source_file` to drop them.
 
@@ -180,21 +188,39 @@ with no user, and `detect only`.
 and writes them even when no rows were produced:
 
 ```text
-timeline.csv    one row per turn, tool call, tool result or system event
-sessions.csv    one row per session with first and last timestamp and counts
+timeline.jsonl  one record per turn, tool call, tool result or system event
+sessions.jsonl  one record per session with first and last timestamp and counts
 detect.json     the detect --json object without its homes and files keys
 ```
 
 On stdout it prints the input, host and notes, one `problem:` line per file a
-parser could not read, the agents parsed and the agents only detected, the
-row count with a breakdown by agent and `turn_type`, and the session count.
+parser could not read, and, when the timeline is filtered, a `window:` line
+with the resolved UTC bounds, a `match:` line with the patterns, and a
+`filtered:` line counting the rows dropped outside the window, without a
+timestamp, and not matching. Then come the agents parsed and the agents only
+detected, the row count with a breakdown by agent and `turn_type`, and the
+session count. The agents parsed are those that produced rows before
+filtering; the breakdown counts the rows written.
 
-Both CSV files are UTF-8 without a byte order mark, quoted where needed as
-in RFC 4180, with CRLF line ends, and start with a header row.
+Both JSONL files are UTF-8 without a byte order mark, one JSON object per
+line, each line ended by LF, with no header line. Every object has every
+field, in the order listed below. Fields with no value hold the empty string
+`""`, never `null`, and every field is a string except the integers
+`source_line`, `user_turns`, `assistant_turns` and `tool_calls` and the
+array `models`. A line holds no literal line break: newlines inside
+`text` are written as `\n`, and U+2028 and U+2029 as `\u2028` and
+`\u2029`, because some line readers split on them. Other non-ASCII text is
+written as UTF-8, not escaped, so a search for it matches as typed; the
+exception is a record whose text holds a lone UTF-16 surrogate, which UTF-8
+cannot encode, and which is written entirely with `\uXXXX` escapes.
+There is no space after `:` or `,`, the same layout `jq -c` prints, so a
+`grep` pattern such as `"agent":"codex-cli"` matches the file and jq output
+alike. [Reading and searching the output](#reading-and-searching-the-output)
+has recipes.
 
-`timeline.csv` columns, in order:
+`timeline.jsonl` fields, in order:
 
-| Column | Meaning |
+| Field | Meaning |
 | --- | --- |
 | `timestamp_utc` | ISO 8601 UTC with milliseconds, `2026-10-03T16:55:31.123Z`. Times recorded without a zone are taken as UTC. Epoch numbers above 10^11 are read as milliseconds, smaller ones as seconds. Empty when the record has none. |
 | `host` | From `collection.json`, or `--host`. Empty for loose input without `--host`. |
@@ -207,9 +233,9 @@ in RFC 4180, with CRLF line ends, and start with a header row.
 | `model` | Model that produced the turn, where recorded. |
 | `tool_name` | For `tool_use` rows: the tool. Codex shell calls are `shell`. |
 | `tool_use_id` | Links a `tool_use` row to its `tool_result`. |
-| `text` | The event's text with whitespace runs collapsed: the prompt, the response, the tool output, or for a tool call its most identifying argument (the Bash command, the edited file, the search pattern, the fetched URL), else the arguments as JSON. Full length by default; `--max-text-length` cuts it. |
+| `text` | The event's full text, with leading and trailing whitespace removed and inner line breaks and indentation kept: the prompt, the response, the tool output, or for a tool call its most identifying argument (the Bash command, the edited file, the search pattern, the fetched URL), else the arguments as JSON. |
 | `source_file` | Path of the record on the source host, as in the manifest. In loose mode it is the path relative to the input root with a leading `/`, or relative to the home when the input root is the home or an agent directory. |
-| `source_line` | Where the record is in that file, so the full record can be read. For line-oriented files (JSONL, Markdown, text) the 1-based line number. For SQLite stores it is the record's `rowid` (Tabby events: the event id), and for JSON documents an array index or `1`. Each parser's module docstring says which. `0` when no position applies. |
+| `source_line` | Integer. Where the record is in that file, so the full record can be read. For line-oriented files (JSONL, Markdown, text) the 1-based line number. For SQLite stores it is the record's `rowid` (Tabby events: the event id), and for JSON documents an array index or `1`. Each parser's module docstring says which. `0` when no position applies. |
 
 Rows are sorted by timestamp, then by source file and line. Rows without a
 timestamp sort last. Injected context is typed `system`, not `user`, so
@@ -226,18 +252,227 @@ full text. A line a parser cannot decode, such as a
 transcript's last line cut off mid-write, is reported as a `system` row,
 and the rest of the file is still read.
 
-`sessions.csv` has one row per `host`, `user`, `agent` and `session_id`,
-built from the timeline rows that have a session id. Its columns: `host`,
-`user`, `agent`, `session_id`, `project_path` (the first non-empty one),
-`first_timestamp_utc`, `last_timestamp_utc`, `models` (space separated, in
-order of first use), `user_turns` and `assistant_turns` (rows of those
-types), `tool_calls` (`tool_use` rows), and `source_file` (the file that
-contributed the most rows). It is sorted by first timestamp, so sessions
-with no timestamp come first.
+`sessions.jsonl` has one record per `host`, `user`, `agent` and
+`session_id`, built from the timeline records that have a session id. Its
+fields, in order: `host`, `user`, `agent`, `session_id`, `project_path`
+(the first non-empty one), `first_timestamp_utc`, `last_timestamp_utc`,
+`models` (an array of strings, in order of first use, empty when none was
+recorded), `user_turns` and `assistant_turns` (integers, timeline records
+of those types), `tool_calls` (integer, `tool_use` records), and
+`source_file` (the file that contributed the most records). It is sorted by
+first timestamp, so sessions with no timestamp come first.
 
-The two CSV layouts are a compatibility contract with the analysts and
-tooling that consume them. A future version may append new columns after the
-existing ones, but existing columns keep their names, order and meaning.
+The two JSONL layouts are a compatibility contract with the analysts and
+tooling that consume them. A future version may append new fields after the
+existing ones, but existing fields keep their names, order, type and
+meaning.
+
+## Filtering the timeline
+
+`timeline` can write only part of the timeline, which keeps the output of a
+busy host to the incident window:
+
+- `--since WHEN` and `--until WHEN` keep rows with `since <= timestamp_utc
+  <= until`. Either may be given alone. Rows without a timestamp are
+  dropped once either is given, unless `--keep-undated` is passed. Formats
+  without per-message times (Continue, Zed, Cline's legacy history) give
+  their rows the session's timestamp, so those rows are kept or dropped by
+  the time the session started.
+- `--match REGEX` keeps rows whose `text` matches the Python regular
+  expression ([`re` syntax](https://docs.python.org/3/library/re.html),
+  searched anywhere in the text, so anchor with `^` and `$` for a whole
+  match). Repeat it to keep rows that match any of the patterns; `-i`
+  makes every pattern case-insensitive. A matched `tool_use` row keeps its
+  `tool_result` row, and a matched result its call, when the partner has
+  the same `session_id` and `tool_use_id` (the same `source_file` for rows
+  without a session id) and is inside the time window. Only `text` is
+  searched; filter other fields with jq afterwards.
+- `--match` applies after the time window. `sessions.jsonl` is summarised
+  from the rows that are kept, so its counts and first and last timestamps
+  describe the filtered timeline, not the whole session.
+
+The resolved window is printed as a `window:` line, so a relative value
+such as `3d` can be checked and recorded in case notes. A value that is not
+one of the forms below, a `--since` later than the `--until`, or a
+`--match` that is not a valid regular expression stops the command with
+exit code `2` before the input is opened or extracted.
+
+`WHEN` is one of the following, after surrounding whitespace is trimmed;
+day words, units, `ago`, `Z` and `UTC` may be in any case. Nothing else is
+accepted, and nothing is guessed. A value without an offset is UTC, like the timeline.
+
+| Form | Examples | Meaning |
+| --- | --- | --- |
+| ISO 8601 date | `2026-10-01`, basic `20261001`, week date `2026-W40-1`, ordinal `2026-274` | That day. |
+| Year or month | `2026`, `2026-10` | That year or month. |
+| Date and time, `T` or one space between them | `2026-10-01T09`, `2026-10-01T09:30`, `2026-10-01 09:30`, `2026-10-01 09:30:15`, `2026-10-01T09:30:15.250`, basic `20261001T093015` | Seconds are optional and may carry a fraction. |
+| Date and time with a UTC offset, directly after the time or after one space | `2026-10-01T09:30Z`, `2026-10-01T09:30+02:00`, `2026-10-01T09:30-0500`, `2026-10-01T09:30+02`, `2026-10-01 09:30 +02:00`, `2026-10-01 09:30 UTC` | Offsets are `Z`, `UTC` (after a space only), `+HH:MM`, `+HHMM` or `+HH`; `-` is west of UTC. The time is converted to UTC. |
+| Epoch number | `1759312800`, `1759312800000` | Seconds since 1970; a number above 10^11 is milliseconds. |
+| Day word | `today`, `yesterday` | That UTC calendar day. |
+| `now` | `now` | The current time. |
+| Relative time | `45m`, `45min`, `45 minutes`, `36h`, `36 hours`, `3d`, `3 days ago`, `2w`, `6mo`, `6 months ago`, `1y`, `2 years` | That long before now. The space and a trailing `ago` are optional; units are `m`, `min`, `minute(s)` (minutes), `h`, `hour(s)`, `d`, `day(s)`, `w`, `week(s)`, `mo`, `month(s)`, `y`, `year(s)`. `m` is always minutes and `mo` always months. Months and years move the calendar date and keep the time of day; a day the target month lacks becomes its last day, so 31 March less `1mo` is 28 February (29 in a leap year). |
+
+An absolute value or a day word names a period as long as its last written
+unit: a year, a month, a day, an hour (`T09`), a minute (`09:30`) or a
+second (`09:30:15`). `--since` takes the period's first millisecond and
+`--until` its last, so `--since 2026-10-01 --until 2026-10-01` selects
+that whole day, `--until 2026-10` runs to the end of October, and
+`--until "2026-10-01 09:30"` keeps an event at 09:30:40. A time with a
+fraction of a second, `now`, a relative time and an epoch number are
+instants, used as they are. Dates and times are parsed by
+`dateutil.parser.isoparse` and months and years counted by
+`dateutil.relativedelta`, both from `python-dateutil`; the forms
+themselves are defined in `agent_analyzer/filters.py`.
+
+## Reading and searching the output
+
+A timeline from a busy host can run to gigabytes, because `text` holds full
+tool output. Each line is one complete record, so the tools below stream
+the file line by line and use little memory however large it is. The
+examples run in the `-o` directory. A spreadsheet is the wrong viewer for
+these files: Excel stops at 1,048,576 rows and 32,767 characters per cell.
+Export a filtered, shortened subset to CSV instead, as shown at the end of
+the jq examples.
+
+**jq** (<https://jqlang.org>) reads one record at a time. Never pass `-s`
+(slurp) on a large file, which loads the whole file into memory.
+
+```sh
+# Look at one record, pretty-printed
+head -n 1 timeline.jsonl | jq .
+
+# Record counts by agent and turn type
+jq -r '[.agent, .turn_type] | @tsv' timeline.jsonl | sort | uniq -c | sort -rn
+
+# Tool calls of one tool, with a few fields
+jq -c 'select(.turn_type == "tool_use" and .tool_name == "Bash") | {timestamp_utc, user, text}' timeline.jsonl
+
+# Case-insensitive regular expression over the text
+jq -c 'select(.text | test("curl|wget|base64 -d"; "i")) | [.timestamp_utc, .agent, .turn_type, .text[0:120]]' timeline.jsonl
+
+# One session as a readable transcript; line breaks in text are printed as line breaks
+jq -r --arg s SESSION_ID 'select(.session_id == $s) | "\(.timestamp_utc)  \(.turn_type)  \(.tool_name)\n\(.text)\n"' timeline.jsonl | less
+
+# A tool call and its result. IDs such as call_1 repeat across agents and
+# sessions, so match the session too
+jq -c --arg s SESSION_ID --arg id TOOL_USE_ID 'select(.session_id == $s and .tool_use_id == $id)' timeline.jsonl
+
+# Sessions with more than 20 tool calls, and their models
+jq -r 'select(.tool_calls > 20) | [.first_timestamp_utc, .user, .agent, .session_id, .tool_calls, (.models | join(" "))] | @tsv' sessions.jsonl
+
+# A CSV for a spreadsheet: filter first, and cut text to 200 characters
+jq -r 'select(.agent == "codex-cli") | [.timestamp_utc, .host, .user, .agent, .session_id, .turn_type, .tool_name, .text[0:200]] | @csv' timeline.jsonl > codex.csv
+```
+
+**grep first, then jq.** `grep -F` and `rg -F` scan text many times faster
+than jq parses JSON, so use them to cut a large file down and jq to check
+the field. A grep match can come from any field, so always confirm with a
+`select` on the field you meant. Write patterns as the record stores them:
+`"turn_type":"tool_use"` without spaces, a quote inside text as `\"`, a
+backslash as `\\`, and a line break as the two characters `\n`.
+
+```sh
+grep -F '"turn_type":"tool_use"' timeline.jsonl | jq -r .tool_name | sort | uniq -c | sort -rn
+rg -F 'aws_secret_access_key' timeline.jsonl | jq -c '{timestamp_utc, user, agent, source_file, source_line}'
+```
+
+**Split or compress.** One file per agent keeps each one small enough for an
+editor, and gzip shrinks transcripts severalfold; `zcat` feeds jq and
+`rg -z` searches the compressed file directly.
+
+```sh
+mkdir -p by-agent
+jq -r .agent timeline.jsonl | sort -u | while read -r a; do
+  jq -c --arg a "$a" 'select(.agent == $a)' timeline.jsonl > "by-agent/$a.jsonl"
+done
+gzip -k timeline.jsonl && zcat timeline.jsonl.gz | jq -c 'select(.agent == "codex-cli")'
+```
+
+**DuckDB** (<https://duckdb.org>) runs SQL over the file without an import
+step, and keeps `session_id` a string even when it looks like a number.
+`COPY` writes a filtered subset as CSV or Parquet.
+
+```sql
+SELECT agent, turn_type, count(*) AS n
+FROM read_json_auto('timeline.jsonl') GROUP BY ALL ORDER BY n DESC;
+
+SELECT timestamp_utc, user, agent, left(text, 120)
+FROM read_json_auto('timeline.jsonl')
+WHERE turn_type = 'tool_use' AND text ILIKE '%rm -rf%'
+ORDER BY timestamp_utc;
+
+COPY (SELECT * FROM read_json_auto('timeline.jsonl') WHERE agent = 'codex-cli')
+TO 'codex.csv' (HEADER);
+```
+
+**Python.** Read line by line for a file of any size, or load it into
+pandas when it fits in memory. pandas parses `timestamp_utc` as a datetime
+by default; `chunksize` reads a large file in pieces.
+
+```python
+import json
+
+with open("timeline.jsonl", encoding="utf-8") as fh:
+    for line in fh:
+        rec = json.loads(line)
+        if rec["turn_type"] == "tool_use" and "curl" in rec["text"]:
+            print(rec["timestamp_utc"], rec["agent"], rec["text"])
+
+import pandas as pd
+
+df = pd.read_json("timeline.jsonl", lines=True)
+for chunk in pd.read_json("timeline.jsonl", lines=True, chunksize=100_000):
+    print(chunk[chunk.turn_type == "tool_use"].tool_name.value_counts())
+```
+
+**Filtering by time afterwards.** `timestamp_utc` always has one fixed
+form, `2026-10-03T16:55:31.123Z`, so plain string comparison puts times in
+the right order and needs no date parsing in any tool. The `--since` and
+`--until` options above do this while writing the timeline; these recipes
+do it on a timeline already written.
+
+```sh
+# Everything on 1 October 2026 (UTC)
+jq -c 'select(.timestamp_utc >= "2026-10-01" and .timestamp_utc < "2026-10-02")' timeline.jsonl
+
+# A window to the second
+jq -c 'select(.timestamp_utc >= "2026-10-01T10:00:00.000Z" and .timestamp_utc < "2026-10-01T10:05:00.000Z")' timeline.jsonl
+
+# Sessions that overlap a day
+jq -c 'select(.last_timestamp_utc >= "2026-10-01" and .first_timestamp_utc < "2026-10-02")' sessions.jsonl
+```
+
+```sql
+SELECT * FROM read_json_auto('timeline.jsonl')
+WHERE timestamp_utc >= '2026-10-01' AND timestamp_utc < '2026-10-02';
+```
+
+- Write a bound either as a date alone (`"2026-10-01"`) or in the full
+  form with milliseconds and `Z`. `"2026-10-01T10:00:00Z"` without `.000`
+  drops the records at exactly 10:00:00, because `.` sorts before `Z`.
+- End a range with "before the next day", `< "2026-10-02"`. `<=
+  "2026-10-01"` keeps almost nothing from that day, since every time on it
+  sorts after the bare date.
+- Records without a timestamp hold `""`, which never passes a lower bound,
+  so they drop out. Add `or .timestamp_utc == ""` to keep them.
+- Convert a local incident window to UTC before writing the bounds.
+- In Python compare the strings directly (`"2026-10-01" <=
+  rec["timestamp_utc"] < "2026-10-02"`). In Windows PowerShell 5.1 `-ge`
+  and `-lt` compare the strings; PowerShell 7 first needs
+  `ConvertFrom-Json -DateKind String`, as below.
+
+**PowerShell**, for an analyst on Windows. `Select-String` as the first
+filter keeps the slow `ConvertFrom-Json` step to the matching lines.
+PowerShell 7 turns `timestamp_utc` into a local `DateTime`; add
+`-DateKind String` (PowerShell 7.5 and later) to `ConvertFrom-Json` to keep
+the UTC string. Windows PowerShell 5.1 keeps it a string.
+
+```powershell
+Select-String -Path timeline.jsonl -SimpleMatch '"agent":"codex-cli"' |
+  ForEach-Object { $_.Line | ConvertFrom-Json } |
+  Where-Object { $_.turn_type -eq 'tool_use' -and $_.text -match 'rm -rf' } |
+  Select-Object timestamp_utc, user, tool_name, text
+```
 
 ## Inventory
 
@@ -296,7 +531,9 @@ it), `users` (distinct host and user pairs, `docker` included) and
 
 ```text
 analyze-agent-artifacts detect INPUT [--json] [--files] [common options]
-analyze-agent-artifacts timeline INPUT -o DIR [--max-text-length N] [--include-thinking] [--agent NAME]... [common options]
+analyze-agent-artifacts timeline INPUT -o DIR [--include-thinking] [--agent NAME]...
+                         [--since WHEN] [--until WHEN] [--keep-undated] [--match REGEX]... [-i]
+                         [common options]
 analyze-agent-artifacts inventory [-o FILE] INPUT...
 analyze-agent-artifacts catalog [--agents]
 analyze-agent-artifacts --version
@@ -308,9 +545,13 @@ analyze-agent-artifacts --version
 | `--files` | `detect` | Also list every attributed file. |
 | `-o, --output DIR` | `timeline` | Output directory, required. |
 | `-o, --output FILE` | `inventory` | CSV to write. Default `fleet-inventory.csv` in the current directory. |
-| `--max-text-length N` | `timeline` | Cut the `text` column to N characters, the last of which is an ellipsis. Default `0`, the full text. |
 | `--include-thinking` | `timeline` | Emit thinking and reasoning blocks as `thinking` rows. |
 | `--agent NAME` | `timeline` | Run only the parsers of this agent. Repeatable. An unknown name produces no rows. |
+| `--since WHEN` | `timeline` | Keep rows at or after `WHEN`, the first millisecond of the period it names. Forms under [Filtering the timeline](#filtering-the-timeline). |
+| `--until WHEN` | `timeline` | Keep rows at or before `WHEN`, the last millisecond of the period it names. Same forms. |
+| `--keep-undated` | `timeline` | With `--since` or `--until`, also keep rows that have no timestamp. |
+| `--match REGEX` | `timeline` | Keep rows whose `text` matches this Python regular expression, with the paired tool call or result. Repeatable; a row matching any pattern is kept. |
+| `-i, --ignore-case` | `timeline` | Make every `--match` case-insensitive. |
 | `--agents` | `catalog` | Print each agent in the catalog with `parser` or `detect only`, instead of the catalog text. |
 | `--host NAME` | `detect`, `timeline` | Host name to record. Overrides `collection.json`. |
 | `--user NAME` | `detect`, `timeline` | User to record for every home whose user is empty. |
@@ -322,8 +563,8 @@ analyze-agent-artifacts --version
 | Exit code | Meaning |
 | --- | --- |
 | `0` | `timeline` wrote at least one row; `detect` found agent artifacts, or `--json` was given; `inventory` wrote at least one row; `catalog`, `--version`. |
-| `1` | `timeline` produced no rows (the three files are still written), `detect` without `--json` found no agent artifacts, or `inventory` found no `host` or `agent` line (the CSV is written with its header only). |
-| `2` | The input does not exist, a file input is neither tar nor zip, an `inventory` input is a symlink or a file or directory that cannot be read, or the command line is invalid. |
+| `1` | `timeline` produced no rows, including when every row was filtered out (the three files are still written), `detect` without `--json` found no agent artifacts, or `inventory` found no `host` or `agent` line (the CSV is written with its header only). |
+| `2` | The input does not exist, a file input is neither tar nor zip, a `--since` or `--until` value is not an accepted form or `--since` is later than `--until`, a `--match` pattern is not a valid regular expression, an `inventory` input is a symlink or a file or directory that cannot be read, or the command line is invalid. |
 
 ## Testing
 
@@ -339,7 +580,7 @@ from anywhere.
 The suite builds a fake image with two Linux users and a Windows profile
 tree, each holding synthetic state for every parsed agent in the exact shapes
 the parsers were validated against, and checks detection in every input mode,
-each parser's rows, the CSV output, and the bundled catalog against the
+each parser's rows, the JSONL output, and the bundled catalog against the
 collector's `--list`. When `sh` and `tar` are available it also runs the sh
 collector on the fake image and analyses the resulting archive end to end.
 `test_inventory.py` feeds `inventory` captured outputs of three hosts, one
@@ -357,7 +598,7 @@ Lint and type checks, from the repository root, at the versions CI pins
 
 ```sh
 uvx ruff@0.16.10 check . && uvx ruff@0.16.10 format --check .
-uvx --from pyright==1.1.414 --with zstandard pyright   # also clean without zstandard
+uvx --from pyright==1.1.414 --with zstandard --with python-dateutil pyright   # also clean without zstandard
 ```
 
 ## Adding a parser
@@ -367,8 +608,8 @@ uvx --from pyright==1.1.414 --with zstandard pyright   # also clean without zsta
 2. Subclass `Parser` in `agent_analyzer/parsers/<agent>.py`: set `agent` to
    the catalog name, implement `wants` on `artifact.rel` and `parse` yielding
    `Row` objects. Use `iter_jsonl` so a truncated line is reported, not fatal.
-   Timestamps go through `to_utc`; text through `compact`, which collapses
-   whitespace and applies `--max-text-length`.
+   Timestamps go through `to_utc`; text through `compact`, which strips
+   leading and trailing whitespace and keeps inner line breaks.
 3. Register it in `agent_analyzer/parsers/__init__.py`. A parser that must
    read a file the catalog attributes to another agent sets `reads_agents`.
 4. Add fixture records to `tests/fixtures.py` and a test class to

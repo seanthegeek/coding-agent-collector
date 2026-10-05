@@ -136,7 +136,7 @@ class ClineParser(LegacyTaskParser):
         row.model = str(m.get("model") or "")
         row.turn_type = "system"
         detail = " ".join("%s=%s" % (k, m[k]) for k in keys if m.get(k) not in (None, ""))
-        row.text = compact("%s: %s" % (label, detail), opts.max_text_length)
+        row.text = compact("%s: %s" % (label, detail))
         return row
 
     START_KEYS = (
@@ -231,7 +231,7 @@ class ClineParser(LegacyTaskParser):
                 row.turn_type = turn
                 row.tool_name = name
                 row.tool_use_id = tid
-                row.text = compact(text, opts.max_text_length)
+                row.text = compact(text)
                 yield row
         if errors:
             yield error_row(self, artifact, errors, session_id, project)

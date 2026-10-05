@@ -1,10 +1,11 @@
-"""Command line: detect agents in an input, or write the CSV timeline."""
+"""Command line: detect agents in an input, or write the JSONL timeline."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import json
+import re
 import sys
 from collections import Counter, OrderedDict
 from pathlib import Path
@@ -12,8 +13,9 @@ from pathlib import Path
 from . import VERSION
 from . import catalog as catalog_mod
 from . import inventory as inventory_mod
+from .filters import FORMS_HELP, RowFilter, parse_bound
 from .inputs import Collection, open_input
-from .model import SESSION_COLUMNS, TIMELINE_COLUMNS, Row, summarise
+from .model import Row, summarise
 from .parsers import ALL, Options, by_agent
 
 PROG = "analyze-agent-artifacts"
@@ -22,7 +24,9 @@ PROG = "analyze-agent-artifacts"
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog=PROG,
-        description="Detect AI coding agent state in a collection and parse it into a CSV timeline.",
+        description=(
+            "Detect AI coding agent state in a collection and parse it into a JSONL timeline."
+        ),
     )
     ap.add_argument("--version", action="version", version="%s %s" % (PROG, VERSION))
     sub = ap.add_subparsers(dest="command", required=True)
@@ -56,15 +60,9 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--json", action="store_true", help="machine-readable output")
     d.add_argument("--files", action="store_true", help="list every attributed file")
 
-    t = sub.add_parser("timeline", help="parse transcripts into timeline.csv and sessions.csv")
+    t = sub.add_parser("timeline", help="parse transcripts into timeline.jsonl and sessions.jsonl")
     add_input(t)
     t.add_argument("-o", "--output", type=Path, required=True, help="output directory")
-    t.add_argument(
-        "--max-text-length",
-        type=int,
-        default=0,
-        help="cut the text column to this many characters; 0 keeps the full text (default)",
-    )
     t.add_argument(
         "--include-thinking",
         action="store_true",
@@ -75,6 +73,38 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="only parse this agent (repeatable); default is every agent with a parser",
+    )
+    t.add_argument(
+        "--since",
+        metavar="WHEN",
+        default="",
+        help="keep rows at or after WHEN; see --until for the forms",
+    )
+    t.add_argument(
+        "--until",
+        metavar="WHEN",
+        default="",
+        help="keep rows at or before WHEN. UTC unless an offset is given; a value without a "
+        "time of day (2026-10-01, 2026-10, today) covers that whole period. " + FORMS_HELP,
+    )
+    t.add_argument(
+        "--keep-undated",
+        action="store_true",
+        help="with --since or --until, also keep rows that have no timestamp",
+    )
+    t.add_argument(
+        "--match",
+        metavar="REGEX",
+        action="append",
+        default=[],
+        help="keep rows whose text matches this Python regular expression (repeatable, any may "
+        "match); a matched tool call keeps its result and a matched result its call",
+    )
+    t.add_argument(
+        "-i",
+        "--ignore-case",
+        action="store_true",
+        help="make --match case-insensitive",
     )
 
     i = sub.add_parser("inventory", help="merge collector --inventory outputs into one fleet CSV")
@@ -105,6 +135,13 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_catalog(args)
     if args.command == "inventory":
         return cmd_inventory(args)
+    if args.command == "timeline":
+        # Checked before an archive is extracted, so a typo fails at once.
+        try:
+            args.row_filter = build_filter(args)
+        except ValueError as e:
+            print("error: %s" % e, file=sys.stderr)
+            return 2
     cat = catalog_mod.load()
     try:
         col = open_input(args.input, cat, work_dir=args.work_dir, host=args.host)
@@ -310,23 +347,63 @@ def collect_rows(
     return rows, counts, problems
 
 
-def write_csv(path: Path, header: list[str], rows) -> None:
-    with open(path, "w", newline="", encoding="utf-8") as fh:
-        w = csv.writer(fh)
-        w.writerow(header)
+# No spaces after separators: the same layout as `jq -c`, so a grep pattern
+# such as '"agent":"codex-cli"' matches both the file and jq's output.
+JSONL_SEPARATORS = (",", ":")
+
+
+def jsonl_line(record: dict) -> str:
+    """One JSON object on one line, keys in schema order. Non-ASCII text is
+    written as UTF-8 rather than escaped, so grep finds it as typed. U+2028
+    and U+2029 are escaped because some line readers (Python's
+    str.splitlines among them) split on them, and a record holding a lone
+    surrogate, which UTF-8 cannot encode, falls back to ASCII escapes."""
+    s = json.dumps(record, ensure_ascii=False, separators=JSONL_SEPARATORS)
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        return json.dumps(record, separators=JSONL_SEPARATORS)
+    return s.replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+
+
+def write_jsonl(path: Path, rows) -> None:
+    with open(path, "w", newline="\n", encoding="utf-8") as fh:
         for r in rows:
-            w.writerow(r.as_list())
+            fh.write(jsonl_line(r.as_dict()))
+            fh.write("\n")
+
+
+def build_filter(args: argparse.Namespace) -> RowFilter:
+    """The row filter from --since, --until, --keep-undated and --match.
+    Raises ValueError with a message for the user on a bad value."""
+    since = parse_bound(args.since) if args.since else ""
+    until = parse_bound(args.until, end=True) if args.until else ""
+    if since and until and since > until:
+        raise ValueError("--since %s is after --until %s" % (since, until))
+    flags = re.IGNORECASE if args.ignore_case else 0
+    patterns = []
+    for m in args.match:
+        try:
+            patterns.append(re.compile(m, flags))
+        except re.error as e:
+            raise ValueError("--match %r: %s" % (m, e)) from None
+    return RowFilter(since, until, args.keep_undated, patterns)
 
 
 def cmd_timeline(args: argparse.Namespace, col: Collection) -> int:
-    opts = Options(max_text_length=args.max_text_length, include_thinking=args.include_thinking)
+    opts = Options(include_thinking=args.include_thinking)
+    rf: RowFilter = args.row_filter
     args.output.mkdir(parents=True, exist_ok=True)
     rows, counts, problems = collect_rows(col, opts, args.agent)
+    parsed_agents = sorted({a for a, _ in counts})
+    if rf.active:
+        rows = rf.apply(rows)
+        counts = Counter((r.agent, r.turn_type) for r in rows)
     sessions = summarise(rows)
-    timeline = args.output / "timeline.csv"
-    sess = args.output / "sessions.csv"
-    write_csv(timeline, TIMELINE_COLUMNS, rows)
-    write_csv(sess, SESSION_COLUMNS, sessions)
+    timeline = args.output / "timeline.jsonl"
+    sess = args.output / "sessions.jsonl"
+    write_jsonl(timeline, rows)
+    write_jsonl(sess, sessions)
     detect = detect_table(col)
     with open(args.output / "detect.json", "w", encoding="utf-8") as fh:
         json.dump(
@@ -346,7 +423,28 @@ def cmd_timeline(args: argparse.Namespace, col: Collection) -> int:
         print("note:      %s" % n)
     for p in problems:
         print("problem:   %s" % p)
-    parsed_agents = sorted({a for a, _ in counts})
+    if rf.since or rf.until:
+        print(
+            "window:    %s to %s%s"
+            % (
+                rf.since or "(start)",
+                rf.until or "(end)",
+                ", undated rows kept" if rf.keep_undated else "",
+            )
+        )
+    if rf.patterns:
+        print(
+            "match:     %s%s"
+            % (
+                " | ".join(p.pattern for p in rf.patterns),
+                " (ignore case)" if args.ignore_case else "",
+            )
+        )
+    if rf.active:
+        print(
+            "filtered:  %d outside the window, %d without a timestamp, %d not matching"
+            % (rf.dropped_window, rf.dropped_undated, rf.dropped_match)
+        )
     # Project-tagged files are routed to every parser, so they are never
     # "detected only" in their own right.
     unparsed = [r["agent"] for r in detect if not r["parser"] and r["agent"] != PROJECT_AGENT]

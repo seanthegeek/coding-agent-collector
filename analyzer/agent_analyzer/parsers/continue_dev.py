@@ -234,7 +234,7 @@ class ContinueParser(Parser):
                 bits.append("%s=%s" % (k, usage[k]))
         if not ts:
             bits.append("dateCreated unknown")
-        row.text = compact(" ".join(bits), opts.max_text_length)
+        row.text = compact(" ".join(bits))
         yield row
 
         # Tool results normally arrive as a later `tool` message; a call that
@@ -428,5 +428,5 @@ class ContinueParser(Parser):
 
     @staticmethod
     def _fill(row: Row, text, opts: Options) -> Row:
-        row.text = compact(text, opts.max_text_length)
+        row.text = compact(text)
         return row

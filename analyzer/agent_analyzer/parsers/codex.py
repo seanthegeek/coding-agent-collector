@@ -545,7 +545,7 @@ class RolloutParser(Parser):
             modified = to_utc(rec.get("source_modified_at"))
             if modified:
                 text += " source_modified=%s" % modified
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
 
     def _parse_history(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
@@ -556,7 +556,7 @@ class RolloutParser(Parser):
             row.timestamp_utc = to_utc(rec.get("ts"))
             row.session_id = str(rec.get("session_id") or "")
             row.turn_type = "user"
-            row.text = compact(rec.get("text"), opts.max_text_length)
+            row.text = compact(rec.get("text"))
             yield row
 
     def _parse_rollout(self, artifact: Artifact, opts: Options) -> Iterator[Row]:
@@ -795,7 +795,7 @@ class RolloutParser(Parser):
 
     @staticmethod
     def _fill(row: Row, text: str, opts: Options) -> Row:
-        row.text = compact(text, opts.max_text_length)
+        row.text = compact(text)
         return row
 
 

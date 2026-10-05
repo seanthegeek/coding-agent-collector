@@ -249,7 +249,6 @@ class OpenCodeParser(Parser):
                 else "",
                 "directory=%s" % s["directory"] if s.get("directory") else "",
             ),
-            opts.max_text_length,
         )
         return row
 
@@ -285,7 +284,7 @@ class OpenCodeParser(Parser):
             def mk(turn: str, text, ts: str = "") -> Row:
                 row = self._row(artifact, ctx, pfile, pline, ts or pts, model)
                 row.turn_type = turn
-                row.text = compact(text, opts.max_text_length)
+                row.text = compact(text)
                 out.append(row)
                 return row
 
@@ -360,7 +359,7 @@ class OpenCodeParser(Parser):
             pfile, pline, at = first_user
             row = self._row(artifact, ctx, pfile, pline, msg_ts, model)
             row.turn_type = "user"
-            row.text = compact("\n".join(user_text), opts.max_text_length)
+            row.text = compact("\n".join(user_text))
             out.insert(at, row)
         yield from out
         if msg.get("error"):
@@ -373,7 +372,7 @@ class OpenCodeParser(Parser):
                 model,
             )
             row.turn_type = "system"
-            row.text = compact("error: " + _error_text(msg.get("error")), opts.max_text_length)
+            row.text = compact("error: " + _error_text(msg.get("error")))
             yield row
         if bad:
             row = self._row(artifact, ctx, msg_file, msg_line, msg_ts, model)
@@ -521,7 +520,7 @@ class OpenCodeParser(Parser):
         def mk(turn: str, text, when: str = "") -> Row:
             row = self._row(artifact, ctx, "", line, when or ts, model)
             row.turn_type = turn
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             return row
 
         if mtype == "user":

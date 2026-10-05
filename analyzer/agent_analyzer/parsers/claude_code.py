@@ -265,7 +265,7 @@ class ClaudeCodeParser(Parser):
             row.session_id = str(rec.get("sessionId") or "")
             row.project_path = str(rec.get("project") or "")
             row.turn_type = "user"
-            row.text = compact(rec.get("display"), opts.max_text_length)
+            row.text = compact(rec.get("display"))
             yield row
 
     @staticmethod
@@ -319,7 +319,6 @@ class ClaudeCodeParser(Parser):
         relocated = ""
         seen_pr: set = set()
         seen_title: set = set()
-        limit = opts.max_text_length
 
         for n, rec in iter_jsonl(artifact.disk_path, errors):
             rtype = rec.get("type")
@@ -346,7 +345,7 @@ class ClaudeCodeParser(Parser):
             def state_row(text: str) -> Row:
                 row = base(ts or last_ts)
                 row.turn_type = "system"
-                row.text = compact(text, limit)
+                row.text = compact(text)
                 return row
 
             if not header_done and rtype in TRANSCRIPT_TYPES:
@@ -374,10 +373,10 @@ class ClaudeCodeParser(Parser):
                 elif not detail:
                     rest = {k: v for k, v in rec.items() if k not in SYSTEM_ENVELOPE}
                     detail = compact_json(rest) if rest else ""
-                row.text = compact("%s: %s" % (subtype, detail) if detail else subtype, limit)
+                row.text = compact("%s: %s" % (subtype, detail) if detail else subtype)
                 yield row
             elif rtype == "attachment":
-                row = self._attachment(rec, base, limit)
+                row = self._attachment(rec, base)
                 if row is not None:
                     yield row
             elif rtype in TITLE_FIELDS:
@@ -415,7 +414,6 @@ class ClaudeCodeParser(Parser):
             yield row
 
     def _user(self, rec, base, artifact: Artifact, opts: Options, is_task: bool) -> Iterator[Row]:
-        limit = opts.max_text_length
         content = (rec.get("message") or {}).get("content")
         origin = rec.get("origin") or {}
         kind = origin.get("kind") if isinstance(origin, dict) else None
@@ -441,7 +439,7 @@ class ClaudeCodeParser(Parser):
                 text = "%s: %s" % (label, text)
             else:
                 row.turn_type = "user"
-            row.text = compact(text, limit)
+            row.text = compact(text)
             return row
 
         if not isinstance(content, list):
@@ -460,13 +458,12 @@ class ClaudeCodeParser(Parser):
                     text = persisted_text(artifact, text)
                 if block.get("is_error"):
                     text = "[error] " + text
-                row.text = compact(text, limit)
+                row.text = compact(text)
                 yield row
             elif btype in ("text", "image"):
                 yield text_row(text_of([block]))
 
     def _assistant(self, rec, base, opts: Options) -> Iterator[Row]:
-        limit = opts.max_text_length
         msg = rec.get("message") or {}
         model = str(msg.get("model") or "")
         content = msg.get("content")
@@ -479,7 +476,6 @@ class ClaudeCodeParser(Parser):
             text = text_of(content)
             row.text = compact(
                 "api error: %s" % ": ".join(p for p in (status, text) if p),
-                limit,
             )
             yield row
             return
@@ -502,7 +498,7 @@ class ClaudeCodeParser(Parser):
                     sent = wire.get(row.tool_use_id)
                     if isinstance(sent, dict) and sent.get("command"):
                         inp = sent
-                row.text = compact(tool_summary(row.tool_name, inp), limit)
+                row.text = compact(tool_summary(row.tool_name, inp))
                 yield row
             elif btype == "text":
                 text = block.get("text")
@@ -511,7 +507,7 @@ class ClaudeCodeParser(Parser):
                 row = base()
                 row.turn_type = "assistant"
                 row.model = model
-                row.text = compact(text, limit)
+                row.text = compact(text)
                 yield row
             elif btype in ("thinking", "redacted_thinking") and opts.include_thinking:
                 if btype == "thinking":
@@ -523,11 +519,11 @@ class ClaudeCodeParser(Parser):
                 row = base()
                 row.turn_type = "thinking"
                 row.model = model
-                row.text = compact(text, limit)
+                row.text = compact(text)
                 yield row
 
     @staticmethod
-    def _attachment(rec, base, limit: int) -> Row | None:
+    def _attachment(rec, base) -> Row | None:
         att = rec.get("attachment") or {}
         if not isinstance(att, dict):
             return None
@@ -546,18 +542,18 @@ class ClaudeCodeParser(Parser):
                 text = "%s: %s" % (label, text)
             else:
                 row.turn_type = "user"
-            row.text = compact(text, limit)
+            row.text = compact(text)
             return row
         if atype == "hook_system_message":
             row = base()
             row.turn_type = "system"
             name = str(att.get("hookName") or att.get("hookEvent") or "")
             body = text_of(att.get("content"))
-            row.text = compact("hook: %s" % ": ".join(p for p in (name, body) if p), limit)
+            row.text = compact("hook: %s" % ": ".join(p for p in (name, body) if p))
             return row
         if atype == "edited_text_file":
             row = base()
             row.turn_type = "system"
-            row.text = compact("edited file: %s" % (att.get("filename") or ""), limit)
+            row.text = compact("edited file: %s" % (att.get("filename") or ""))
             return row
         return None

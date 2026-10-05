@@ -1,5 +1,5 @@
-"""Output schema. `timeline.csv` and `sessions.csv` are interfaces that
-analysts build on; add columns at the end, never rename or remove them
+"""Output schema. `timeline.jsonl` and `sessions.jsonl` are interfaces that
+analysts build on; add fields at the end, never rename or remove them
 without a README note."""
 
 from __future__ import annotations
@@ -58,8 +58,8 @@ class Row:
     source_file: str = ""
     source_line: int = 0
 
-    def as_list(self) -> list[object]:
-        return [getattr(self, c) for c in TIMELINE_COLUMNS]
+    def as_dict(self) -> dict[str, object]:
+        return {c: getattr(self, c) for c in TIMELINE_COLUMNS}
 
 
 assert [f.name for f in fields(Row)] == TIMELINE_COLUMNS
@@ -103,21 +103,21 @@ class SessionSummary:
         elif row.turn_type == "tool_use":
             self.tool_calls += 1
 
-    def as_list(self) -> list[object]:
-        return [
-            self.host,
-            self.user,
-            self.agent,
-            self.session_id,
-            self.project_path,
-            self.first_timestamp_utc,
-            self.last_timestamp_utc,
-            " ".join(self.models),
-            self.user_turns,
-            self.assistant_turns,
-            self.tool_calls,
-            self.source_file,
-        ]
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "host": self.host,
+            "user": self.user,
+            "agent": self.agent,
+            "session_id": self.session_id,
+            "project_path": self.project_path,
+            "first_timestamp_utc": self.first_timestamp_utc,
+            "last_timestamp_utc": self.last_timestamp_utc,
+            "models": list(self.models),
+            "user_turns": self.user_turns,
+            "assistant_turns": self.assistant_turns,
+            "tool_calls": self.tool_calls,
+            "source_file": self.source_file,
+        }
 
 
 def summarise(rows: list[Row]) -> list[SessionSummary]:
@@ -134,13 +134,11 @@ def summarise(rows: list[Row]) -> list[SessionSummary]:
     return sorted(out.values(), key=lambda s: (s.first_timestamp_utc, s.agent, s.session_id))
 
 
-def compact(text: object | None, limit: int) -> str:
-    """One-line text, optionally length-capped. Whitespace runs collapse so the
-    CSV stays one row per record; the full content is at source_file:line."""
+def compact(text: object | None) -> str:
+    """Event text with leading and trailing whitespace stripped. Inner
+    newlines and indentation are kept: JSON escapes them, so each record
+    still stays on one line of the JSONL output."""
     if text is None:
         return ""
     s = text if isinstance(text, str) else str(text)
-    s = " ".join(s.split())
-    if limit and len(s) > limit:
-        s = s[: limit - 1] + "…"
-    return s
+    return s.strip()

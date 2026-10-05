@@ -252,7 +252,7 @@ class GooseParser(Parser):
             else:
                 row.turn_type = "system"
                 text = compact_json(b)
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
 
     # -- sessions.db ---------------------------------------------------------------------
@@ -302,7 +302,6 @@ class GooseParser(Parser):
                                 "schedule=%s" % s["schedule_id"] if s.get("schedule_id") else "",
                                 "archived=%s" % s["archived_at"] if s.get("archived_at") else "",
                             ),
-                            opts.max_text_length,
                         )
                         yield row
                 tool_names: dict[str, str] = {}
@@ -368,7 +367,6 @@ class GooseParser(Parser):
                         str(rec.get("description") or ""),
                         "%s messages" % rec["message_count"] if "message_count" in rec else "",
                     ),
-                    opts.max_text_length,
                 )
                 yield row
                 continue
@@ -432,7 +430,6 @@ class GooseParser(Parser):
                         "%d messages" % len(msgs),
                         "last user: " + last_user if last_user else "",
                     ),
-                    opts.max_text_length,
                 )
                 continue
             data = rec.get("data")
@@ -461,7 +458,6 @@ class GooseParser(Parser):
                         if isinstance(rec["error"], str)
                         else compact_json(rec["error"])
                     ),
-                    opts.max_text_length,
                 )
                 pending.append(row)
         if request is not None:
@@ -478,5 +474,5 @@ class GooseParser(Parser):
                     continue
                 row = self._row(artifact, n)
                 row.turn_type = "user"
-                row.text = compact(unescape_history(line), opts.max_text_length)
+                row.text = compact(unescape_history(line))
                 yield row

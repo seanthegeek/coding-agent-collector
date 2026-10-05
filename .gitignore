@@ -9,3 +9,5 @@ __pycache__/
 *.egg-info/
 analyzer/build/
 analyzer/dist/
+.venv/
+venv/

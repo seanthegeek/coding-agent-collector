@@ -33,7 +33,7 @@ It must work in three situations:
 
 Roadmap: v1 (done) collects, with sh and PowerShell 5.1 collectors. v2, in
 progress under `analyzer/`, is the analyst-side Python tool that detects agent
-state in any collected directory and parses transcripts into a CSV timeline;
+state in any collected directory and parses transcripts into a JSONL timeline;
 the parser table in `analyzer/README.md` lists which agents are parsed, the
 rest of the catalog is detected but not yet parsed. Parsing never happens on
 the host.
@@ -58,11 +58,12 @@ analyzer/
   agent_analyzer/              Python package: cli, inputs, catalog, model, parsers/
   agent_analyzer/catalog.txt   verbatim copy of collect-agent-artifacts.sh --list
   research/<agent>.md          how each agent records transcripts; one per agent
-  README.md                    analyzer user documentation, CSV schema, parser table
+  README.md                    analyzer user documentation, JSONL schema, parser table
   CHANGELOG.md                 analyzer release history, one entry per VERSION
   tests/                       unittest suite with synthetic fixtures; tests/run.sh
   pyproject.toml               installable as analyze-agent-artifacts
-  requirements.txt             third-party dependencies (zstandard, for Zed threads)
+  requirements.txt             third-party dependencies (python-dateutil, required;
+                               zstandard, optional, for compressed transcripts)
 lab/                           Docker sandbox for running CLI agents against a scratch
                                home and exporting it for the collector; see lab/README.md
 tools/check_research_links.py  verifies every citation link in the research documents
@@ -238,15 +239,18 @@ rules are different from the collectors'.
   copy is never opened directly.
   Bad lines are reported as a `system` row, never fatal: a transcript cut
   mid-write by a running agent must still yield its earlier turns.
-- **The CSVs are interfaces.** `timeline.csv` and `sessions.csv` columns are
-  documented in `analyzer/README.md`; add columns at the end and never rename
-  or remove them without updating the README and saying so in the commit.
+- **The outputs are interfaces.** The `timeline.jsonl` and `sessions.jsonl`
+  fields, their order and their JSON types are documented in
+  `analyzer/README.md`, as are the `fleet-inventory.csv` columns; add
+  fields or columns at the end and never rename, retype or remove them
+  without updating the README and saying so in the commit. A JSONL record
+  always has every field, with `""` rather than `null` for no value.
   Timestamps are always UTC ISO 8601 with milliseconds and a trailing Z.
 - **Read-only, no surprises.** The analyzer writes only under `-o` and the
   archive work directory, never follows symlinks, and never materialises
-  symlinks from an archive. The `text` column carries the full event text by
-  default; `--max-text-length` is the analyst's choice when a shorter CSV is
-  wanted.
+  symlinks from an archive. The `text` field carries the full event text,
+  line breaks included, and is never truncated; shortening it is the
+  analyst's step afterwards, with jq or DuckDB.
 - **Lint and types.** ruff (lint and format) and pyright in standard mode
   must be clean; see "Quality gates". Fix a finding rather than suppress
   it, and give any `# noqa` or `# pyright: ignore` a reason.
@@ -569,7 +573,7 @@ cd ../analyzer && tests/run.sh
 cd ..
 # quality gates, from the repository root (see "Quality gates")
 uvx ruff@0.16.10 check . && uvx ruff@0.16.10 format --check .
-uvx --from pyright==1.1.414 --with zstandard pyright
+uvx --from pyright==1.1.414 --with zstandard --with python-dateutil pyright
 npx -y markdownlint-cli2@0.23.3 "**/*.md"
 shfmt -ln posix $(shfmt -f .) >/dev/null && shellcheck -s sh $(shfmt -f .) && checkbashisms -p $(shfmt -f .)
 pwsh -NoProfile -Command '$r = @("collectors/Collect-AgentArtifacts.ps1","collectors/tests/smoke.ps1") | ForEach-Object { Invoke-ScriptAnalyzer -Path $_ -Settings collectors/PSScriptAnalyzerSettings.psd1 }; $r | Format-Table -AutoSize; exit @($r).Count'
@@ -629,7 +633,7 @@ list together. Run the commands from the repository root before pushing.
 | --- | --- | --- | --- |
 | ruff lint | 0.16.10 | `uvx ruff@0.16.10 check .` | `ruff.toml`; `analyzer/pyproject.toml` extends it |
 | ruff format | 0.16.10 | `uvx ruff@0.16.10 format --check .` | `ruff.toml` (line length 100) |
-| pyright, standard mode, Python 3.10 | 1.1.414 | `uvx --from pyright==1.1.414 --with zstandard pyright` | `pyrightconfig.json` |
+| pyright, standard mode, Python 3.10 | 1.1.414 | `uvx --from pyright==1.1.414 --with zstandard --with python-dateutil pyright` | `pyrightconfig.json` |
 | markdownlint | markdownlint-cli2 0.23.3 | `npx -y markdownlint-cli2@0.23.3 "**/*.md"` | `.markdownlint-cli2.jsonc` |
 | shfmt POSIX parse | 3.14.1 | `shfmt -ln posix $(shfmt -f .) >/dev/null` | none; never pass `-w` |
 | shellcheck | 0.11.0 | `shellcheck -s sh $(shfmt -f .)` | `.shellcheckrc` |
@@ -688,7 +692,7 @@ list together. Run the commands from the repository root before pushing.
   `collectors/CHANGELOG.md` or `analyzer/CHANGELOG.md`, in Keep a Changelog
   form: a `## [x.y.z] - YYYY-MM-DD` heading with `Added`, `Changed`, `Fixed`
   and `Removed` subsections, one line per item, written for the responder
-  or analyst who uses that part. Any change to the manifest or CSV
+  or analyst who uses that part. Any change to the manifest, JSONL or CSV
   interfaces is called out in that entry. Work that lands between bumps
   goes under `## [Unreleased]` and moves into the next version's heading
   when it is bumped.

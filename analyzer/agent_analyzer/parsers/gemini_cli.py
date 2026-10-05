@@ -226,7 +226,7 @@ class GeminiCliParser(Parser):
         row.session_id = sid
         row.project_path = project
         row.turn_type = "system"
-        row.text = compact(text, opts.max_text_length)
+        row.text = compact(text)
         return row
 
     # -- logs.json --
@@ -255,7 +255,7 @@ class GeminiCliParser(Parser):
             row.session_id = str(rec.get("sessionId") or "")
             row.project_path = project
             row.turn_type = "user"
-            row.text = compact(rec.get("message"), opts.max_text_length)
+            row.text = compact(rec.get("message"))
             yield row
 
     # -- sessions --
@@ -433,7 +433,7 @@ class GeminiCliParser(Parser):
             r.project_path = project
             r.turn_type = turn
             r.model = model
-            r.text = compact(text, opts.max_text_length)
+            r.text = compact(text)
             return r
 
         out: list[Row] = []

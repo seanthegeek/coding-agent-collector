@@ -288,7 +288,7 @@ class AgentZeroParser(Parser):
     ) -> Row:
         row = Row(**base.__dict__)
         row.turn_type = turn_type
-        row.text = compact(text, opts.max_text_length)
+        row.text = compact(text)
         row.source_line = line
         row.timestamp_utc = ts
         return row

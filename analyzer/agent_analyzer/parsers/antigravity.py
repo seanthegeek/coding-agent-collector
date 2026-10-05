@@ -632,7 +632,7 @@ class AntigravityParser(Parser):
             row.timestamp_utc = to_utc(rec.get("timestamp"))
             row.project_path = uri_to_path(str(rec.get("workspace") or ""))
             row.turn_type = "user"
-            row.text = compact(rec.get("display"), opts.max_text_length)
+            row.text = compact(rec.get("display"))
             yield row
 
     # -- conversation_summaries.db ----------------------------------------------
@@ -667,7 +667,6 @@ class AntigravityParser(Parser):
                         if r.get("parent_conversation_id")
                         else "",
                     ),
-                    opts.max_text_length,
                 )
                 yield row
 
@@ -714,7 +713,6 @@ class AntigravityParser(Parser):
                                 if meta.get("parent_conversation_id")
                                 else "",
                             ),
-                            opts.max_text_length,
                         )
                         yield row
             models: dict[int, str] = {}
@@ -803,7 +801,7 @@ class AntigravityParser(Parser):
             text = payload.get("query") or payload.get("user_response") or ""
             if payload.get("is_queued_message"):
                 text = "[queued] " + text
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
             return
 
@@ -812,22 +810,20 @@ class AntigravityParser(Parser):
             if thinking and opts.include_thinking:
                 row = base(created)
                 row.turn_type = "thinking"
-                row.text = compact(thinking, opts.max_text_length)
+                row.text = compact(thinking)
                 yield row
             text = payload.get("modified_response") or payload.get("response")
             if text:
                 row = base(completed)
                 row.turn_type = "assistant"
-                row.text = compact(text, opts.max_text_length)
+                row.text = compact(text)
                 yield row
             for tc in payload.get("tool_calls", []):
                 row = base(completed)
                 row.turn_type = "tool_use"
                 row.tool_name = tc.get("name") or tc.get("original_name", "")
                 row.tool_use_id = tc.get("id", "")
-                row.text = compact(
-                    tool_args_summary(tc.get("arguments_json", "")), opts.max_text_length
-                )
+                row.text = compact(tool_args_summary(tc.get("arguments_json", "")))
                 yield row
             return
 
@@ -843,5 +839,5 @@ class AntigravityParser(Parser):
         else:
             row = base(created)
             row.turn_type = "system"
-        row.text = compact(text, opts.max_text_length)
+        row.text = compact(text)
         yield row

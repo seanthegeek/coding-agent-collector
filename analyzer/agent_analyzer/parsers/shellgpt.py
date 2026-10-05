@@ -117,7 +117,7 @@ class ShellGptParser(Parser):
             row.turn_type = turn_type
             row.tool_name, row.tool_use_id = tool_name, tool_use_id
             row.source_line = 1
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             return row
 
         with open(artifact.disk_path, "rb") as fh:

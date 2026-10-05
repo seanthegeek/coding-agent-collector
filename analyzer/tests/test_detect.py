@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_analyzer import catalog, cli
+from agent_analyzer import catalog, cli, model
 from agent_analyzer.inputs import open_input
 from fixtures import build_home, build_image
 
@@ -234,15 +234,17 @@ class ArchiveTests(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             rc = cli.main(["timeline", str(extracted), "-o", str(self.tmp / "tl")])
         self.assertEqual(rc, 0, buf.getvalue())
-        rows = (self.tmp / "tl" / "timeline.csv").read_text(encoding="utf-8").splitlines()
+        lines = (self.tmp / "tl" / "timeline.jsonl").read_text(encoding="utf-8").split("\n")
+        self.assertEqual(lines[-1], "")
+        rows = [json.loads(line) for line in lines[:-1]]
         self.assertGreater(len(rows), 20)
-        self.assertTrue(rows[0].startswith("timestamp_utc,host,user,agent"))
-        self.assertTrue((self.tmp / "tl" / "sessions.csv").exists())
+        self.assertEqual(list(rows[0]), model.TIMELINE_COLUMNS)
+        self.assertIsInstance(rows[0]["source_line"], int)
+        sessions = (self.tmp / "tl" / "sessions.jsonl").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(list(json.loads(sessions[0])), model.SESSION_COLUMNS)
         self.assertTrue((self.tmp / "tl" / "detect.json").exists())
         # host comes from collection.json, users from the manifest
-        self.assertTrue(
-            all(",alice," in r or ",bob," in r or ",carol," in r for r in rows[1:]), rows[1:3]
-        )
+        self.assertLessEqual({r["user"] for r in rows}, {"alice", "bob", "carol"})
 
 
 if __name__ == "__main__":

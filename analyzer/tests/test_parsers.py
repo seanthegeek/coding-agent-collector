@@ -1,4 +1,3 @@
-import csv
 import io
 import json
 import shutil
@@ -9,7 +8,7 @@ from typing import ClassVar, cast
 
 from agent_analyzer import catalog, cli, protobuf, sqlite_util
 from agent_analyzer.inputs import Artifact, open_input
-from agent_analyzer.model import summarise
+from agent_analyzer.model import compact, summarise
 from agent_analyzer.parsers import Options, by_agent
 from agent_analyzer.parsers.antigravity import AntigravityParser, tool_args_summary, uri_to_path
 from agent_analyzer.parsers.claude_code import ClaudeCodeParser, tool_summary
@@ -56,6 +55,24 @@ class TimeTests(unittest.TestCase):
         self.assertEqual(to_utc("garbage"), "")
 
 
+def read_jsonl(path: Path) -> list[dict]:
+    with open(path, encoding="utf-8", newline="") as fh:
+        return [json.loads(line) for line in fh]
+
+
+class JsonlOutputTests(unittest.TestCase):
+    def test_text_keeps_inner_whitespace(self):
+        self.assertEqual(compact("  line one\n    indented\n"), "line one\n    indented")
+        self.assertEqual(compact(None), "")
+
+    def test_one_record_per_line(self):
+        for text in ("a\nb\r\nc", "a\u2028b\u2029c", "lone \ud800 surrogate", "caf\u00e9"):
+            line = cli.jsonl_line({"text": text})
+            self.assertEqual(len(line.splitlines()), 1, repr(text))
+            self.assertEqual(json.loads(line), {"text": text})
+        self.assertIn("caf\u00e9", cli.jsonl_line({"text": "caf\u00e9"}))
+
+
 class ParserBase(unittest.TestCase):
     def setUp(self):
         self.cat = catalog.load()
@@ -91,8 +108,8 @@ class ClaudeCodeTests(ParserBase):
         (
             14,
             "system",
-            "slash command: <command-name>/model</command-name> "
-            "<command-message>model</command-message> <command-args></command-args>",
+            "slash command: <command-name>/model</command-name>\n"
+            "<command-message>model</command-message>\n<command-args></command-args>",
         ),
         (
             15,
@@ -102,13 +119,13 @@ class ClaudeCodeTests(ParserBase):
         (
             16,
             "system",
-            "task notification: <task-notification> <task-id>b1</task-id> "
-            "<status>completed</status> </task-notification>",
+            "task notification: <task-notification>\n<task-id>b1</task-id>\n"
+            "<status>completed</status>\n</task-notification>",
         ),
         (17, "tool_use", "select:WebFetch"),
         (18, "tool_result", "WebFetch"),
         (19, "tool_use", "/srv/proj/big.log"),
-        (20, "tool_result", "line 1 of the full output line 2 of the full output"),
+        (20, "tool_result", "line 1 of the full output\nline 2 of the full output"),
         (21, "tool_use", "/srv/proj/gone.log"),
         (22, "tool_result", ""),
         (23, "system", "api error: 429 rate_limit: API Error: rate limited"),
@@ -193,7 +210,7 @@ class ClaudeCodeTests(ParserBase):
 
     def test_persisted_output(self):
         rows = {r.source_line: r for r in self.rows_for(ClaudeCodeParser(), self.REL)}
-        self.assertEqual(rows[20].text, "line 1 of the full output line 2 of the full output")
+        self.assertEqual(rows[20].text, "line 1 of the full output\nline 2 of the full output")
         missing = rows[22].text
         self.assertTrue(missing.startswith("<persisted-output>"), missing)
         self.assertTrue(
@@ -219,11 +236,6 @@ class ClaudeCodeTests(ParserBase):
         thinking = [r for r in rows if r.turn_type == "thinking"]
         # The empty block on line 4 (signature only) is skipped.
         self.assertEqual([(r.source_line, r.text) for r in thinking], [(3, "private reasoning")])
-
-    def test_max_text_length(self):
-        rows = self.rows_for(ClaudeCodeParser(), self.REL, max_text_length=10)
-        self.assertTrue(all(len(r.text) <= 10 for r in rows))
-        self.assertTrue(rows[0].text.endswith("…"))
 
     def test_history(self):
         rows = self.rows_for(ClaudeCodeParser(), ".claude/history.jsonl")
@@ -444,14 +456,14 @@ class CodexTests(ParserBase):
                     "system",
                     "",
                     "",
-                    "context: agents_md_instructions: # AGENTS.md instructions for /srv/proj "
-                    "<INSTRUCTIONS> Run the tests. </INSTRUCTIONS>",
+                    "context: agents_md_instructions: # AGENTS.md instructions for /srv/proj\n\n"
+                    "<INSTRUCTIONS>\nRun the tests.\n</INSTRUCTIONS>",
                 ),
                 (
                     "system",
                     "",
                     "",
-                    "context: environment_context: <environment_context> <cwd>/srv/proj</cwd> "
+                    "context: environment_context: \n<environment_context>\n  <cwd>/srv/proj</cwd>\n"
                     "</environment_context>",
                 ),
                 # A tag typed mid-message stays the person's prompt.
@@ -461,7 +473,7 @@ class CodexTests(ParserBase):
                 ("tool_result", "", "ts_1", "calendar_list"),
                 ("tool_use", "docs.search", "mcp_1", '{"q":"diagram"}'),
                 ("tool_result", "", "mcp_1", "2 hits"),
-                ("system", "", "", "plan: 1. draw 2. check"),
+                ("system", "", "", "plan: 1. draw\n2. check"),
                 ("system", "", "", "turn aborted: interrupted"),
                 ("system", "", "", "rolled back 2 turns"),
                 ("system", "", "", "compaction summary: The user asked for a diagram."),
@@ -498,8 +510,7 @@ class TimelineTests(ParserBase):
         with contextlib.redirect_stdout(buf):
             rc = cli.main(["timeline", str(self.tmp / "home"), "-o", str(out), "--host", "h1"])
         self.assertEqual(rc, 0, buf.getvalue())
-        with open(out / "timeline.csv", encoding="utf-8", newline="") as fh:
-            rows = list(csv.DictReader(fh))
+        rows = read_jsonl(out / "timeline.jsonl")
         ts = [r["timestamp_utc"] for r in rows if r["timestamp_utc"]]
         self.assertEqual(ts, sorted(ts))
         # Subset checks: each parser branch adds its own agents and sessions.
@@ -534,8 +545,7 @@ class TimelineTests(ParserBase):
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
-        with open(out / "sessions.csv", encoding="utf-8", newline="") as fh:
-            sessions = {r["session_id"]: r for r in csv.DictReader(fh)}
+        sessions = {r["session_id"]: r for r in read_jsonl(out / "sessions.jsonl")}
         expected_sessions = {
             CLAUDE_SESSION,
             CODEX_SESSION,
@@ -581,13 +591,13 @@ class TimelineTests(ParserBase):
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
-        self.assertEqual(c["models"], "claude-fable-5-1")
+        self.assertEqual(c["models"], ["claude-fable-5-1"])
         # Four calls in the session file and the fork call in a subagent file,
         # which carries the parent's session id.
-        self.assertEqual(c["tool_calls"], "5")
+        self.assertEqual(c["tool_calls"], 5)
         self.assertTrue(c["source_file"].endswith(CLAUDE_SESSION + ".jsonl"), c["source_file"])
         self.assertEqual(c["first_timestamp_utc"], "2026-10-01T10:00:00.000Z")
-        self.assertEqual(sessions[CODEX_SESSION]["models"], "gpt-5-codex")
+        self.assertEqual(sessions[CODEX_SESSION]["models"], ["gpt-5-codex"])
 
     def test_agent_filter(self):
         out = self.tmp / "out"
@@ -595,8 +605,7 @@ class TimelineTests(ParserBase):
 
         with contextlib.redirect_stdout(io.StringIO()):
             cli.main(["timeline", str(self.tmp / "home"), "-o", str(out), "--agent", "codex-cli"])
-        with open(out / "timeline.csv", encoding="utf-8", newline="") as fh:
-            rows = list(csv.DictReader(fh))
+        rows = read_jsonl(out / "timeline.jsonl")
         self.assertEqual({r["agent"] for r in rows}, {"codex-cli"})
 
 
@@ -647,8 +656,7 @@ class ProjectRoutingTests(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             rc = cli.main(["timeline", str(archive), "-o", str(out), *list(extra)])
         self.assertEqual(rc, 0, buf.getvalue())
-        with open(out / "timeline.csv", encoding="utf-8", newline="") as fh:
-            return list(csv.DictReader(fh)), buf.getvalue()
+        return read_jsonl(out / "timeline.jsonl"), buf.getvalue()
 
     def test_project_artifacts_reach_their_parsers(self):
         archive = self._collect()
@@ -1018,7 +1026,7 @@ class KiroTests(ParserBase):
             (res.tool_name, res.tool_use_id, res.timestamp_utc),
             ("execute_bash", "tooluse_abc123", "2026-04-24T03:17:17.000Z"),
         )
-        self.assertEqual(res.text, "total 8 README.md [Success]")
+        self.assertEqual(res.text, "total 8\nREADME.md [Success]")
         self.assertEqual(final.timestamp_utc, "2026-04-24T03:17:18.100Z")
 
     def test_export_variants(self):
@@ -1153,7 +1161,7 @@ class GeminiCliTests(ParserBase):
         self.assertEqual(ls.text, 'ReadFolder: {"path":"/srv/proj/src"}')
         self.assertEqual(ls.timestamp_utc, "2026-10-01T09:00:07.100Z")
         self.assertEqual(
-            (lsout.tool_use_id, lsout.text), ("list_directory-1759309207000", "main.ts util.ts")
+            (lsout.tool_use_id, lsout.text), ("list_directory-1759309207000", "main.ts\nutil.ts")
         )
         self.assertNotIn("delete everything", " ".join(r.text for r in rows))  # rewound
         self.assertEqual(g3.text, "Here is util.ts.")  # $patch content
@@ -1399,7 +1407,7 @@ class GooseTests(ParserBase):
         rows = self.rows_for(GooseParser(), ".local/state/goose/history.txt")
         self.assertEqual(
             [(r.turn_type, r.text) for r in rows],
-            [("user", "run the tests"), ("user", "line one line two \\ done")],
+            [("user", "run the tests"), ("user", "line one\nline two \\ done")],
         )
         self.assertEqual(unescape_history("a\\nb\\\\c"), "a\nb\\c")
 
@@ -1466,7 +1474,7 @@ class ContinueTests(ParserBase):
             self.assertEqual(r.timestamp_utc, "2026-10-02T10:00:00.000Z")
         start, user, use1, res1, asst, _use2, res2 = rows
         self.assertIn("session start: Fix bug mode=agent items=5", start.text)
-        self.assertEqual(user.text, "rename foo [image]")
+        self.assertEqual(user.text, "rename foo\n[image]")
         self.assertEqual(
             (use1.tool_name, use1.tool_use_id, use1.text, use1.model),
             ("edit_existing_file", "call_1", '{"filepath":"a.py"}', "GPT-4o"),
@@ -1560,10 +1568,10 @@ class AiderTests(ParserBase):
             (user.text, user.timestamp_utc), ("rename foo to bar", "2026-10-02T12:00:05.123Z")
         )
         self.assertEqual(asst.timestamp_utc, "2026-10-02T12:00:05.123Z")
-        self.assertTrue(asst.text.startswith("Here is the change: a.py <<<<<<< SEARCH"))
+        self.assertTrue(asst.text.startswith("Here is the change:\n\na.py\n<<<<<<< SEARCH"))
         self.assertTrue(asst.text.endswith(">>>>>>> REPLACE"))
         self.assertEqual(
-            tool.text, "Applied edit to a.py Commit abc1234 refactor: rename foo to bar"
+            tool.text, "Applied edit to a.py\nCommit abc1234 refactor: rename foo to bar"
         )
         self.assertEqual((add.text, add.timestamp_utc), ("/add b.py", "2026-10-02T13:00:02.000Z"))
         self.assertEqual(added.text, "Added b.py to the chat")
@@ -1594,7 +1602,7 @@ class AiderTests(ParserBase):
         )
         self.assertEqual(
             (rows[1].text, rows[1].timestamp_utc),
-            ("Here is the change: a.py", "2026-10-02T12:00:09.000Z"),
+            ("Here is the change:\n\na.py", "2026-10-02T12:00:09.000Z"),
         )
         self.assertTrue(all(r.session_id == self.S1 for r in rows))
 
@@ -1728,7 +1736,7 @@ class ZedTests(ParserBase):
         self.assertEqual(
             user.timestamp_utc, "2026-10-03T09:01:05.000Z"
         )  # thread updated_at, approximate
-        self.assertEqual(user.text, "run the tests [mention] file:///srv/proj/README.md")
+        self.assertEqual(user.text, "run the tests\n[mention] file:///srv/proj/README.md")
         self.assertEqual(
             (use.tool_name, use.tool_use_id, use.text),
             ("terminal", "toolu_01", '{"command":"pytest -q"}'),
@@ -1855,7 +1863,7 @@ class VsCodeTests(ParserBase):
         self.assertEqual(start.timestamp_utc, "2026-10-03T11:00:00.000Z")
         self.assertEqual(
             (user.text, user.model, user.timestamp_utc),
-            ("run tests [attached: test_a.py]", "copilot/gpt-4.1", "2026-10-03T11:00:01.000Z"),
+            ("run tests\n[attached: test_a.py]", "copilot/gpt-4.1", "2026-10-03T11:00:01.000Z"),
         )
         self.assertEqual(
             (use.tool_name, use.tool_use_id, use.text), ("run_in_terminal", "call_a", "pytest")
@@ -2148,8 +2156,7 @@ class OpenCodeTests(ParserBase):
                     "kilo-code",
                 ]
             )
-        with open(out / "sessions.csv", encoding="utf-8", newline="") as fh:
-            sessions = {r["session_id"]: r for r in csv.DictReader(fh)}
+        sessions = {r["session_id"]: r for r in read_jsonl(out / "sessions.jsonl")}
         self.assertEqual(
             set(sessions),
             {
@@ -2160,8 +2167,8 @@ class OpenCodeTests(ParserBase):
                 KILO_TASK,
             },
         )
-        self.assertEqual(sessions[OPENCODE_SESSION]["models"], "anthropic/claude-sonnet-4")
-        self.assertEqual(sessions[OPENCODE_SESSION]["tool_calls"], "1")
+        self.assertEqual(sessions[OPENCODE_SESSION]["models"], ["anthropic/claude-sonnet-4"])
+        self.assertEqual(sessions[OPENCODE_SESSION]["tool_calls"], 1)
         self.assertEqual(sessions[KILO_SESSION]["agent"], "kilo-code")
         self.assertEqual({s["project_path"] for s in sessions.values()}, {"/srv/proj"})
 
@@ -2524,7 +2531,7 @@ class RooCodeTests(ParserBase):
             (user.text, user.timestamp_utc), ("rename the helper", "2026-10-03T10:03:20.000Z")
         )
         self.assertIn("apiProtocol=anthropic", api.text)
-        self.assertEqual((diff.tool_name, diff.text), ("appliedDiff", "src/util.py | -old +new"))
+        self.assertEqual((diff.tool_name, diff.text), ("appliedDiff", "src/util.py | -old\n+new"))
         self.assertEqual((out.tool_use_id, out.text), (cmd.tool_use_id, "1 passed"))
         self.assertTrue(condense.text.startswith("condense_context: prevContextTokens=9000"))
         self.assertIn("Renamed helper; tests pass.", condense.text)
@@ -2710,7 +2717,7 @@ class TabbyTests(ParserBase):
     def test_secret_columns_never_reach_output(self):
         for rel in (TABBY_REL, TABBY_BACKUP_REL):
             for r in self.rows_for(TabbyParser(), rel):
-                for value in r.as_list():
+                for value in r.as_dict().values():
                     for secret in TABBY_SECRETS:
                         self.assertNotIn(secret, str(value))
         out = self.tmp / "out"
@@ -2885,7 +2892,7 @@ class ShellGptTests(ParserBase):
         self.assertEqual(
             (result.tool_name, result.tool_use_id), ("execute_shell_command", "call_Q1w2e3r4")
         )
-        self.assertTrue(result.text.startswith("Exit code: 0, Output: LISTEN"))
+        self.assertTrue(result.text.startswith("Exit code: 0, Output:\nLISTEN"))
         self.assertTrue(asst.text.endswith("is listening on 8080."))
 
     def test_legacy_function_call(self):
@@ -3045,7 +3052,7 @@ class PiTests(ParserBase):
         for why in ("lc-skills", "llamacpp", "checkpoints"):
             self.assertIn(why, last.text)
         self.assertIn(
-            "custom_message lc-skills: ## Skill: edit Use the edit tool.", [r.text for r in rows]
+            "custom_message lc-skills: ## Skill: edit\nUse the edit tool.", [r.text for r in rows]
         )
         plain = self.rows_for(PiParser(), self.REL)
         self.assertFalse(any("little-coder" in r.text for r in plain))
@@ -3298,11 +3305,11 @@ class HermesTests(ParserBase):
         self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("terminal", "call_1", "ls"))
         self.assertEqual(
             (result.tool_name, result.tool_use_id, result.text),
-            ("terminal", "call_1", "a.txt b.txt"),
+            ("terminal", "call_1", "a.txt\nb.txt"),
         )
         self.assertEqual(asst.text, "Two files: a.txt, b.txt.")
         self.assertEqual(rewound.text, "[rewound] delete them instead")
-        self.assertEqual(image.text, "what is in this screenshot? [image]")
+        self.assertEqual(image.text, "what is in this screenshot?\n[image]")
         self.assertEqual(
             (sub.session_id, sub.git_branch, sub.model, sub.project_path),
             (HERMES_CHILD, "", "openai/gpt-5", "/srv/proj"),
@@ -3422,7 +3429,7 @@ class AgentZeroTests(ParserBase):
             (user.text, user.timestamp_utc), ("list files", "2026-10-01T12:00:01.000Z")
         )
         self.assertEqual(
-            (asst.text, asst.model), ("Listing list", "openrouter/anthropic/claude-sonnet-4")
+            (asst.text, asst.model), ("Listing\nlist", "openrouter/anthropic/claude-sonnet-4")
         )
         self.assertEqual(
             (use.tool_name, use.tool_use_id, use.text), ("code_execution_tool", "t1", "ls")
@@ -3491,7 +3498,7 @@ class AgentZeroTests(ParserBase):
         self.assertEqual(early[0].text, "[summary] earlier: set up the repo")
         self.assertEqual(
             (early[2].text, early[2].model),
-            ("Listing list", "openrouter/anthropic/claude-sonnet-4"),
+            ("Listing\nlist", "openrouter/anthropic/claude-sonnet-4"),
         )
         self.assertEqual((early[3].tool_name, early[3].text), ("code_execution_tool", "ls"))
         self.assertEqual(early[6].text, "info: tick 0")
@@ -3801,7 +3808,7 @@ class OpenClawTests(ParserBase):
         self.assertEqual((use.tool_name, use.tool_use_id, use.text), ("exec", "call_01", "df -h"))
         self.assertEqual(
             (result.tool_name, result.tool_use_id, result.text),
-            ("exec", "call_01", "/dev/sda1 50G 20G 30G 40% /"),
+            ("exec", "call_01", "/dev/sda1  50G  20G  30G  40% /"),
         )
         self.assertEqual((change.text, change.model), ("model change: openai/gpt-5", "gpt-5"))
         self.assertEqual(
@@ -3888,7 +3895,7 @@ class OpenClawTests(ParserBase):
         rows = self.rows_for(OpenClawParser(), self.DB, include_thinking=True)
         self.assertTrue(rows)
         self.assertFalse(
-            [r for r in rows if OPENCLAW_TOKEN in "|".join(str(v) for v in r.as_list())]
+            [r for r in rows if OPENCLAW_TOKEN in "|".join(str(v) for v in r.as_dict().values())]
         )
         out = self.tmp / "out"
         import contextlib
@@ -4152,7 +4159,7 @@ class CodyTests(ParserBase):
             first.text, "chat: Fix flaky test | account=%s | interactions=1" % CODY_ACCOUNT
         )
         self.assertEqual(
-            user.text, "why is test_login flaky? [context: /srv/proj/tests/test_login.py]"
+            user.text, "why is test_login flaky?\n[context: /srv/proj/tests/test_login.py]"
         )
         self.assertEqual((user.model, user.project_path), ("", ""))
         self.assertEqual(
@@ -4175,7 +4182,7 @@ class CodyTests(ParserBase):
         self.assertEqual(
             [(r.turn_type, r.text) for r in rows],
             [
-                ("system", "chat: | account=%s | interactions=1" % CODY_ACCOUNT),
+                ("system", "chat:  | account=%s | interactions=1" % CODY_ACCOUNT),
                 ("user", "explain build.sh"),
                 ("assistant", "It runs make."),
             ],
@@ -4302,11 +4309,11 @@ class TwinnyTests(ParserBase):
             self.assertEqual(
                 cli.main(["timeline", str(self.tmp / "home"), "-o", str(out), "--host", "h1"]), 0
             )
-        for name in ("timeline.csv", "sessions.csv"):
+        for name in ("timeline.jsonl", "sessions.jsonl"):
             text = (out / name).read_text(encoding="utf-8")
             self.assertNotIn(TWINNY_API_KEY, text, name)
             self.assertNotIn(CODY_TOKEN, text, name)
-        self.assertIn(TWINNY_CONVERSATION, (out / "sessions.csv").read_text(encoding="utf-8"))
+        self.assertIn(TWINNY_CONVERSATION, (out / "sessions.jsonl").read_text(encoding="utf-8"))
         # Nor from a value the parser cannot decode.
         db = self.home / ".config/Code - Insiders/User/globalStorage/state.vscdb"
         _vscdb(
@@ -4378,7 +4385,7 @@ class PearAiTests(ParserBase):
             "session start: why does build.sh fail | integration=continue | "
             "history=2 perplexityHistory=0",
         )
-        self.assertEqual(rows[1].text, "why does build.sh fail [context: /srv/proj/build.sh]")
+        self.assertEqual(rows[1].text, "why does build.sh fail\n[context: /srv/proj/build.sh]")
         self.assertEqual(
             (rows[2].text, rows[2].model), ("The make target is missing.", "pearai_model")
         )
@@ -4387,7 +4394,11 @@ class PearAiTests(ParserBase):
             [(r.turn_type, r.source_line, r.text) for r in rows][1:],
             [
                 ("user", 1, "latest make release"),
-                ("assistant", 2, "GNU make 4.4.1. [citations: https://www.gnu.org/software/make/]"),
+                (
+                    "assistant",
+                    2,
+                    "GNU make 4.4.1.\n[citations: https://www.gnu.org/software/make/]",
+                ),
             ],
         )
         self.assertIn("integration=perplexity", rows[0].text)
@@ -4621,7 +4632,7 @@ class MuseCodeTests(ParserBase):
             [(r.turn_type, r.text, r.source_line) for r in rows],
             [
                 ("user", "also check the linter", 23),
-                ("thinking", "First. Second.", 25),
+                ("thinking", "First.\n\nSecond.", 25),
                 ("system", "run failed: 402 Payment Required", 26),
                 ("tool_use", "ls", 27),
                 ("tool_result", "[exit 2] no such file", 28),

@@ -166,7 +166,7 @@ class OpenHandsParser(Parser):
         if artifact.disk_path.name == conv.first_event:
             row = self._row(artifact, conv, "system")
             row.timestamp_utc = conv.created
-            row.text = compact(conv.header, opts.max_text_length)
+            row.text = compact(conv.header)
             yield row
         ev = _read_json(artifact.disk_path)
         if not isinstance(ev, dict):
@@ -287,7 +287,7 @@ class OpenHandsParser(Parser):
         def mk(turn_type: str, text: str, tool_name: str = "", tool_use_id: str = "") -> Row:
             row = self._row(artifact, conv, turn_type)
             row.tool_name, row.tool_use_id = tool_name, tool_use_id
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             return row
 
         if kind == "MessageEvent":
@@ -445,7 +445,6 @@ class OpenHandsParser(Parser):
         row.text = compact(
             "legacy OpenHands 0.x session, %d event files, not parsed; "
             "times are host local, emitted as if UTC" % len(numbers),
-            opts.max_text_length,
         )
         yield row
 

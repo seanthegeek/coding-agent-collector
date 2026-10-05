@@ -260,7 +260,7 @@ class PearAiParser(LegacyTaskParser):
             row.project_path = project
             row.turn_type = turn
             row.model = model
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             return row
 
         bits = ["session start: %s" % (sess.get("title") or entry.get("title") or "")]

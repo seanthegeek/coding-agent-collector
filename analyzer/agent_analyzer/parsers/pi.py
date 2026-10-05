@@ -151,7 +151,7 @@ def entry_rows(
             row.turn_type = turn
             row.tool_name = tool_name
             row.tool_use_id = tool_use_id
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             return row
 
         if etype == "message":
@@ -358,7 +358,7 @@ class PiParser(Parser):
         text = "session start: version=%s cwd=%s" % (h.get("version") or 1, cwd)
         if parent:
             text += " parentSession=%s" % parent
-        row.text = compact(text, opts.max_text_length)
+        row.text = compact(text)
         yield row
 
         skip: set[tuple[str, str]] = set()
@@ -383,7 +383,6 @@ class PiParser(Parser):
                 row.text = compact(
                     "fork: %d entries copied from the parent session %s omitted; "
                     "they are in the parent's rows" % (dropped, parent),
-                    opts.max_text_length,
                 )
                 yield row
 
@@ -397,7 +396,6 @@ class PiParser(Parser):
             row.session_id, row.project_path, row.turn_type = sid, cwd, "system"
             row.text = compact(
                 "session driven by little-coder (pi launcher): %s" % "; ".join(why),
-                opts.max_text_length,
             )
             yield row
         if session.errors:
@@ -420,7 +418,6 @@ class PiParser(Parser):
         row.text = compact(
             "experimental durable session created: cwd=%s (transcript in session.sqlite, "
             "not parsed)" % row.project_path,
-            opts.max_text_length,
         )
         yield row
 

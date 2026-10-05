@@ -109,7 +109,6 @@ class CrushParser(Parser):
                     "crush project last accessed",
                     "data_dir=%s" % p["data_dir"] if p.get("data_dir") else "",
                 ),
-                opts.max_text_length,
             )
             yield row
 
@@ -149,7 +148,6 @@ class CrushParser(Parser):
                                 % (s.get("prompt_tokens") or 0, s.get("completion_tokens") or 0),
                                 "cost=%s" % s["cost"] if s.get("cost") else "",
                             ),
-                            opts.max_text_length,
                         )
                         yield row
                 for m in con.execute(
@@ -264,5 +262,5 @@ class CrushParser(Parser):
             else:
                 row.turn_type = "system"
                 text = "%s: %s" % (kind, compact_json(d))
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row

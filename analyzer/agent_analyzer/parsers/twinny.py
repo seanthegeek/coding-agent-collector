@@ -119,7 +119,7 @@ class TwinnyParser(Parser):
             r.model = model
             r.tool_name = name
             r.tool_use_id = tid
-            r.text = compact(text, opts.max_text_length)
+            r.text = compact(text)
             return r
 
         yield row(

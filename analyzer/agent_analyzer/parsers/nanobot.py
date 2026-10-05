@@ -126,7 +126,7 @@ class NanobotParser(Parser):
             r.turn_type = turn_type
             r.tool_name = tool_name
             r.tool_use_id = tool_use_id
-            r.text = compact(text, opts.max_text_length)
+            r.text = compact(text)
             return r
 
         for n, rec in iter_jsonl(artifact.disk_path, errors):
@@ -215,7 +215,6 @@ class NanobotParser(Parser):
             r.turn_type = "system"
             r.text = compact(
                 "memory history #%s: %s" % (rec.get("cursor", ""), rec.get("content") or ""),
-                opts.max_text_length,
             )
             yield r
         if errors:

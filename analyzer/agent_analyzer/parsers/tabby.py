@@ -210,7 +210,7 @@ class TabbyParser(Parser):
         row.project_path = project_path
         row.timestamp_utc = ts
         row.turn_type = turn_type
-        row.text = compact(text, opts.max_text_length if opts else 0)
+        row.text = compact(text)
         return row
 
     # -- db.sqlite and its backups -------------------------------------------------------

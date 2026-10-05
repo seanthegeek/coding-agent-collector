@@ -1,7 +1,12 @@
 # The analyzer is standard library first (Python 3.10+). Third-party packages
-# are listed here only when a format needs them; keep pyproject.toml in step.
-# Parsers import them lazily and report undecodable records as system rows
-# when a package is missing.
+# are listed here only when a format or option needs them; keep pyproject.toml
+# in step.
+# zstandard is optional and imported lazily: without it the parsers report
+# the compressed records as system rows. python-dateutil is required.
 
-# Zed: threads/threads.db stores each thread as zstd-compressed JSON.
+# Zed threads, .jsonl.zst rollouts and OpenClaw rows are zstd-compressed.
 zstandard
+
+# timeline --since and --until: ISO 8601 parsing (dateutil.parser.isoparse)
+# and calendar month and year arithmetic (dateutil.relativedelta).
+python-dateutil

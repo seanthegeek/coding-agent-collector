@@ -84,7 +84,7 @@ class LittleCoderParser(Parser):
             row = self.base_row(artifact)
             row.source_line = n
             row.turn_type = "user"
-            row.text = compact(v, opts.max_text_length)
+            row.text = compact(v)
             yield row
         if errors:
             row = self.base_row(artifact)
@@ -124,6 +124,5 @@ class LittleCoderParser(Parser):
         row.text = compact(
             "little-coder checkpoints for %s: %d pre-edit file(s)%s: %s"
             % (what, len(names), "" if header else ", session file not collected", listed),
-            opts.max_text_length,
         )
         yield row

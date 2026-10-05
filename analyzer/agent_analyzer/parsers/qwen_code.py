@@ -148,7 +148,7 @@ class QwenCodeParser(Parser):
                 row.project_path = str(rec.get("cwd") or "")
                 row.git_branch = str(rec.get("gitBranch") or "")
                 row.turn_type = turn_type
-                row.text = compact(text, opts.max_text_length)
+                row.text = compact(text)
                 return row
 
             parts = _parts(rec)
@@ -251,7 +251,7 @@ class QwenCodeParser(Parser):
                         etype,
                         event if isinstance(event, str) else compact_json(event),
                     )
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
         if errors:
             yield self._error_row(artifact, "", errors, "entry")

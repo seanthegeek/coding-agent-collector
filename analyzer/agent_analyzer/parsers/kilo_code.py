@@ -166,7 +166,6 @@ class KiloCodeParser(OpenCodeParser):
                     )
                     if p
                 ),
-                opts.max_text_length,
             )
             yield row
 
@@ -181,7 +180,7 @@ class KiloCodeParser(OpenCodeParser):
             def mk(turn: str, text) -> Row:
                 row = base(n, ts)
                 row.turn_type = turn
-                row.text = compact(text, opts.max_text_length)
+                row.text = compact(text)
                 return row
 
             if msg.get("type") == "reasoning":

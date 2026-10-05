@@ -38,7 +38,7 @@ matrix are in [collectors/README.md](collectors/README.md).
 A Python tool that reads a collector archive, an extracted collection, or any
 loose directory such as a copied home or a mounted image, detects which agents
 left state in it using the collectors' own catalog, and parses the transcripts
-it understands into a normalised CSV timeline of turns, tool calls and tool
+it understands into a normalised JSONL timeline of turns, tool calls and tool
 results, plus a per-session summary. Parsers exist for Claude Code, Codex
 CLI, Gemini CLI, Antigravity, Qwen Code, Amazon Q CLI (the `kiro` entry), VS
 Code chat (including Copilot Chat), Cline, Roo Code, Kilo Code, Continue,
@@ -53,7 +53,8 @@ Python 3.10 or later and the packages in `analyzer/requirements.txt`,
 currently only `zstandard`, for Zed threads, zstd-compressed Codex and Open
 Interpreter rollouts, and OpenClaw's compressed transcript rows.
 
-Usage, accepted inputs, the CSV schema and the parser table are in
+Usage, accepted inputs, the JSONL schema, recipes for searching large
+timelines and the parser table are in
 [analyzer/README.md](analyzer/README.md).
 
 ## License

@@ -193,7 +193,7 @@ class AiderParser(Parser):
             row.timestamp_utc = ts
             row.session_id = session_id
             row.turn_type = {"user": "user", "tool": "tool_result", "assistant": "assistant"}[kind]
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
 
         for n, line in _lines(artifact.disk_path):
@@ -239,7 +239,7 @@ class AiderParser(Parser):
             row.timestamp_utc = to_utc(ts)
             row.session_id = session_for(ts)
             row.turn_type = "user"
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
         yield from self._errors(artifact, errors)
 
@@ -262,7 +262,7 @@ class AiderParser(Parser):
                 if not text:
                     return
                 row.turn_type = "assistant"
-                row.text = compact(text, opts.max_text_length)
+                row.text = compact(text)
                 yield row
                 return
             msgs: list[tuple[str, list[str]]] = []
@@ -285,7 +285,6 @@ class AiderParser(Parser):
             row.text = compact(
                 "TO LLM: %d message(s) (%s); last user message: %s"
                 % (len(msgs), ", ".join("%s %d" % kv for kv in counts.items()), last_user),
-                opts.max_text_length,
             )
             yield row
 

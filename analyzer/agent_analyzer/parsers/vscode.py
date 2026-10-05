@@ -261,7 +261,7 @@ class VsCodeParser(Parser):
             row.source_line = line
             row.model = model
             row.turn_type = turn_type
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             return row
 
         if state:

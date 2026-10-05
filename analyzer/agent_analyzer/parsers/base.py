@@ -13,7 +13,6 @@ from ..model import Row
 
 @dataclass
 class Options:
-    max_text_length: int = 0  # 0 means unlimited
     include_thinking: bool = False
 
 
@@ -84,7 +83,7 @@ def text_of(content) -> str:
     return str(content)
 
 
-def compact_json(value, limit: int = 0) -> str:
+def compact_json(value) -> str:
     try:
         s = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     except (TypeError, ValueError):

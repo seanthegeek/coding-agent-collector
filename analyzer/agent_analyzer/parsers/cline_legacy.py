@@ -366,7 +366,7 @@ class LegacyTaskParser(Parser):
             ):
                 row = self._row(artifact, ctx, n, to_utc(ts), row_model)
                 row.turn_type = "thinking"
-                row.text = compact(reasoning, opts.max_text_length)
+                row.text = compact(reasoning)
                 yield row
             mapped = map_ui(kind, msg, n == 1)
             if mapped is None:
@@ -385,7 +385,7 @@ class LegacyTaskParser(Parser):
                 row.tool_name = tool_name
             if msg.get("partial"):
                 text = text + " [partial]" if text else "[partial]"
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
         if errors:
             yield error_row(self, artifact, errors, ctx.task_id, ctx.project_path)
@@ -412,7 +412,6 @@ class LegacyTaskParser(Parser):
                         or msg.get("text")
                         or msg.get("reasoning_content")
                         or "[encrypted reasoning]",
-                        opts.max_text_length,
                     )
                     yield row
                 continue
@@ -420,9 +419,7 @@ class LegacyTaskParser(Parser):
                 row = self._row(artifact, ctx, n, ts, model)
                 row.turn_type = "system"
                 label = "summary" if msg.get("isSummary") else "truncation marker"
-                row.text = compact(
-                    "%s: %s" % (label, text_of(msg.get("content"))), opts.max_text_length
-                )
+                row.text = compact("%s: %s" % (label, text_of(msg.get("content"))))
                 yield row
                 continue
             if (
@@ -432,7 +429,7 @@ class LegacyTaskParser(Parser):
             ):
                 row = self._row(artifact, ctx, n, ts, model)
                 row.turn_type = "thinking"
-                row.text = compact(msg["reasoning_content"], opts.max_text_length)
+                row.text = compact(msg["reasoning_content"])
                 yield row
             for turn, text, name, tid in self.api_content_rows(
                 msg, n, base_turn, opts.include_thinking
@@ -441,7 +438,7 @@ class LegacyTaskParser(Parser):
                 row.turn_type = turn
                 row.tool_name = name
                 row.tool_use_id = tid
-                row.text = compact(text, opts.max_text_length)
+                row.text = compact(text)
                 yield row
         if errors:
             yield error_row(self, artifact, errors, ctx.task_id, ctx.project_path)
@@ -522,7 +519,7 @@ class LegacyTaskParser(Parser):
         for ts, n, model, text in events:
             row = self._row(artifact, ctx, n, to_utc(ts), model)
             row.turn_type = "system"
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
 
     # -- task index entries
@@ -552,7 +549,7 @@ class LegacyTaskParser(Parser):
                 "rootTaskId",
             ),
         )
-        row.text = compact("task: %s | %s" % (item.get("task") or "", extra), opts.max_text_length)
+        row.text = compact("task: %s | %s" % (item.get("task") or "", extra))
         return row
 
 

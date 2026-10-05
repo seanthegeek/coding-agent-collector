@@ -178,7 +178,6 @@ class ZedParser(Parser):
                         r.get("title_override") or r.get("title") or "",
                         " archived" if r.get("archived") else "",
                     ),
-                    opts.max_text_length,
                 )
                 yield row
 
@@ -204,7 +203,7 @@ class ZedParser(Parser):
             row.timestamp_utc = ts or updated
             row.model = model
             row.turn_type = turn_type
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             return row
 
         thread, err = self._decode(r)
@@ -312,7 +311,7 @@ class ZedParser(Parser):
     @staticmethod
     def _user(u) -> Iterator[tuple[str, str, str, str]]:
         # One row per prompt: text, mentions and images of one User message
-        # are joined so sessions.csv counts prompts, not content items.
+        # are joined so sessions.jsonl counts prompts, not content items.
         content = u.get("content") if isinstance(u, dict) else None
         if isinstance(content, (str, dict)):
             content = [content]

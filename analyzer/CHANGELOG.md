@@ -1,15 +1,51 @@
 # Changelog
 
 All notable changes to the analyzer are recorded here. The version is
-printed by `--version`. Changes to the `timeline.csv` and `sessions.csv`
-columns are called out, since they are interfaces.
+printed by `--version`. Changes to the `timeline.jsonl` and
+`sessions.jsonl` fields (`timeline.csv` and `sessions.csv` columns up to
+0.7.0) are called out, since they are interfaces.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `timeline --since WHEN` and `--until WHEN` keep only the rows inside a
+  UTC time window, `--keep-undated` also keeps rows without a timestamp,
+  and `--match REGEX` (repeatable, `-i` for case-insensitive) keeps rows
+  whose `text` matches, with the paired tool call or result. `WHEN` is an
+  ISO 8601 date or time (a space may replace the `T`, and an offset may
+  follow after a space), a year or month, an epoch number, `today`,
+  `yesterday`, `now`, or a relative time such as `45m`, `36h`, `3d`, `2w`,
+  `6mo`, `1y`. A value names a period to its last written unit, so
+  `--since 2026-10-01 --until 2026-10-01` is that whole day. The resolved
+  window and the dropped-row counts are printed. `sessions.jsonl` is
+  summarised from the kept rows.
+- `python-dateutil` is a new required dependency, used for `--since` and
+  `--until`; reinstall with `pip install -r requirements.txt`.
+- The analyzer README has recipes for filtering a written timeline by time
+  with jq, DuckDB, Python and PowerShell.
+
+### Changed
+
+- `timeline` writes `timeline.jsonl` and `sessions.jsonl` instead of
+  `timeline.csv` and `sessions.csv`: one JSON object per line, UTF-8, LF
+  line ends, every field present in the old column order, `""` for no
+  value. Interface change: `source_line`, `user_turns`, `assistant_turns`
+  and `tool_calls` are JSON integers, and `models` is an array of strings
+  instead of a space-separated string. Field names are unchanged.
+- The `text` field keeps the event's line breaks and indentation, so tool
+  output, diffs and multi-line prompts read as they were written; only
+  leading and trailing whitespace is removed. Before, whitespace runs were
+  collapsed to one space.
+- The analyzer README has a section on reading and searching large JSONL
+  timelines with jq, grep, DuckDB, Python and PowerShell.
+
 ### Removed
 
+- `--max-text-length`. `text` is always written in full; cut it while
+  reading, for example with `.text[0:200]` in jq.
 - The `shell-history` catalog agent, following collector 1.7.0, which no
   longer collects shell history. Loose input no longer attributes
   `.bash_history`, `.zsh_history` and the other shell history files to an

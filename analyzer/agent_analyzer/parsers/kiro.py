@@ -215,7 +215,7 @@ class KiroParser(Parser):
             text = "shell history: %s" % (r.get("command") or "")
             if extras:
                 text += " (%s)" % " ".join(extras)
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
 
     # -- /save exports ------------------------------------------------------------
@@ -261,7 +261,7 @@ class KiroParser(Parser):
             return row
 
         def fill(row: Row, s: str) -> Row:
-            row.text = compact(s, opts.max_text_length)
+            row.text = compact(s)
             return row
 
         for entry in state["history"]:

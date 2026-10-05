@@ -155,7 +155,7 @@ class HermesParser(Parser):
         def mk(turn_type: str, text: str) -> Row:
             row = self._row(artifact, line, session, ts)
             row.turn_type = turn_type
-            row.text = compact(marker + text, opts.max_text_length)
+            row.text = compact(marker + text)
             return row
 
         if opts.include_thinking:
@@ -222,7 +222,6 @@ class HermesParser(Parser):
                                     else "",
                                     "end=%s" % s["end_reason"] if s.get("end_reason") else "",
                                 ),
-                                opts.max_text_length,
                             ),
                         )
                         row.timestamp_utc = to_utc(s.get("started_at"))

@@ -192,7 +192,7 @@ class OpenClawParser(Parser):
         row.model = model
         row.tool_name = tool_name
         row.tool_use_id = tool_use_id
-        row.text = compact(text, opts.max_text_length)
+        row.text = compact(text)
         return row
 
     def _start(

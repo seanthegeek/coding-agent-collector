@@ -156,7 +156,6 @@ class LettaParser(Parser):
             row.session_id, row.project_path, row.turn_type = sid, cwd, "system"
             row.text = compact(
                 "letta local-backend conversation start: %s cwd=%s" % (key or sid, cwd),
-                opts.max_text_length,
             )
             yield row
         yield from entry_rows(self, artifact, session, opts, sid, cwd)
@@ -202,7 +201,6 @@ class LettaParser(Parser):
                 "letta transcript for agent %s not repeated: the same conversation's "
                 "local-backend messages.jsonl was collected (%s)"
                 % (agent_dir, twin.relative_to(artifact.home.disk_path).as_posix()),
-                opts.max_text_length,
             )
             yield row
             return
@@ -230,24 +228,24 @@ class LettaParser(Parser):
             if kind in ("user", "assistant"):
                 row = base()
                 row.turn_type = kind
-                row.text = compact(text, opts.max_text_length)
+                row.text = compact(text)
                 yield row
             elif kind == "reasoning":
                 if opts.include_thinking:
                     row = base()
                     row.turn_type = "thinking"
-                    row.text = compact(text, opts.max_text_length)
+                    row.text = compact(text)
                     yield row
             elif kind == "error":
                 row = base()
                 row.turn_type = "system"
-                row.text = compact("error: " + text, opts.max_text_length)
+                row.text = compact("error: " + text)
                 yield row
             elif kind == "tool_call":
                 name = str(rec.get("name") or "")
                 row = base()
                 row.turn_type, row.tool_name = "tool_use", name
-                row.text = compact(rec.get("argsText"), opts.max_text_length)
+                row.text = compact(rec.get("argsText"))
                 yield row
                 if "resultText" in rec or "resultOk" in rec:
                     result = str(rec.get("resultText") or "")
@@ -255,7 +253,7 @@ class LettaParser(Parser):
                         result = "[error] " + result
                     row = base()
                     row.turn_type, row.tool_name = "tool_result", name
-                    row.text = compact(result, opts.max_text_length)
+                    row.text = compact(result)
                     yield row
         if errors:
             yield error_row(self, artifact, errors, conv_dir)
@@ -293,7 +291,7 @@ class LettaParser(Parser):
                     row.model,
                     row.project_path,
                 )
-            row.text = compact(text, opts.max_text_length)
+            row.text = compact(text)
             yield row
         if errors:
             yield error_row(self, artifact, errors)

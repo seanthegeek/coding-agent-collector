@@ -58,7 +58,7 @@ to `DIR`, by default `lab/out/<UTC stamp>/`:
 ```text
 image/        home/agent/..., etc/passwd, root/.ollama (when the Ollama container exists)
 collection/   the collector's archive, manifest, summary, log and .sha256
-analysis/     timeline.csv, sessions.csv and detect.json from the analyzer
+analysis/     timeline.jsonl, sessions.jsonl and detect.json from the analyzer
 ```
 
 The export goes through `docker cp`, so times, modes and symlinks survive

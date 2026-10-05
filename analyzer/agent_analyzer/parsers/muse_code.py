@@ -342,7 +342,7 @@ class MuseCodeParser(Parser):
                 r.turn_type = turn
                 r.tool_name = tool_name
                 r.tool_use_id = tool_use_id
-                r.text = compact(text, opts.max_text_length)
+                r.text = compact(text)
                 return r
 
             if ptype == "runtime.session.metadata":
@@ -525,7 +525,7 @@ class MuseCodeParser(Parser):
             r.turn_type = "user"
             r.session_id = _str(meta.get("session"))
             r.project_path = _str(meta.get("project"))
-            r.text = compact(text, opts.max_text_length)
+            r.text = compact(text)
             return r
 
         with open(artifact.disk_path, "rb") as fh:
