@@ -45,7 +45,7 @@ cp .env.example .env && $EDITOR .env  # keys; .env is gitignored
 | `pull MODEL` | Pull a model into the running Ollama service. |
 | `collect [DIR]` | Export the home and run the collector and analyzer on it; see below. |
 | `down` | Stop and remove the containers, keeping the volumes. |
-| `clean` | Remove the containers and both volumes; see [Cleaning up](#cleaning-up). |
+| `clean` | Remove the containers, both volumes and the `agent-lab:latest` image; see [Cleaning up](#cleaning-up). |
 | `help` | Print the command summary. |
 
 Every command but `help` needs `docker` and Compose v2 and stops with a
@@ -124,12 +124,12 @@ reference for Claude Code shows an allowlisting firewall if you need one.
 
 ```sh
 ./lab.sh down                     # stop, keep volumes
-./lab.sh clean                    # remove containers and volumes; lab/out stays
-docker image rm agent-lab:latest  # the image, which clean leaves behind
+./lab.sh clean                    # remove containers, volumes and image; lab/out stays
 rm -rf out                        # the exports, once you have what you need
 ```
 
-`clean` runs `docker compose down -v --rmi local`. `--rmi local` removes only
-images without a custom tag, and `compose.yaml` tags the sandbox image
-`agent-lab:latest`, so the image stays even though `clean` says it was
-removed. The pulled `ollama/ollama` image also stays.
+`clean` runs `docker compose down -v --rmi local`, then removes the
+`agent-lab:latest` image with `docker image rm` when it exists, since
+`--rmi local` skips images with a custom tag and `compose.yaml` tags the
+sandbox image. The pulled `ollama/ollama` image stays; remove it with
+`docker image rm ollama/ollama:latest` if you want the space back.

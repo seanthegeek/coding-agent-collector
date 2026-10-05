@@ -11,7 +11,8 @@
 #                                  run the collector into DIR/collection and
 #                                  the analyzer into DIR/analysis
 #   lab.sh down                    stop containers, keep the home volume
-#   lab.sh clean                   stop and delete containers, volumes, image
+#   lab.sh clean                   stop and delete containers, volumes and the
+#                                  agent-lab:latest image
 #
 # DIR defaults to lab/out/<UTC stamp>. Exports contain whatever credentials
 # the agents wrote; lab/out is gitignored, delete it when done.
@@ -21,6 +22,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/.." && pwd)
 collector="$repo/collectors/collect-agent-artifacts.sh"
 agent_ctr=agent-lab
+agent_image=agent-lab:latest
 ollama_ctr=agent-lab-ollama
 
 die() { printf 'lab: %s\n' "$*" >&2; exit 1; }
@@ -31,7 +33,9 @@ need_docker() {
 }
 
 want_ollama=0
-for a in "$@"; do [ "$a" = "--ollama" ] && want_ollama=1; done
+for a in "$@"; do
+  if [ "$a" = "--ollama" ]; then want_ollama=1; fi
+done
 
 # Compose invocation: add the Ollama profile when asked, and the GPU
 # override when the host has a working NVIDIA driver.
@@ -54,13 +58,13 @@ ctr_running() { [ "$(docker container inspect -f '{{.State.Running}}' "$1" 2>/de
 need_up() { ctr_running "$agent_ctr" || die "sandbox is not running; run $0 up"; }
 
 cmd=${1:-help}
-[ $# -gt 0 ] && shift
+if [ $# -gt 0 ]; then shift; fi
 case "$cmd" in help|-h|--help) ;; *) need_docker ;; esac
 
 case "$cmd" in
   build)
     compose build
-    [ "$want_ollama" = 1 ] && compose pull ollama
+    if [ "$want_ollama" = 1 ]; then compose pull ollama; fi
     ;;
   up)
     compose up -d
@@ -98,7 +102,9 @@ case "$cmd" in
     printf 'lab: collecting\n'
     "$collector" -r "$image" -o "$out/collection" -q
     archive=
-    for f in "$out/collection"/*.tar.gz; do [ -f "$f" ] && archive=$f && break; done
+    for f in "$out/collection"/*.tar.gz; do
+      if [ -f "$f" ]; then archive=$f; break; fi
+    done
     if [ -n "$archive" ] && command -v python3 >/dev/null 2>&1; then
       printf 'lab: analyzing\n'
       rc=0
@@ -116,10 +122,16 @@ case "$cmd" in
     ;;
   clean)
     compose down -v --rmi local
-    printf 'lab: containers, volumes and image removed. Exports in %s/out are untouched.\n' "$here"
+    # --rmi local skips images with a custom tag, and compose.yaml tags the
+    # sandbox image, so remove it by name when it exists.
+    if docker image inspect "$agent_image" >/dev/null 2>&1; then
+      docker image rm "$agent_image"
+    fi
+    printf 'lab: containers, volumes and the %s image removed. Exports in %s/out are untouched.\n' "$agent_image" "$here"
     ;;
   help|-h|--help)
-    sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+    # The header comment, from line 2 to the first line that is not one.
+    awk 'NR == 1 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "$0"
     ;;
   *)
     die "unknown command '$cmd'; try $0 help"
