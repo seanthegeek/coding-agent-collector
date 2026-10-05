@@ -117,6 +117,52 @@ and the archive actually written: the summary is rewritten and restaged before
 the zip fallback, so both the copy inside the archive and the one beside it say
 `ZipFile` and `.zip` after a `tar.exe` failure.
 
+Symlinks and other reparse points are recreated in the staging directory as
+symbolic links with the target string exactly as `Target` reports it, as the
+sh collector does with `ln -s`, so a relative target stays relative and a
+dangling one is kept. A junction is recreated as a directory symlink to the
+same target. `tar.exe` stores the link, not the file or directory it points
+to (libarchive archives a symlink reparse point as a link and does not
+descend into it,
+[`archive_read_disk_windows.c`](https://github.com/libarchive/libarchive/blob/7219b0134d771dc4b51bf86b4d01761b87398b1b/libarchive/archive_read_disk_windows.c#L2046-L2050)
+at v3.8.8); the libarchive 3.3.2 `tar.exe` of early Windows 10 builds
+stores the link entry without its target text. Creating a symlink on
+Windows needs the `SeCreateSymbolicLinkPrivilege` (Administrator) or
+Developer Mode. Windows PowerShell 5.1 has no managed API for this, so it
+runs `cmd.exe /d /v:off /c mklink` (with `/D` for a directory link or a
+junction), which keeps the target string verbatim and accepts a target that
+does not exist; [Microsoft documents](https://blogs.windows.com/windowsdeveloper/2016/12/02/symlinks-windows-10/) that `mklink` creates links without
+elevation in Developer Mode from the Windows 10 Creators Update (1703).
+`cmd.exe` expands `%NAME%` even inside quotes, so a link whose path or
+target contains `%` or `"` is not passed to it. PowerShell 7 uses .NET's
+`CreateSymbolicLink` instead and has neither limit. Without the privilege,
+for a `%` or `"` under 5.1, or for a reparse point with no single link
+target, the row keeps `archive_path` empty
+and `error` says why (under 5.1, `mklink`'s message and exit code), and
+`collection.json` `notes` counts the links that
+could not be recreated. A `.zip` cannot hold symlinks and `ZipFile` would
+copy the target's bytes in their place, possibly from outside the
+collection, so the zip archive never contains them:
+
+- When `tar.exe` is missing from the start, no link is created, every
+  `symlink` row has an empty `archive_path` and the `error`
+  `not recreated in the archive: zip cannot store symlinks`, and a note
+  says how many symlinks are in the manifest only.
+- When `tar.exe` fails after the links were staged, they are deleted from
+  the staging directory before zipping, the manifest is rewritten so those
+  rows have an empty `archive_path` and the `error`
+  `not in the archive: tar failed and zip cannot store symlinks`, a note
+  records the removal, and the rewritten manifest and summary are what the
+  zip and the output directory hold.
+
+Under PowerShell 7 on Linux or macOS the links are made with .NET's
+`CreateSymbolicLink`, the archiver is the system `tar`, and the same rules
+apply. Staged links are deleted one by one before the staging directory is
+removed, so the cleanup never descends through a link. If one cannot be
+deleted, the staging directory is kept and the log says so, and a zip fall
+back is not attempted (the run exits `2` with no archive) rather than
+zipping through the link.
+
 ## Options
 
 | Option | Meaning |
@@ -536,7 +582,8 @@ the archive's size and hash.
 Inside the archive (the sh collector's tar members start with `./`):
 
 ```text
-fs/<original path>          collected files, mirroring the source filesystem
+fs/<original path>          collected files and recreated symlinks, mirroring
+                            the source filesystem
 manifest.jsonl
 collection.json
 collector.log
@@ -559,7 +606,7 @@ Each manifest row is one JSON object:
 | `home` | The base the path was collected relative to: the home directory, the project directory, or a volume's `_data`, including the `-r` root. |
 | `agent` | Catalog agent name. `project` for files found through the project catalog, the `DOCKER_VOLUMES` agent for a matched volume, and empty for `skipped_unmatched_volume`. |
 | `path` | The original full path, including the `-r` root in image mode. |
-| `archive_path` | Where the file is in the archive: `fs/<original path>`. Set for `collected` rows, and for `symlink` rows from the sh collector. Empty otherwise. |
+| `archive_path` | Where the file is in the archive: `fs/<original path>`. Set for `collected` rows and for `symlink` rows whose link is in the archive: always from the sh collector, and from the PowerShell collector when the link was recreated and the archive is a tar (see [Windows](#windows)). Empty otherwise. |
 | `type` | `file`, `symlink`, or `dir` (an excluded directory or an unmatched volume). |
 | `size` | Bytes. For a `dir` row, the size of everything under it: `du -sk` × 1024 from the sh collector, the sum of file lengths from the PowerShell collector. |
 | `mtime`, `atime`, `ctime`, `btime` | Epoch seconds, read before the copy. `btime` (creation) is `0` where the platform cannot report it, and `ctime` is `0` from the PowerShell collector. All four are `0` for an excluded directory from the sh collector, for an unmatched volume, and on a host with neither GNU nor BSD `stat` (where `uid`, `gid` and `mode` are `0` too). |
@@ -569,12 +616,12 @@ Each manifest row is one JSON object:
 | `secret` | `true` when the path, relative to `home`, matched a credential pattern. |
 | `status` | See below. |
 | `target` | For a symlink, its target as stored. The PowerShell collector joins several reparse point targets with `;`. |
-| `error` | For `error_copy`, why the copy failed: `cp`'s message or the .NET exception. |
+| `error` | For `error_copy`, why the copy failed: `cp`'s message or the .NET exception. For a PowerShell `symlink` row with no `archive_path`, why the link is not in the archive, starting `not recreated in the archive:` or `not in the archive:`. |
 
 | Status | Meaning |
 | --- | --- |
 | `collected` | Copied, hashed and archived. |
-| `symlink` | A symbolic link (on Windows any reparse point, including junctions), recorded with its target and never followed. The sh collector recreates the link in the archive. The PowerShell collector records it in the manifest only. |
+| `symlink` | A symbolic link (on Windows any reparse point, including junctions), recorded with its target and never followed. Both collectors recreate the link in the archive with its target as stored. The PowerShell collector cannot where Windows refuses to create it or where the archive is a `.zip`; the row then has no `archive_path` and `error` says why. |
 | `skipped_excluded` | Matched an `EXCLUDES` pattern. An excluded directory is one `dir` row with its total size. |
 | `skipped_size` | Larger than `--max-file-size`. |
 | `skipped_secret` | A credential file left out by `--no-secrets`. |
@@ -610,7 +657,7 @@ the root, as on other platforms.
 | `projects` | The project directories collected from, discovered or given with `-p`. |
 | `counts` | Rows per status (`collected`, `symlink`, `skipped_excluded`, `skipped_size`, `skipped_secret`, `error_copy`, `skipped_unmatched_volume`) and `collected_bytes`. |
 | `docker` | `volumes_found`, `volumes_collected`, `unreadable` and `docker_desktop`; see [Docker volumes](#docker-volumes). |
-| `notes` | Messages about what could not be collected, such as an unreadable or symlinked Docker volume directory, or Docker Desktop data. |
+| `notes` | Messages about what could not be collected, such as an unreadable or symlinked Docker volume directory, Docker Desktop data, or (PowerShell) symlinks that are not in the archive and why. |
 | `archive` | The file name of the archive written: `.tar.gz`, `.tar` after the sh collector's uncompressed fallback, or `.zip` from the PowerShell collector without `tar.exe` or after it failed. |
 
 The copy of each file is hashed after staging, so the hash matches the bytes
@@ -673,7 +720,11 @@ with its path printed, when one fails. The exit status is `0` or `1`.
 than the one beside it, which is how the test runs under Windows PowerShell
 5.1 from a WSL checkout. It works under the system temp directory, keeps it
 on failure in the same way, and skips the symlink checks, saying so, where
-creating symlinks is not permitted.
+creating symlinks is not permitted. Its symlink-in-archive checks use a
+separate small image with a relative, a dangling and a directory symlink
+(and, on Windows, a junction) and run it three times: with `tar`, with no
+`tar` on the `PATH` (zip from the start), and, off Windows, with a `tar`
+that fails (the late fall back to zip).
 
 Each smoke test builds a fake disk image with two users, a service account,
 awkward filenames, a symlink, credential files, excluded directories, an

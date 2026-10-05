@@ -1598,6 +1598,143 @@ function Get-LinkTarget($item) {
 }
 
 # ---------------------------------------------------------------------------
+# Symlinks are recreated in the staging tree with their target string as
+# stored, as the sh collector does with ln -s, so tar archives the link
+# itself. PowerShell 7 (.NET 6+) has File/Directory.CreateSymbolicLink;
+# Windows PowerShell 5.1 runs cmd.exe's mklink, which keeps the target
+# verbatim, accepts one that does not exist, and works unprivileged in
+# Developer Mode from Windows 10 1703. New-Item -ItemType SymbolicLink is not
+# used: on 5.1 it resolves a relative target against the current directory
+# and refuses a target that does not exist. ZipFile follows links, so the zip
+# path never has them: none are made when zip is the archiver from the start,
+# and they are removed before a fall back to zip.
+# ---------------------------------------------------------------------------
+$script:LinkApi = $null
+$script:LinkApiError = ''
+$script:LinkFileMethod = $null
+$script:LinkDirMethod = $null
+$script:CmdExe = ''
+$script:StagedLinks = New-Object System.Collections.ArrayList
+$script:LinkCounts = @{ zip = 0; failed = 0 }
+function Get-LinkApi {
+  if ($null -ne $script:LinkApi) { return $script:LinkApi }
+  $script:LinkApi = ''
+  # Looked up by reflection: the methods do not exist in .NET Framework.
+  $script:LinkFileMethod = [System.IO.File].GetMethod('CreateSymbolicLink', [Type[]]@([string], [string]))
+  $script:LinkDirMethod = [System.IO.Directory].GetMethod('CreateSymbolicLink', [Type[]]@([string], [string]))
+  if ($null -ne $script:LinkFileMethod -and $null -ne $script:LinkDirMethod) { $script:LinkApi = 'dotnet' }
+  elseif ($env:OS -eq 'Windows_NT') {
+    $c = ''
+    if ($env:SystemRoot) { $c = Join-PathSafe $env:SystemRoot 'System32\cmd.exe' }
+    if ($c -ne '' -and (Test-PathQuiet $c 'Leaf')) { $script:CmdExe = $c; $script:LinkApi = 'mklink' }
+    else { $script:LinkApiError = 'cmd.exe not found for mklink' }
+  } else { $script:LinkApiError = 'no symlink API in this PowerShell' }
+  return $script:LinkApi
+}
+
+# Runs cmd.exe /d /v:off /c mklink [/D] "link" "target" with an argument
+# string built here, so PowerShell's native-argument quoting is not involved.
+# Returns '' on success, otherwise mklink's message and exit code.
+function Invoke-Mklink([string]$dest, [string]$target, [bool]$isDir) {
+  # cmd expands %NAME% even inside quotes, and a quote would end the argument.
+  if ($dest.Contains('%') -or $dest.Contains('"') -or $target.Contains('%') -or $target.Contains('"')) {
+    return 'link path or target contains % or ", which cmd.exe mklink cannot take verbatim'
+  }
+  $sw = ''; if ($isDir) { $sw = '/D ' }
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $script:CmdExe
+  $psi.Arguments = '/d /v:off /c mklink ' + $sw + '"' + $dest + '" "' + $target + '"'
+  # The link path is absolute; a UNC current directory would add a cmd.exe warning to stderr.
+  $psi.WorkingDirectory = $env:SystemRoot
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError = $true
+  $pr = [System.Diagnostics.Process]::Start($psi)
+  # mklink's messages are short, so reading one stream to the end cannot block on the other.
+  $errText = $pr.StandardError.ReadToEnd()
+  [void]$pr.StandardOutput.ReadToEnd()
+  $pr.WaitForExit()
+  if ($pr.ExitCode -eq 0) { return '' }
+  $msg = ($errText -replace '\s+', ' ').Trim()
+  if ($msg -eq '') { $msg = 'mklink failed' }
+  return "$msg (mklink exit $($pr.ExitCode))"
+}
+
+# Makes the link at $dest; returns '' on success, otherwise the reason.
+function Invoke-CreateSymlink([string]$dest, [string]$target, [bool]$isDir) {
+  $api = Get-LinkApi
+  try {
+    if ($api -eq 'dotnet') {
+      $m = $script:LinkFileMethod; if ($isDir) { $m = $script:LinkDirMethod }
+      # Plain strings: Invoke rejects PSObject-wrapped arguments.
+      $margs = New-Object 'object[]' 2; $margs[0] = [string]$dest; $margs[1] = [string]$target
+      [void]$m.Invoke($null, $margs)
+    } elseif ($api -eq 'mklink') {
+      $why = Invoke-Mklink $dest $target $isDir
+      if ($why -ne '') { return $why }
+    } else { return $script:LinkApiError }
+  } catch {
+    # Invoke wraps the IOException; report the innermost message.
+    $e = $_.Exception; while ($null -ne $e.InnerException) { $e = $e.InnerException }
+    return $e.Message
+  }
+  [void]$script:StagedLinks.Add(@($dest, $isDir))
+  return ''
+}
+
+# Recreates the reparse point $item at $dest; returns '' or the row's error.
+function Add-StagedLink($item, [string]$dest) {
+  if (-not $TarExe) { $script:LinkCounts.zip++; return 'not recreated in the archive: zip cannot store symlinks' }
+  $vals = @()
+  try { $p = $item.PSObject.Properties['Target']; if ($p -and $p.Value) { $vals = @([string[]]$p.Value) } } catch { }
+  if ($vals.Count -ne 1 -or $vals[0] -eq '') { $script:LinkCounts.failed++; return 'not recreated in the archive: reparse point has no single link target' }
+  # Only Windows distinguishes file and directory links.
+  $isDir = ($env:OS -eq 'Windows_NT') -and (($item.Attributes -band [System.IO.FileAttributes]::Directory) -ne 0)
+  $why = ''
+  try {
+    $d = Split-Path -Path $dest -Parent
+    if (-not (Test-PathQuiet $d 'Any')) { New-Item -ItemType Directory -Path $d -Force -ErrorAction Stop | Out-Null }
+    $why = Invoke-CreateSymlink $dest $vals[0] $isDir
+  } catch { $why = $_.Exception.Message }
+  if ($why -eq '') { return '' }
+  $script:LinkCounts.failed++
+  Write-CollectorLog "symlink not recreated: $($item.FullName): $why"
+  return "not recreated in the archive: $why"
+}
+
+# Deletes the staged links themselves, never what they point to, so the
+# cleanup does not depend on how each PowerShell version's Remove-Item
+# -Recurse treats a directory link.
+# Called after the log writer is closed, so it appends to the log directly.
+# Returns how many links could not be removed.
+function Clear-StagedLinks {
+  $left = 0
+  foreach ($l in @($script:StagedLinks)) {
+    try { if ($l[1]) { [System.IO.Directory]::Delete($l[0]) } else { [System.IO.File]::Delete($l[0]) } }
+    catch { $left++; [System.IO.File]::AppendAllText($LogPath, "could not remove staged link $($l[0]): $($_.Exception.Message)`n", $Utf8NoBom) }
+  }
+  $script:StagedLinks.Clear()
+  return $left
+}
+
+# After a late fall back to zip the staged links are gone, so their rows lose
+# archive_path and say why; the manifest is rewritten before it is archived.
+function Clear-LinkArchivePaths([string]$reason) {
+  $lines = [System.IO.File]::ReadAllLines($ManifestPath, $Utf8NoBom)
+  $w = New-Object System.IO.StreamWriter($ManifestPath, $false, $Utf8NoBom)
+  try {
+    foreach ($ln in $lines) {
+      if ($ln.Contains('"status":"symlink"')) {
+        $o = $ln | ConvertFrom-Json
+        if ($o.status -eq 'symlink' -and $o.archive_path) { $o.archive_path = ''; $o.error = $reason; $ln = $o | ConvertTo-Json -Compress -Depth 2 }
+      }
+      $w.WriteLine($ln)
+    }
+  } finally { $w.Close() }
+}
+
+# ---------------------------------------------------------------------------
 # Setup
 # ---------------------------------------------------------------------------
 $Mode = 'live'
@@ -1744,6 +1881,7 @@ function Add-File([string]$user, [string]$homeDir, [string]$agent, $item) {
   $type = 'file'; $status = 'collected'; $sha = ''; $target = ''; $err = ''
   if ($isLink) {
     $type = 'symlink'; $status = 'symlink'; $target = Get-LinkTarget $item
+    $err = Add-StagedLink $item $dest
   } elseif ($secret -and $NoSecrets) {
     $status = 'skipped_secret'
   } elseif ($MaxSize -gt 0 -and $size -gt $MaxSize) {
@@ -1760,7 +1898,7 @@ function Add-File([string]$user, [string]$homeDir, [string]$agent, $item) {
       try { if (Test-PathQuiet $dest 'Any') { Remove-Item -LiteralPath $dest -Force } } catch { }
     }
   }
-  $apath = ''; if ($status -eq 'collected') { $apath = $arel }
+  $apath = ''; if ($status -eq 'collected' -or ($status -eq 'symlink' -and $err -eq '')) { $apath = $arel }
   Write-Row $user $homeDir $agent $full $apath $type $size $mtime $atime 0 $btime $owner $attrs $sha $secret $status $target $err
 }
 
@@ -2251,6 +2389,8 @@ function Format-HumanSize([int64]$bytes) {
   if ($i -eq 0) { return "$bytes B" }
   return $v.ToString('0.0', [Globalization.CultureInfo]::InvariantCulture) + ' ' + $units[$i]
 }
+if ($script:LinkCounts.zip -gt 0) { Add-Note "$($script:LinkCounts.zip) symlinks are in the manifest only: the zip archive cannot store symlinks" }
+if ($script:LinkCounts.failed -gt 0) { Add-Note "$($script:LinkCounts.failed) symlinks could not be recreated in the archive; each row's error says why" }
 $summary = [ordered]@{
   tool = $TOOL; version = $ToolVersion; hostname = $HostName; mode = $Mode
   root = $(if ($Root) { $Root } else { '\' })
@@ -2293,6 +2433,20 @@ if ($TarExe) {
 if (-not $archiveOk) {
   try {
     if (Test-PathQuiet $Archive 'Any') { Remove-Item -LiteralPath $Archive -Force }
+    # ZipFile would follow the staged links, so they go first, and the
+    # manifest and summary are rewritten to say they are not in the archive.
+    if ($script:StagedLinks.Count -gt 0) {
+      $nl = $script:StagedLinks.Count
+      if ((Clear-StagedLinks) -gt 0) { throw 'staged symlinks could not be removed; not zipping through them' }
+      Clear-LinkArchivePaths 'not in the archive: tar failed and zip cannot store symlinks'
+      $script:Notes += "tar failed; $nl symlinks were removed from the staging tree before zipping, because zip cannot store symlinks"
+      [System.IO.File]::AppendAllText($LogPath, "NOTE: tar failed; $nl staged symlinks removed before zipping`n", $Utf8NoBom)
+      $summary.notes = @($script:Notes)
+      Copy-Item -LiteralPath $ManifestPath -Destination (Join-PathSafe $Stage 'manifest.jsonl') -Force
+      Copy-Item -LiteralPath $LogPath -Destination (Join-PathSafe $Stage 'collector.log') -Force
+    }
+    # Write-Summary writes and restages collection.json with the notes above
+    # and the zip's name and archiver.
     $Archive = Join-PathSafe $OutputDir "$Name.zip"
     $summary.archive = (Split-Path -Leaf $Archive)
     $summary.capabilities.archiver = 'ZipFile'
@@ -2311,7 +2465,11 @@ $ArchiveSize = (Get-Item -LiteralPath $Archive).Length
 # The archive's size and hash follow on stdout, so stderr gets only "done".
 if (-not $Quiet) { [Console]::Error.WriteLine('done') }
 
-if (-not $KeepStaging) { try { Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction Stop } catch { } }
+if (-not $KeepStaging) {
+  # A link that could not be deleted keeps the staging directory, which the log names.
+  if ((Clear-StagedLinks) -eq 0) { try { Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction Stop } catch { } }
+  else { [System.IO.File]::AppendAllText($LogPath, "staging directory kept because a staged link could not be removed: $Stage`n", $Utf8NoBom) }
+}
 
 $c = $script:Counts
 Write-Output "archive:    $Archive"

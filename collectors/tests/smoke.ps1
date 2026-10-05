@@ -1009,6 +1009,140 @@ Run 'noproj31' @{ NoProjects = $true }
 $ns = Get-Content -LiteralPath $script:S.FullName -Raw
 Check '#31 -NoProjects recorded' { ($ns | ConvertFrom-Json).options.no_projects -eq $true -and $ns -match '"no_projects":\s*true,\s*"projects":\s*\[\s*\]' }
 
+# 2026-10-04 bug round: #30
+# Symlinks are recreated in the archive with their target string verbatim
+# under tar, and kept out of a zip, whose writer would follow them. A separate
+# image so the default run's counts and notes stay as they are. On Windows a
+# junction, which needs no privilege, gives a reparse point to recreate even
+# where symlinks cannot be made; where links cannot be created in the stage
+# the row must say so in error and claim no archive_path.
+$LRoot = Join-Path $Work 'linkroot'
+function LinkP([string]$rel) { return (Join-Path $LRoot ($rel.Replace('/', $Sep))) }
+function LinkMk([string]$rel, [string]$content) {
+  $p = LinkP $rel; $d = Split-Path -Parent $p
+  if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+  [System.IO.File]::WriteAllText($p, $content, (New-Object System.Text.UTF8Encoding $false))
+}
+LinkMk 'home/eve/.gemini/antigravity-cli/log/real.log' 'LINK-TARGET-BYTES'
+LinkMk 'outside/secret.txt' 'OUTSIDE-BYTES'
+$isWin = ($env:OS -eq 'Windows_NT')
+$fileLinkOk = $false
+# .NET 6+ only, so looked up by reflection; 5.1's New-Item would resolve the
+# relative target and refuse the dangling one.
+$mkFile = [System.IO.File].GetMethod('CreateSymbolicLink', [Type[]]@([string], [string]))
+$mkDir = [System.IO.Directory].GetMethod('CreateSymbolicLink', [Type[]]@([string], [string]))
+# Invoke rejects PSObject-wrapped strings, so the arguments are cast.
+function MkLink($method, [string]$rel, [string]$target) {
+  $a = New-Object 'object[]' 2; $a[0] = [string](LinkP $rel); $a[1] = $target
+  [void]$method.Invoke($null, $a)
+}
+try {
+  if ($null -eq $mkFile -or $null -eq $mkDir) { throw 'no symlink API' }
+  MkLink $mkFile 'home/eve/.gemini/antigravity-cli/cli.log' 'log/real.log'
+  MkLink $mkFile 'home/eve/.gemini/antigravity-cli/dangling.log' 'log/missing.log'
+  MkLink $mkDir 'home/eve/.gemini/antigravity-cli/out' '../../../../outside'
+  $fileLinkOk = $true
+} catch { Write-Output 'note: symlink creation not permitted here, #30 symlink-in-archive checks skipped' }
+$junctionOk = $false
+if ($isWin) {
+  try { New-Item -ItemType Junction -Path (LinkP 'home/eve/.gemini/antigravity-cli/jn') -Target (LinkP 'outside') -ErrorAction Stop | Out-Null; $junctionOk = $true }
+  catch { Write-Output 'note: junction creation failed, #30 junction checks skipped' }
+  # A % in the name would be expanded by cmd.exe, so 5.1 must not run mklink for it.
+  if ($junctionOk) { New-Item -ItemType Junction -Path (LinkP 'home/eve/.gemini/antigravity-cli/jn%TEMP%x') -Target (LinkP 'outside') | Out-Null }
+}
+$isDesktop = ($PSVersionTable.PSEdition -eq 'Desktop')
+function LRun([string]$name) {
+  $o = Join-Path $Out $name
+  New-Item -ItemType Directory -Path $o -Force | Out-Null
+  $global:LASTEXITCODE = 0
+  $script:stdout = & $Collector -Root $LRoot -OutputDir $o -Quiet -NoDocker 2>&1 | Out-String
+  $script:rc = $LASTEXITCODE
+  $script:M = Get-ChildItem -LiteralPath $o -Filter '*.manifest.jsonl' | Select-Object -First 1
+  $script:A = Get-ChildItem -LiteralPath $o | Where-Object { $_.Name -match '\.(tar\.gz|zip)$' } | Select-Object -First 1
+  $script:S = Get-ChildItem -LiteralPath $o -Filter '*.collection.json' | Select-Object -First 1
+  $script:Rows = @()
+  if ($script:M) { $script:Rows = @(Get-Content -LiteralPath $script:M.FullName | ForEach-Object { $_ | ConvertFrom-Json }) }
+  $script:LSum = $null
+  if ($script:S) { $script:LSum = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json }
+}
+# Bytes of every regular file in the archive, concatenated, to show that no
+# link target's content was pulled in.
+function ArchiveText {
+  $x = Join-Path $Work ('lx-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+  New-Item -ItemType Directory -Path $x -Force | Out-Null
+  if ($script:A.Name -like '*.tar.gz') { & tar -xzf $script:A.FullName -C $x 2>$null } else { [System.IO.Compression.ZipFile]::ExtractToDirectory($script:A.FullName, $x) }
+  $t = ''
+  foreach ($f in @(Get-ChildItem -LiteralPath $x -Recurse -Force -File | Where-Object { ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0 })) { $t += [System.IO.File]::ReadAllText($f.FullName) }
+  return $t
+}
+function LinkRowsConsistent {
+  $bad = @($script:Rows | Where-Object { $_.status -eq 'symlink' -and -not (($_.archive_path -ne '') -xor ($_.error -ne '')) })
+  return ($bad.Count -eq 0)
+}
+
+if ($fileLinkOk -or $junctionOk) {
+  LRun 'links-tar'
+  Check '#30 tar run exit 0' { $script:rc -eq 0 }
+  Check '#30 every symlink row has archive_path or error, not both' { LinkRowsConsistent }
+  $tv = @()
+  if ($script:A.Name -like '*.tar.gz') { $tv = @(& tar -tvzf $script:A.FullName 2>$null) }
+  if ($fileLinkOk) {
+    $r = Row 'antigravity-cli/cli.log'
+    Check '#30 symlink row has archive_path and no error' { $r -and $r.status -eq 'symlink' -and $r.archive_path -match '^fs/.*antigravity-cli/cli\.log$' -and $r.error -eq '' }
+    Check '#30 archive stores the link with its relative target verbatim' { @($tv | Where-Object { $_ -match '^l' -and $_ -match 'antigravity-cli/cli\.log -> log/real\.log$' }).Count -eq 1 }
+    Check '#30 dangling symlink stored as a link' { @($tv | Where-Object { $_ -match '^l' -and $_ -match 'antigravity-cli/dangling\.log -> log/missing\.log$' }).Count -eq 1 }
+    Check '#30 directory symlink stored as a link, not descended' { @($tv | Where-Object { $_ -match '^l' -and $_ -match 'antigravity-cli/out -> \.\./\.\./\.\./\.\./outside$' }).Count -eq 1 -and -not ($tv | Where-Object { $_ -match 'antigravity-cli/out/' }) }
+    Check '#30 link target bytes outside the collection not archived' { (ArchiveText) -notmatch 'OUTSIDE-BYTES' }
+    Check '#30 staging removed and link targets intact' { -not (Get-ChildItem -LiteralPath (Join-Path $Out 'links-tar') -Filter '.stage-*' -Force) -and (Test-Path -LiteralPath (LinkP 'outside/secret.txt')) -and (Test-Path -LiteralPath (LinkP 'home/eve/.gemini/antigravity-cli/log/real.log')) }
+  }
+  if ($junctionOk) {
+    $r = Row 'antigravity-cli/jn'
+    Check '#30 junction row has archive_path or a reason' { $r -and $r.status -eq 'symlink' -and (($r.archive_path -ne '' -and $r.error -eq '') -or ($r.archive_path -eq '' -and $r.error -like 'not recreated in the archive:*')) }
+    Check '#30 junction failure noted in collection.json' { $r.archive_path -ne '' -or @($script:LSum.notes | Where-Object { $_ -like '*could not be recreated in the archive*' }).Count -eq 1 }
+    Check '#30 junction target bytes not archived' { (ArchiveText) -notmatch 'OUTSIDE-BYTES' }
+    Check '#30 junction target intact after staging cleanup' { Test-Path -LiteralPath (LinkP 'outside/secret.txt') }
+    if ($isDesktop) {
+      Check '#30 5.1: a failed mklink reports its message and exit code' { $r.archive_path -ne '' -or $r.error -match '\(mklink exit \d+\)$' }
+      $r = Row 'antigravity-cli/jn%TEMP%x'
+      Check '#30 5.1: a % in the link path is refused before cmd.exe' { $r -and $r.archive_path -eq '' -and $r.error -like '*contains % or "*' }
+    }
+  }
+
+  # zip from the start: no tar on PATH
+  $savedPath = $env:PATH
+  $env:PATH = ''
+  try { LRun 'links-zip' } finally { $env:PATH = $savedPath }
+  Check '#30 zip run exit 0 and wrote a zip' { $script:rc -eq 0 -and $script:A.Name -like '*.zip' }
+  Check '#30 zip: symlink rows have no archive_path and say zip' { $l = @($script:Rows | Where-Object { $_.status -eq 'symlink' }); $l.Count -ge 1 -and @($l | Where-Object { $_.archive_path -ne '' -or $_.error -notlike '*zip cannot store symlinks*' }).Count -eq 0 }
+  Check '#30 zip: collection.json notes say symlinks are manifest-only' { @($script:LSum.notes | Where-Object { $_ -like '*in the manifest only: the zip archive cannot store symlinks*' }).Count -eq 1 }
+  Check '#30 zip: no link target content in the zip' { $t = ArchiveText; $t -notmatch 'OUTSIDE-BYTES' -and ([regex]::Matches($t, 'LINK-TARGET-BYTES')).Count -eq 1 }
+
+  # tar fails late: a tar on PATH that exits 1, then the zip fall back
+  if (-not $isWin) {
+    $shim = Join-Path $Work 'badtar'
+    New-Item -ItemType Directory -Path $shim -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $shim 'tar'), "#!/bin/sh`nexit 1`n")
+    & chmod +x (Join-Path $shim 'tar')
+    $env:PATH = $shim
+    try { LRun 'links-late' } finally { $env:PATH = $savedPath }
+    Check '#30 late fallback exit 0 and wrote a zip' { $script:rc -eq 0 -and $script:A.Name -like '*.zip' }
+    Check '#30 late fallback: symlink rows rewritten without archive_path' { $l = @($script:Rows | Where-Object { $_.status -eq 'symlink' }); $l.Count -ge 1 -and @($l | Where-Object { $_.archive_path -ne '' -or $_.error -notlike '*tar failed and zip cannot store symlinks*' }).Count -eq 0 }
+    Check '#30 late fallback: manifest in the zip matches the one on disk' {
+      $z = [System.IO.Compression.ZipFile]::OpenRead($script:A.FullName)
+      try { $e = $z.GetEntry('manifest.jsonl'); $rd = New-Object System.IO.StreamReader($e.Open()); $inZip = $rd.ReadToEnd(); $rd.Close() } finally { $z.Dispose() }
+      $inZip -eq [System.IO.File]::ReadAllText($script:M.FullName)
+    }
+    Check '#30 x #31 late fallback: collection.json in the zip matches the one on disk and names the zip' {
+      $z = [System.IO.Compression.ZipFile]::OpenRead($script:A.FullName)
+      try { $e = $z.GetEntry('collection.json'); $rd = New-Object System.IO.StreamReader($e.Open()); $inZip = $rd.ReadToEnd(); $rd.Close() } finally { $z.Dispose() }
+      $inZip -eq [System.IO.File]::ReadAllText($script:S.FullName) -and $script:LSum.archive -eq $script:A.Name -and $script:LSum.capabilities.archiver -eq 'ZipFile'
+    }
+    Check '#30 late fallback: collection.json notes the removed links' { @($script:LSum.notes | Where-Object { $_ -like 'tar failed;*removed from the staging tree before zipping*' }).Count -eq 1 }
+    Check '#30 late fallback: no link target content in the zip' { $t = ArchiveText; $t -notmatch 'OUTSIDE-BYTES' -and ([regex]::Matches($t, 'LINK-TARGET-BYTES')).Count -eq 1 }
+    Check '#30 late fallback: link targets intact' { Test-Path -LiteralPath (LinkP 'outside/secret.txt') }
+  }
+}
+
 if ($script:fail -eq 0) { Write-Output "ALL PASSED ($($PSVersionTable.PSEdition) $($PSVersionTable.PSVersion))"; Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue }
 else { Write-Output "FAILURES; work dir kept: $Work" }
 exit $script:fail

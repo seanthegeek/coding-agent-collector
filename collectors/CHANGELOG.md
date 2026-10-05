@@ -31,6 +31,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   archived copy before each fallback, so they no longer say `.tar.gz` after
   the sh collector's plain `.tar` fallback or `.tar.gz` and `tar.exe` after
   the PowerShell collector's `.zip` fallback (#31).
+- The PowerShell collector recreates symlinks and other reparse points in
+  the archive, with the target string as stored, and sets their
+  `archive_path`, as the sh collector does (#30). Windows PowerShell 5.1
+  makes the link with `cmd.exe`'s `mklink` and skips a link path or target
+  containing `%` or `"`, which `cmd.exe` cannot take verbatim; PowerShell
+  7 uses .NET. Where Windows refuses to
+  create a link (no Administrator or Developer Mode) or the archive is a
+  `.zip`, which cannot hold links, the `symlink` row keeps an empty
+  `archive_path`, its `error` field says why, and `collection.json`
+  `notes` counts them; a late fall back from `tar.exe` to zip removes the
+  staged links first and rewrites their manifest rows, so a zip never
+  holds a link target's bytes. Manifest change: `error` is now set on such
+  `symlink` rows, and `archive_path` on recreated ones.
 
 ## [1.7.0] - 2026-10-04
 
