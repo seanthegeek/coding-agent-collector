@@ -9,6 +9,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-04
+
+### Added
+
+- `detect` prints `problem:` lines too, and `detect --json` and
+  `detect.json` have a new last key `problems`, an array of the problem
+  texts; in `detect.json` it also holds the files a parser could not read.
+
+### Fixed
+
+- An input that cannot be opened, including a missing path, an archive
+  that is not readable, an archive inside a directory that cannot be
+  traversed, an input directory that cannot be listed and an unreadable
+  `manifest.jsonl`, now prints `error: <path>: <reason>` with the OS
+  reason in lower case (`no such file or directory`, `permission denied`)
+  and exits 2 under `detect`, `timeline` and `inventory`. Before, it
+  printed only the path, or a Python traceback for permission errors. A
+  corrupt or truncated archive prints `error: <path>: cannot extract:
+  <reason>` instead of a traceback, and the extracted work directory is
+  removed on every such error.
+- A directory inside a loose tree that cannot be listed is now a
+  `problem:` line instead of being skipped silently.
+- A manifest row whose file is absent from the extracted collection is now
+  one `problem:` line, `<original path>: missing from the collection`.
+- Problem lines and the `collection.json unreadable` note name the path
+  once: `<path>: permission denied` instead of
+  `<path>: [Errno 13] Permission denied: '<path>'`. The Continue and Codex
+  `parser: unreadable ...` system rows carry only the reason, since
+  `source_file` names the file.
+
 ## [0.8.0] - 2026-10-04
 
 ### Added
@@ -284,7 +314,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--summary-length` (default 400), `--include-thinking` and `--agent`;
   `detect --json` and `--files`; `catalog --agents`.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.8.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.8.1...HEAD
+[0.8.1]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.8.0...analyzer-v0.8.1
 [0.8.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.7.0...analyzer-v0.8.0
 [0.7.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.6.0...analyzer-v0.7.0
 [0.6.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.5.0...analyzer-v0.6.0

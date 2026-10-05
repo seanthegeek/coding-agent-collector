@@ -23,6 +23,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import tarfile
 import tempfile
 import zipfile
@@ -70,6 +71,9 @@ class Collection:
     homes: list[Home] = field(default_factory=list)
     artifacts: list[Artifact] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # "<path>: <reason>" for each directory or file inside the input that
+    # could not be read while the input was opened.
+    problems: list[str] = field(default_factory=list)
     _tmp: str | None = None
 
     def cleanup(self) -> None:
@@ -87,24 +91,54 @@ class Collection:
         return list(seen)
 
 
+def error_reason(e: BaseException) -> str:
+    """The reason in an exception without the path it names: the OS message
+    of an OSError, lower-cased (`permission denied`, `no such file or
+    directory`), otherwise the exception's own text."""
+    if isinstance(e, OSError) and e.strerror:
+        return e.strerror.lower()
+    return str(e)
+
+
+def describe_error(path, e: BaseException) -> str:
+    """`<path>: <reason>` for a problem line or an error message. The path is
+    the file the OS reported when it names one, otherwise `path`."""
+    name = e.filename if isinstance(e, OSError) and e.filename else path
+    return "%s: %s" % (os.fsdecode(name), error_reason(e))
+
+
 def open_input(
     path: Path, catalog: Catalog, work_dir: Path | None = None, host: str = ""
 ) -> Collection:
+    """Open an archive, extracted collection or loose directory. Raises
+    OSError when the input itself, an archive member being extracted, or the
+    manifest cannot be read, and ValueError when a file input is not an
+    archive. Unreadable directories and files inside a loose tree are not
+    errors; they are recorded in `Collection.problems`."""
     path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(path)
-    if path.is_file():
+    # stat, not exists(): exists() hides the reason, and on Python 3.14 also
+    # returns False for a permission error.
+    st = path.stat()
+    if stat.S_ISDIR(st.st_mode):
+        os.listdir(path)  # an unlistable input directory is an error, not an empty tree
+        if (path / "manifest.jsonl").is_file() and (path / "fs").is_dir():
+            col = Collection(source=path, kind="collected", root=path)
+        else:
+            col = Collection(source=path, kind="loose", root=path)
+    elif stat.S_ISREG(st.st_mode):
         col = _open_archive(path, work_dir)
-    elif (path / "manifest.jsonl").is_file() and (path / "fs").is_dir():
-        col = Collection(source=path, kind="collected", root=path)
     else:
-        col = Collection(source=path, kind="loose", root=path)
+        raise ValueError("%s is neither a regular file nor a directory" % path)
     if host:
         col.host = host
-    if col.kind in ("archive", "collected"):
-        _load_collected(col, catalog)
-    else:
-        _discover_loose(col, catalog)
+    try:
+        if col.kind in ("archive", "collected"):
+            _load_collected(col, catalog)
+        else:
+            _discover_loose(col, catalog)
+    except BaseException:
+        col.cleanup()
+        raise
     return col
 
 
@@ -112,6 +146,10 @@ def open_input(
 
 
 def _open_archive(path: Path, work_dir: Path | None) -> Collection:
+    # Opened once up front so an unreadable archive fails with its reason
+    # before a work directory is made; zipfile.is_zipfile hides OSError.
+    with open(path, "rb"):
+        pass
     if work_dir:
         work_dir.mkdir(parents=True, exist_ok=True)
         dest = Path(tempfile.mkdtemp(prefix="cac-", dir=str(work_dir)))
@@ -119,16 +157,22 @@ def _open_archive(path: Path, work_dir: Path | None) -> Collection:
         dest = Path(tempfile.mkdtemp(prefix="cac-analyzer-"))
     col = Collection(source=path, kind="archive", root=dest)
     col._tmp = str(dest)
-    sidecar = Path(str(path) + ".sha256")
-    if sidecar.is_file():
-        col.notes.append(_verify_sidecar(path, sidecar))
-    if zipfile.is_zipfile(path):
-        _extract_zip(path, dest)
-    elif tarfile.is_tarfile(path):
-        _extract_tar(path, dest)
-    else:
+    try:
+        sidecar = Path(str(path) + ".sha256")
+        if sidecar.is_file():
+            col.notes.append(_verify_sidecar(path, sidecar))
+        if zipfile.is_zipfile(path):
+            _extract_zip(path, dest)
+        elif tarfile.is_tarfile(path):
+            _extract_tar(path, dest)
+        else:
+            raise ValueError("%s is neither a tar nor a zip archive" % path)
+    except (tarfile.TarError, zipfile.BadZipFile, EOFError) as e:
         col.cleanup()
-        raise ValueError("%s is neither a tar nor a zip archive" % path)
+        raise ValueError("%s: cannot extract: %s" % (path, e)) from None
+    except BaseException:
+        col.cleanup()
+        raise
     # An archive produced by the collector unpacks to manifest.jsonl + fs/ at
     # the top; anything else is treated as a loose tree.
     if not ((dest / "manifest.jsonl").is_file() and (dest / "fs").is_dir()):
@@ -137,7 +181,10 @@ def _open_archive(path: Path, work_dir: Path | None) -> Collection:
 
 
 def _verify_sidecar(archive: Path, sidecar: Path) -> str:
-    expected = sidecar.read_text(encoding="utf-8", errors="replace").split()
+    try:
+        expected = sidecar.read_text(encoding="utf-8", errors="replace").split()
+    except OSError as e:
+        return "WARNING archive sha256 not checked: %s" % describe_error(sidecar, e)
     expected = expected[0].lower() if expected else ""
     h = hashlib.sha256()
     with open(archive, "rb") as fh:
@@ -202,7 +249,7 @@ def _load_collected(col: Collection, catalog: Catalog) -> None:
         try:
             col.summary = json.loads(summary_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
-            col.notes.append("collection.json unreadable: %s" % e)
+            col.notes.append("collection.json unreadable: %s" % error_reason(e))
     if not col.host and col.summary:
         col.host = str(col.summary.get("hostname") or "")
     rows: list[dict] = []
@@ -238,9 +285,22 @@ def _load_collected(col: Collection, catalog: Catalog) -> None:
         orig = str(r.get("path") or "")
         archive_path = str(r.get("archive_path") or "")
         rel = _relative_to_home(orig, home_orig)
+        disk_path = root / archive_path
+        # A collected row whose file is not under fs/ (a truncated or edited
+        # archive) is a problem line, not an artifact a parser trips over.
+        try:
+            present = archive_path != "" and stat.S_ISREG(os.lstat(disk_path).st_mode)
+            reason = "missing from the collection"
+        except FileNotFoundError:
+            present, reason = False, "missing from the collection"
+        except OSError as e:
+            present, reason = False, error_reason(e)
+        if not present:
+            col.problems.append("%s: %s" % (orig or archive_path, reason))
+            continue
         col.artifacts.append(
             Artifact(
-                disk_path=root / archive_path,
+                disk_path=disk_path,
                 original=orig,
                 rel=rel,
                 agent=str(r.get("agent") or ""),
@@ -298,16 +358,19 @@ def _discover_loose(col: Collection, catalog: Catalog) -> None:
             )
             col.notes.append("root is a %s directory; treating its parent as the home" % e.agent)
             homes.append(home)
-            _add_hits(col, home, [(e, tree), *list(catalog.nested_matches(tree))])
+            nested = catalog.nested_matches(tree, onerror=_problem_recorder(col))
+            _add_hits(col, home, [(e, tree), *list(nested)])
             col.homes = homes
             return
 
     first_rx = catalog.first_segment_regexes()
-    for dirpath, dirnames, filenames in os.walk(tree, followlinks=False):
+    for dirpath, dirnames, filenames in os.walk(
+        tree, onerror=_problem_recorder(col), followlinks=False
+    ):
         here = Path(dirpath)
         names = dirnames + filenames
         if any(rx.fullmatch(n) for n in names for rx in first_rx):
-            hits = list(catalog.matches_in_home(here))
+            hits = list(catalog.matches_in_home(here, onerror=_problem_recorder(col)))
             # A directory holding only shared files (AGENTS.md) is a
             # project, not a home; it needs a hit from a real agent.
             if any(entry.agent != "shared" for entry, _ in hits):
@@ -350,8 +413,9 @@ def _add_hits(col: Collection, home: Home, hits) -> None:
     # collectors' nested-claim rule.
     hits = sorted(hits, key=lambda h: -len(h[0].segments))
     seen: dict[Path, None] = {}
+    onerror = _problem_recorder(col)
     for entry, hit in hits:
-        for f in _walk_files(hit):
+        for f in _walk_files(hit, onerror):
             if f in seen:
                 continue
             seen[f] = None
@@ -367,13 +431,25 @@ def _add_hits(col: Collection, home: Home, hits) -> None:
             )
 
 
-def _walk_files(p: Path) -> Iterator[Path]:
+def _problem_recorder(col: Collection):
+    """An os.walk onerror callback that records the unreadable directory as a
+    problem of the collection, once per path, instead of skipping it."""
+
+    def record(e: OSError) -> None:
+        line = describe_error("", e)
+        if line not in col.problems:
+            col.problems.append(line)
+
+    return record
+
+
+def _walk_files(p: Path, onerror=None) -> Iterator[Path]:
     if p.is_symlink():
         return
     if p.is_file():
         yield p
         return
-    for dirpath, dirnames, filenames in os.walk(p, followlinks=False):
+    for dirpath, dirnames, filenames in os.walk(p, onerror=onerror, followlinks=False):
         here = Path(dirpath)
         dirnames[:] = [d for d in dirnames if not (here / d).is_symlink()]
         for n in filenames:

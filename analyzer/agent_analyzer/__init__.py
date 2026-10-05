@@ -6,4 +6,4 @@ coding agents left state in it, and parses the agents' transcripts into a
 normalised JSONL timeline. Nothing here runs on the host under investigation.
 """
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"

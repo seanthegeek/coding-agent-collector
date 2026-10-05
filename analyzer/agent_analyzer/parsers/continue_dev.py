@@ -46,7 +46,7 @@ import json
 import re
 from collections.abc import Iterator
 
-from ..inputs import Artifact
+from ..inputs import Artifact, error_reason
 from ..model import Row, compact
 from ..timeutil import to_utc
 from .base import Options, Parser, compact_json, iter_jsonl, text_of
@@ -193,7 +193,7 @@ class ContinueParser(Parser):
         except OSError as e:
             row = self.base_row(artifact)
             row.turn_type = "system"
-            row.text = "parser: unreadable session file: %s" % e
+            row.text = "parser: unreadable session file: %s" % error_reason(e)
             yield row
             return
         sess, problem = load_session(raw)

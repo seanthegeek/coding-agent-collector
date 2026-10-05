@@ -76,6 +76,37 @@ output is marked `inferred` in `detect --json` because none of this comes
 from a manifest. Exclusions do not apply in loose mode: every file under a
 matched catalog path is attributed and offered to the parsers.
 
+### Unreadable inputs
+
+An input that cannot be opened stops `detect`, `timeline` and `inventory`
+with exit code `2` and one line on stderr, `error: <path>: <reason>`, where
+the reason is the operating system's message in lower case, such as
+`no such file or directory` or `permission denied`. The path is the file
+the operating system named, so it is the input itself, or `manifest.jsonl`
+inside it, or the archive member being extracted. This covers an input that
+cannot be stat'ed (including one inside a directory the analyst cannot
+traverse), an input directory that cannot be listed, an archive that cannot
+be read or written to the work directory while it is extracted, and a
+`manifest.jsonl` that cannot be read. An archive whose content is corrupt
+gives `error: <path>: cannot extract: <reason>`. An extracted archive is
+removed before the command exits.
+
+Anything inside an input that cannot be read is a `problem:` line and the
+command carries on:
+
+| Problem line | When |
+| --- | --- |
+| `<directory>: <reason>` | A directory in a loose tree that cannot be listed, while homes are discovered or files under a catalog match are walked. Reported once per directory; nothing under it is attributed. |
+| `<original path>: missing from the collection` | A manifest row with status `collected` and type `file` whose `archive_path` is not a regular file in the extracted collection, for example in a truncated or edited archive. The row is not attributed. Any other reason the file cannot be stat'ed is printed instead. |
+| `<original path>: <reason>` | `timeline` only: a parser could not read an attributed file. |
+
+`detect` prints them after the notes, and `timeline` before its `window:`
+line. Symlinks are never followed, so a dangling symlink in a loose tree is
+skipped like any other symlink rather than reported. An unreadable
+`collection.json` is a note, `collection.json unreadable: <reason>`, and an
+unreadable `.sha256` sidecar is the note `WARNING archive sha256 not
+checked: <path>: <reason>`.
+
 ## Detection
 
 Detection uses the collectors' own catalog. `agent_analyzer/catalog.txt` is a
@@ -175,12 +206,15 @@ collection, or `loose`), the host, any notes, and one line per user, home
 and agent with the number of files, their bytes (from the manifest `size`,
 or from disk in loose mode), and whether a parser exists. The notes cover the
 archive hash check, unreadable `collection.json`, manifest rows that do not
-parse, and how a loose root was interpreted. `--files` adds one
+parse, and how a loose root was interpreted. One `problem:` line follows the
+notes for each directory or file inside the input that could not be read
+(see [Unreadable inputs](#unreadable-inputs)). `--files` adds one
 `user<TAB>agent<TAB>path` line per attributed file. With `--json` the same
 data is printed as one object with the keys `input`, `kind`, `host`,
 `notes`, `homes` (`user`, `home`, `inferred`), `agents` (`user`, `home`,
-`agent`, `files`, `bytes`, `parser`, `inferred`), and with `--files` also
-`files` (`user`, `agent`, `path`). Collections made by collectors before
+`agent`, `files`, `bytes`, `parser`, `inferred`), `problems` (an array of
+the problem line texts, without the `problem:` prefix), and with `--files`
+also `files` (`user`, `agent`, `path`). Collections made by collectors before
 1.6.0 also hold a `live/` system snapshot, which appears as agent `live`
 with no user, and `detect only`.
 
@@ -190,11 +224,13 @@ and writes them even when no rows were produced:
 ```text
 timeline.jsonl  one record per turn, tool call, tool result or system event
 sessions.jsonl  one record per session with first and last timestamp and counts
-detect.json     the detect --json object without its homes and files keys
+detect.json     the detect --json object without its homes and files keys; its
+                problems also hold the files a parser could not read
 ```
 
-On stdout it prints the input, host and notes, one `problem:` line per file a
-parser could not read, and, when the timeline is filtered, a `window:` line
+On stdout it prints the input, host and notes, one `problem:` line per
+directory or file that could not be read (see
+[Unreadable inputs](#unreadable-inputs)), and, when the timeline is filtered, a `window:` line
 with the resolved UTC bounds, a `match:` line with the patterns, and a
 `filtered:` line counting the rows dropped outside the window, without a
 timestamp, and not matching. Then come the agents parsed and the agents only
@@ -564,7 +600,7 @@ analyze-agent-artifacts --version
 | --- | --- |
 | `0` | `timeline` wrote at least one row; `detect` found agent artifacts, or `--json` was given; `inventory` wrote at least one row; `catalog`, `--version`. |
 | `1` | `timeline` produced no rows, including when every row was filtered out (the three files are still written), `detect` without `--json` found no agent artifacts, or `inventory` found no `host` or `agent` line (the CSV is written with its header only). |
-| `2` | The input does not exist, a file input is neither tar nor zip, a `--since` or `--until` value is not an accepted form or `--since` is later than `--until`, a `--match` pattern is not a valid regular expression, an `inventory` input is a symlink or a file or directory that cannot be read, or the command line is invalid. |
+| `2` | The input cannot be opened, printed as `error: <path>: <reason>` (see [Unreadable inputs](#unreadable-inputs)), a file input is neither tar nor zip or cannot be extracted, a `detect` or `timeline` input is neither a regular file nor a directory, a `--since` or `--until` value is not an accepted form or `--since` is later than `--until`, a `--match` pattern is not a valid regular expression, an `inventory` input is a symlink, neither a regular file nor a directory, or cannot be read, or the command line is invalid. |
 
 ## Testing
 
