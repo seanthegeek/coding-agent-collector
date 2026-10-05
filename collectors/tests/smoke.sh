@@ -963,7 +963,10 @@ check "--list prints docker volume table" "\"$SHELL_UNDER_TEST\" \"$SCRIPT\" --l
 # the project options. A PATH shim tar that rejects -z forces the tar | gzip
 # fallback; a shim gzip that fails as well forces the plain .tar fallback. The
 # collector puts the system directories first on PATH, so these runs use a
-# copy of it whose PATH line puts the shim directory first.
+# copy of it whose PATH line puts the shim directory first. A busybox built
+# with the standalone shell (busybox-static, as CI installs) runs its own tar
+# and gzip applets before searching PATH, so the shims never run; the probe
+# below detects that and skips only the checks that need a forced fallback.
 SUMS=$(ls "$OUT/default"/*.collection.json)
 check "#31 default summary: archiver tar -z, .tar.gz" "grep -q '\"archiver\": \"tar -z\"' \"$SUMS\" && grep -q '\"archive\": \"[^\"]*\\.tar\\.gz\"' \"$SUMS\""
 check "#31 default summary: no_projects false, projects empty" "grep -q '\"no_projects\": false, \"projects\": \\[\\]' \"$SUMS\""
@@ -972,12 +975,22 @@ REAL_TAR=$(command -v tar)
 # shellcheck disable=SC2016 # $1 and $@ belong to the shim, not to this script
 printf '#!/bin/sh\ncase "$1" in *z*) echo "tar: -z not supported" >&2; exit 2 ;; esac\nexec "%s" "$@"\n' "$REAL_TAR" >"$SHIM/tar"
 chmod +x "$SHIM/tar"
+mkdir -p "$WORK/probe31"
+printf '#!/bin/sh\necho cac-shim-ran\n' >"$WORK/probe31/tar"
+chmod +x "$WORK/probe31/tar"
+SHIMS31=no
+case $(PATH="$WORK/probe31:$PATH" "$SHELL_UNDER_TEST" -c tar 2>/dev/null) in
+  (cac-shim-ran) SHIMS31=yes ;;
+esac
+[ "$SHIMS31" = yes ] || printf 'skip #31 forced tar | gzip and plain tar fallback checks (the shell runs its own tar applet before PATH)\n'
 sed "s|^PATH=\"/usr/bin:|PATH=\"$SHIM:/usr/bin:|" "$SCRIPT" >"$SHIM/collector.sh"
 check "#31 shimmed collector copy puts the shim first" "grep -q '^PATH=\"$SHIM:/usr/bin:' \"$SHIM/collector.sh\""
 _sc31=$SCRIPT; SCRIPT="$SHIM/collector.sh"
 run tgz31 -p "$ROOT/srv/ccwork" -p "$ROOT/srv/cchist"; _rc31=$?
 check "#31 tar | gzip fallback exit 0" "[ $_rc31 -eq 0 ] && [ -s \"\$A\" ]"
-check "#31 tar | gzip: on-disk summary names tar | gzip" "grep -q '\"archiver\": \"tar | gzip\"' \"\$S\" && grep -q \"\\\"archive\\\": \\\"\${A##*/}\\\"\" \"\$S\""
+if [ "$SHIMS31" = yes ]; then
+  check "#31 tar | gzip: on-disk summary names tar | gzip" "grep -q '\"archiver\": \"tar | gzip\"' \"\$S\" && grep -q \"\\\"archive\\\": \\\"\${A##*/}\\\"\" \"\$S\""
+fi
 check "#31 tar | gzip: archived summary matches on-disk" "tar -xzOf \"\$A\" ./collection.json | cmp -s - \"\$S\""
 check "#31 -p values recorded in options.projects" "grep -q '\"no_projects\": false, \"projects\": \\[\"$ROOT/srv/ccwork\",\"$ROOT/srv/cchist\"\\]' \"\$S\""
 printf '#!/bin/sh\ncat >/dev/null; echo "gzip: broken" >&2; exit 1\n' >"$SHIM/gzip"
@@ -985,10 +998,12 @@ chmod +x "$SHIM/gzip"
 run tar31 --no-projects; _rc31=$?
 SCRIPT=$_sc31
 T31=$(ls "$OUT/tar31"/*.tar 2>/dev/null)
-check "#31 plain tar fallback exit 0, no .tar.gz left" "[ $_rc31 -eq 0 ] && [ -s \"$T31\" ] && [ -z \"\$A\" ]"
-check "#31 plain tar: on-disk summary names .tar and tar" "grep -q '\"archiver\": \"tar\"' \"\$S\" && grep -q \"\\\"archive\\\": \\\"\${T31##*/}\\\"\" \"\$S\""
-check "#31 plain tar: archived summary matches on-disk" "tar -xOf \"$T31\" ./collection.json | cmp -s - \"\$S\""
-check "#31 plain tar: sidecar names .tar" "grep -q \"  \${T31##*/}\\\$\" \"$T31.sha256\""
+if [ "$SHIMS31" = yes ]; then
+  check "#31 plain tar fallback exit 0, no .tar.gz left" "[ $_rc31 -eq 0 ] && [ -s \"$T31\" ] && [ -z \"\$A\" ]"
+  check "#31 plain tar: on-disk summary names .tar and tar" "grep -q '\"archiver\": \"tar\"' \"\$S\" && grep -q \"\\\"archive\\\": \\\"\${T31##*/}\\\"\" \"\$S\""
+  check "#31 plain tar: archived summary matches on-disk" "tar -xOf \"$T31\" ./collection.json | cmp -s - \"\$S\""
+  check "#31 plain tar: sidecar names .tar" "grep -q \"  \${T31##*/}\\\$\" \"$T31.sha256\""
+fi
 check "#31 --no-projects recorded" "grep -q '\"no_projects\": true, \"projects\": \\[\\]' \"\$S\""
 if command -v python3 >/dev/null 2>&1; then
   check "#31 fallback summaries are valid JSON" "python3 -c 'import json,sys; [json.load(open(f)) for f in sys.argv[1:]]' \"\$S\" \"$OUT\"/tgz31/*.collection.json"
