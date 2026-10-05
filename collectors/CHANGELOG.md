@@ -10,6 +10,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-05
+
+Interface changes: the manifest has a new status value, `error_read`;
+`collection.json` has new fields `options.no_projects`, `options.projects`
+and `counts.error_read`, and the sh collector now writes
+`capabilities.archiver`; the PowerShell collector now sets `archive_path`
+(and, when the link is not in the archive, `error`) on `symlink` rows; the
+stdout `errors:` line now reads `errors:     N (X error_copy, Y error_read)`.
+
 ### Added
 
 - `collection.json` `options.no_projects` (boolean) and `options.projects`
@@ -330,7 +339,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.7.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.8.0...HEAD
+[1.8.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.7.0...collector-v1.8.0
 [1.7.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.6.0...collector-v1.7.0
 [1.6.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.5.0...collector-v1.6.0
 [1.5.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.4.0...collector-v1.5.0

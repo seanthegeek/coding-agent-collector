@@ -76,7 +76,7 @@ param(
 
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
-$ToolVersion = '1.7.0'
+$ToolVersion = '1.8.0'
 $TOOL = 'collect-agent-artifacts'
 
 # ---------------------------------------------------------------------------

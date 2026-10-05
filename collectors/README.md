@@ -127,7 +127,12 @@ to (libarchive archives a symlink reparse point as a link and does not
 descend into it,
 [`archive_read_disk_windows.c`](https://github.com/libarchive/libarchive/blob/7219b0134d771dc4b51bf86b4d01761b87398b1b/libarchive/archive_read_disk_windows.c#L2046-L2050)
 at v3.8.8); the libarchive 3.3.2 `tar.exe` of early Windows 10 builds
-stores the link entry without its target text. Creating a symlink on
+stores the link entry without its target text. `tar.exe` stores a relative
+target with its backslashes turned into forward slashes and an absolute
+target as `\\?\C:\...`
+([`archive_read_disk_windows.c`](https://github.com/libarchive/libarchive/blob/7219b0134d771dc4b51bf86b4d01761b87398b1b/libarchive/archive_read_disk_windows.c#L396-L405)),
+so the link in the archive can differ from the manifest row's `target`,
+which keeps the original string. Creating a symlink on
 Windows needs the `SeCreateSymbolicLinkPrivilege` (Administrator) or
 Developer Mode. Windows PowerShell 5.1 has no managed API for this, so it
 runs `cmd.exe /d /v:off /c mklink` (with `/D` for a directory link or a
@@ -171,7 +176,7 @@ zipping through the link.
 | `-o, --output DIR` | Where to write the archive, manifest, summary and log. Created if missing. Default: current directory. |
 | `-r, --root DIR` | Alternate root such as a mounted disk image. Switches to image mode. `-r /` is live mode. |
 | `-u, --users LIST` | Comma-separated usernames to collect. Default: every home directory found. Names are compared with the user name from the password database, or with the directory name for a home found by globbing. The sh collector compares case-sensitively and the PowerShell collector does not. Also limits the rootless Docker directories. |
-| `-p, --project DIR` | Extra project directory whose project-level artifacts (`PROJECT_CATALOG`) are collected, as for a discovered project. Repeatable. It is a path on the machine running the collector and is never prefixed with the root, so in image mode give it including the mount point. A relative path is resolved against the current directory, in image mode too (sh: `cd` and `pwd` for an existing directory, otherwise joined to `pwd` as given; PowerShell: against the current location). A value given twice is collected once. A value that is not a directory (missing, a file, or not visible) is logged as `WARNING: project given with -p is not a directory: <path>: <error>` (`-Project` in the PowerShell message) and gets one `error_read` row; it is not listed in `collection.json` `projects`. Has no effect with `--no-projects`. |
+| `-p, --project DIR` | Extra project directory whose project-level artifacts (`PROJECT_CATALOG`) are collected, as for a discovered project. Repeatable. It is a path on the machine running the collector and is never prefixed with the root, so in image mode give it including the mount point. A relative path is resolved against the current directory, in image mode too (sh: `cd` and `pwd` for an existing directory, otherwise joined to `pwd` as given; PowerShell: against the current location). A value given twice is collected once. A value that is not a directory (missing, a file, or not visible) is logged as `WARNING: project given with -p is not a directory: <path>: <error>` (`-Project` in the PowerShell message) and gets one `error_read` row; it is not listed in `collection.json` `projects`, only in `options.projects`. Has no effect with `--no-projects`. |
 | `--full` | Disable the default size exclusions (model blobs, caches, extension and daemon binaries, marketplace clones). |
 | `--no-secrets` | Skip credential files. By default they are collected and flagged `secret: true` in the manifest. |
 | `--no-projects` | Skip project-level artifact discovery and `-p`. |
