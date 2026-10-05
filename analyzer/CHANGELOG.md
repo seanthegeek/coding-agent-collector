@@ -15,7 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `detect` prints `problem:` lines too, and `detect --json` and
   `detect.json` have a new last key `problems`, an array of the problem
-  texts; in `detect.json` it also holds the files a parser could not read.
+  texts; in `detect.json` it also holds the files a parser could not read (#37).
 
 ### Fixed
 
@@ -28,16 +28,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   printed only the path, or a Python traceback for permission errors. A
   corrupt or truncated archive prints `error: <path>: cannot extract:
   <reason>` instead of a traceback, and the extracted work directory is
-  removed on every such error.
+  removed on every such error (#37).
 - A directory inside a loose tree that cannot be listed is now a
-  `problem:` line instead of being skipped silently.
+  `problem:` line instead of being skipped silently (#37).
 - A manifest row whose file is absent from the extracted collection is now
-  one `problem:` line, `<original path>: missing from the collection`.
+  one `problem:` line, `<original path>: missing from the collection` (#37).
 - Problem lines and the `collection.json unreadable` note name the path
   once: `<path>: permission denied` instead of
   `<path>: [Errno 13] Permission denied: '<path>'`. The Continue and Codex
   `parser: unreadable ...` system rows carry only the reason, since
-  `source_file` names the file.
+  `source_file` names the file (#37).
 
 ## [0.8.0] - 2026-10-04
 
