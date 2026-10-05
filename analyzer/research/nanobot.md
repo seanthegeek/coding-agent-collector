@@ -107,7 +107,7 @@ Skip `*.checkpoint.json`. Read `.workspace` from the same directory.
 
 **Timestamps are host local time.** The collector does not record the host
 zone, so follow the aider parser's documented convention (local time emitted
-as if UTC, stated in the README parser table) and let the analyst correct it;
+as if UTC, stated in the parser table in [`docs/parsers.md`](../docs/parsers.md)) and let the analyst correct it;
 `llm_usage.sqlite3` gives true UTC for the same calls to derive the offset.
 
 | Column | Source |

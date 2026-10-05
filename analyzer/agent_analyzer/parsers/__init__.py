@@ -1,4 +1,4 @@
-"""Parser registry. Add a parser module here and in the README's table."""
+"""Parser registry. Add a parser module here and in the parser table in docs/parsers.md."""
 
 from __future__ import annotations
 

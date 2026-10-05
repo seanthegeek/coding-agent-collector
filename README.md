@@ -50,13 +50,14 @@ Sourcegraph Cody, Twinny, PearAI and Muse Code. Every other agent in the catalog
 store, Cursor, Windsurf, Amp, Factory Droid, Augment, Ollama,
 Local Deep Research) is detected and reported but not yet parsed. Parsing never happens
 on the host, so the analyzer is free to carry its own requirements. It needs
-Python 3.10 or later and the packages in `analyzer/requirements.txt`,
-currently only `zstandard`, for Zed threads, zstd-compressed Codex and Open
-Interpreter rollouts, and OpenClaw's compressed transcript rows.
+Python 3.10 or later and the packages in `analyzer/requirements.txt`:
+`python-dateutil`, required, and `zstandard`, optional, for Zed threads,
+zstd-compressed Codex and Open Interpreter rollouts, and OpenClaw's
+compressed transcript rows.
 
-Usage, accepted inputs, the JSONL schema, recipes for searching large
-timelines and the parser table are in
-[analyzer/README.md](analyzer/README.md).
+Usage and options are in [analyzer/README.md](analyzer/README.md); accepted
+inputs, the JSONL schema, recipes for searching large timelines and the
+parser table are in the pages under [analyzer/docs/](analyzer/docs/).
 
 ## License
 

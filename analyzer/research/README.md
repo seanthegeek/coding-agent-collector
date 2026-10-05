@@ -52,7 +52,7 @@ it.
 | `zed` | [zed.md](zed.md) | SQLite with zstd-compressed JSON thread blobs | yes, needs `zstandard` |
 
 The Parser column says whether `agent_analyzer/parsers/` has a parser for
-the agent; the analyzer README's parser table lists the files each one
+the agent; the parser table in [`docs/parsers.md`](../docs/parsers.md) lists the files each one
 reads. `tools/check_research_links.py` at the repository root verifies the
 citation links in these documents; see the
 [collectors research index](../../collectors/research/README.md).

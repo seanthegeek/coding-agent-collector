@@ -1,6 +1,6 @@
 """Output schema. `timeline.jsonl` and `sessions.jsonl` are interfaces that
 analysts build on; add fields at the end, never rename or remove them
-without a README note."""
+without a note in docs/output.md."""
 
 from __future__ import annotations
 

@@ -34,7 +34,7 @@ It must work in three situations:
 Roadmap: v1 (done) collects, with sh and PowerShell 5.1 collectors. v2, in
 progress under `analyzer/`, is the analyst-side Python tool that detects agent
 state in any collected directory and parses transcripts into a JSONL timeline;
-the parser table in `analyzer/README.md` lists which agents are parsed, the
+the parser table in `analyzer/docs/parsers.md` lists which agents are parsed, the
 rest of the catalog is detected but not yet parsed. Parsing never happens on
 the host.
 
@@ -61,7 +61,10 @@ analyzer/
   agent_analyzer/              Python package: cli, inputs, catalog, model, parsers/
   agent_analyzer/catalog.txt   verbatim copy of collect-agent-artifacts.sh --list
   research/<agent>.md          how each agent records transcripts; one per agent
-  README.md                    analyzer user documentation, JSONL schema, parser table
+  README.md                    analyzer user documentation: quick start, commands, options
+  docs/<topic>.md              detailed analyzer documentation: inputs, parser table,
+                               output and JSONL schema, filtering, searching, inventory,
+                               options, development
   CHANGELOG.md                 analyzer release history, one entry per VERSION
   tests/                       unittest suite with synthetic fixtures; tests/run.sh
   pyproject.toml               installable as analyze-agent-artifacts
@@ -244,9 +247,10 @@ rules are different from the collectors'.
   mid-write by a running agent must still yield its earlier turns.
 - **The outputs are interfaces.** The `timeline.jsonl` and `sessions.jsonl`
   fields, their order and their JSON types are documented in
-  `analyzer/README.md`, as are the `fleet-inventory.csv` columns; add
-  fields or columns at the end and never rename, retype or remove them
-  without updating the README and saying so in the commit. A JSONL record
+  `analyzer/docs/output.md`, and the `fleet-inventory.csv` columns in
+  `analyzer/docs/inventory.md`; add fields or columns at the end and never
+  rename, retype or remove them without updating those pages and saying so
+  in the commit. A JSONL record
   always has every field, with `""` rather than `null` for no value.
   Timestamps are always UTC ISO 8601 with milliseconds and a trailing Z.
 - **Read-only, no surprises.** The analyzer writes only under `-o` and the
@@ -306,13 +310,14 @@ and say in the module docstring if the shape has drifted since.
 6. Add a `<Agent>Tests(ParserBase)` class to `tests/test_parsers.py` with
    the same cases the existing classes have: rows, thinking opt-in, history,
    not-wanted, truncated line.
-7. Add the row to the parser table in `analyzer/README.md` in
+7. Add the row to the parser table in `analyzer/docs/parsers.md` in
    alphabetical order of the agent name, ending its "Validated against"
    cell with a Markdown link to the research document, written
-   ``see [`research/<agent>.md`](research/<agent>.md)``; remove the agent
-   from the "detected but not yet parsed" list there, bump `VERSION` in
-   `agent_analyzer/__init__.py` and `pyproject.toml`, and run
-   `analyzer/tests/run.sh`.
+   ``see [`research/<agent>.md`](../research/<agent>.md)``; remove the agent
+   from the "detected but not yet parsed" list there, also update the
+   parsed-agent list in `analyzer/README.md` and the top-level README,
+   bump `VERSION` in `agent_analyzer/__init__.py` and `pyproject.toml`,
+   and run `analyzer/tests/run.sh`.
 
 Each parser is self-contained and fully specified by its research document
 and this list, so one parser per agent, run in parallel, is the natural way
