@@ -565,6 +565,17 @@ Mk 'Users/alice/.claude-work/.credentials.json' '{"claudeAiOauth":{"accessToken"
 Mk 'Users/alice/.claude-code-router/config.json' '{"PORT":3456}'
 Mk 'ccwork/.claude/settings.json' '{}'
 Mk 'cchist/.claude/settings.json' '{}'
+
+# 2026-10-04 bug round: #29. Catalog entries that differ only by case:
+# .config/PearAI/User before .config/pearai/User, and .config/Cursor/User
+# nested under .config/cursor. Distinct directories under pwsh on Linux; one
+# directory each on NTFS (Windows PowerShell 5.1) and APFS, where the checks
+# expect one row per file. The same files are in smoke.sh.
+Mk 'Users/alice/.config/PearAI/User/case29-upper.json' '{}'
+Mk 'Users/alice/.config/pearai/User/case29-lower.json' '{}'
+Mk 'Users/alice/.config/cursor/case29-cli.json' '{}'
+Mk 'Users/alice/.config/Cursor/User/case29-editor.json' '{}'
+$caseInsensitive = [System.IO.File]::Exists((P 'Users/alice/.config/pearai/User/case29-upper.json'))
 $clawLinkOk = $false
 try {
   New-Item -ItemType SymbolicLink -Path (P 'home/bob/.clawdbot') -Target '.openclaw' -ErrorAction Stop | Out-Null
@@ -686,9 +697,9 @@ foreach ($c in $Cases14) {
     'agent' { Check "$($f[1]): $($f[2])" { $r -and $r.agent -eq $f[1] -and $r.status -eq 'collected' } }
   }
 }
-# On a case-insensitive filesystem .config/PearAI/User matches the same directory, so only attribution is checked here
+# On a case-insensitive filesystem .config/PearAI/User matches the same directory and is collected once (#29)
 $pr = @($script:Rows | Where-Object { ($_.path -replace '\\', '/') -like '*/.config/pearai/User/globalStorage/state.vscdb' })
-Check 'pearai lowercase .config/pearai collected as pearai' { $pr.Count -ge 1 -and @($pr | Where-Object { $_.agent -ne 'pearai' }).Count -eq 0 }
+Check 'pearai lowercase .config/pearai collected as pearai' { $pr.Count -eq 1 -and @($pr | Where-Object { $_.agent -ne 'pearai' }).Count -eq 0 }
 Check 'cody nested globalStorage collected exactly once' { @($script:Rows | Where-Object { ($_.path -replace '\\', '/') -like '*sourcegraph.cody-ai/symf/indexroot/meta.json' }).Count -eq 1 }
 Check 'twinny nested globalStorage collected exactly once' { @($script:Rows | Where-Object { ($_.path -replace '\\', '/') -like '*globalStorage/rjmacarthy.twinny/twinny-providers.json' }).Count -eq 1 }
 Check 'little-coder history nested in .pi collected exactly once' { @($script:Rows | Where-Object { $_.path -like '*little-coder-prompt-history.json' }).Count -eq 1 }
@@ -790,6 +801,24 @@ Check 'stdout users counts users_with_artifacts' { $script:stdout -match "(?m)^u
 Check 'log has no progress line for a profile without artifacts' { $lg = Get-Content -LiteralPath (Get-ChildItem -LiteralPath (Join-Path $Out 'default') -Filter '*.log' | Select-Object -First 1).FullName -Raw; $lg -notmatch 'User dave' -and $lg -match 'User alice' }
 Check 'stdout size is human-readable' { $script:stdout -match '(?m)^size:       \d+ \([0-9.]+ (B|KiB|MiB)\)\s*$' }
 Check 'stdout collected bytes are human-readable' { $script:stdout -match '(?m)^collected:  \d+ files, \d+ bytes \([0-9.]+ (B|KiB|MiB)\)\s*$' }
+
+# 2026-10-04 bug round: #29
+function CountOf([string]$name) { return @($script:Rows | Where-Object { ($_.path -replace '\\', '/') -like "*/$name" }).Count }
+function HasPath([string]$rel) { $w = (P $rel); return @($script:Rows | Where-Object { $_.path -ceq $w -and $_.status -eq 'collected' }).Count -eq 1 }
+$log29 = Get-Content -LiteralPath (Get-ChildItem -LiteralPath (Join-Path $Out 'default') -Filter '*.log' | Select-Object -First 1).FullName -Raw
+if ($caseInsensitive) {
+  Write-Output "note: $Work is case-insensitive; checking the folded layout"
+  Check '#29 case variants of one directory collected once' { (CountOf 'case29-upper.json') -eq 1 -and (CountOf 'case29-lower.json') -eq 1 }
+  # PowerShell records the on-disk spelling (the CASES14 block above created .config/pearai first)
+  Check '#29 path recorded in its on-disk spelling' { (HasPath 'Users/alice/.config/pearai/User/case29-upper.json') -and (HasPath 'Users/alice/.config/pearai/User/case29-lower.json') }
+  Check '#29 nested case variant collected once under the nested entry' { (CountOf 'case29-editor.json') -eq 1 -and (HasPath 'Users/alice/.config/cursor/User/case29-editor.json') }
+  # 5.1 wraps long log lines written through a redirected console, so whitespace is folded first
+  Check '#29 dropped variant logged' { ($log29 -replace '\s+', ' ') -match '\[pearai\] \S*\.config[\\/]pearai[\\/]User: catalog line \.config/pearai/User names the same path as an earlier line \(case-insensitive filesystem\)' }
+} else {
+  Check '#29 PearAI and pearai are distinct here and both collected' { (HasPath 'Users/alice/.config/PearAI/User/case29-upper.json') -and (HasPath 'Users/alice/.config/pearai/User/case29-lower.json') -and (CountOf 'case29-upper.json') -eq 1 -and (CountOf 'case29-lower.json') -eq 1 }
+  Check '#29 nested Cursor/User distinct from cursor and both collected' { (HasPath 'Users/alice/.config/cursor/case29-cli.json') -and (HasPath 'Users/alice/.config/Cursor/User/case29-editor.json') -and (CountOf 'case29-editor.json') -eq 1 -and (Row 'alice/.config/Cursor/User/case29-editor.json').agent -eq 'cursor' }
+  Check '#29 nothing folded on a case-sensitive filesystem' { $log29 -notmatch 'case-insensitive filesystem' }
+}
 
 # cross-check archived bytes against manifest hashes
 $x = Join-Path $Work 'x'; New-Item -ItemType Directory -Path $x -Force | Out-Null
@@ -899,6 +928,14 @@ Check 'Inventory child stdout parses line by line' { @($childOut | Where-Object 
 Check 'Inventory -OutputDir noted on stderr' { ((Get-Content -LiteralPath $errFile -Raw) -replace '\s+', ' ') -match 'NOTE: -Inventory writes nothing; -OutputDir .*inv-o ignored' }
 $childQ = @(& $self -NoProfile -ExecutionPolicy Bypass -File $Collector -Root $Root -Inventory -Quiet 2>$errFile)
 Check 'Inventory -Quiet leaves stderr empty' { $childQ.Count -gt 10 -and -not ((Get-Content -LiteralPath $errFile -Raw) -match '\S') }
+# 2026-10-04 bug round: #29 (the -Users run above left alice out, so run once more)
+Inv @{ NoDocker = $true }
+$r = InvAgent 'alice' 'pearai'
+if ($caseInsensitive) {
+  Check '#29 Inventory evidence keeps only the first spelling' { $r -and $r.evidence -clike '*.config/PearAI/User*' -and $r.evidence -cnotlike '*.config/pearai/User*' }
+} else {
+  Check '#29 Inventory evidence keeps both distinct spellings' { $r -and $r.evidence -clike '*.config/PearAI/User,.config/pearai/User*' }
+}
 Remove-Item -LiteralPath (P 'home/bob/.gemini') -Recurse -Force
 if ($Sep -eq '/' -and (& id -u) -ne '0') {
   New-Item -ItemType Directory -Path (P 'home/carol/.claude') -Force | Out-Null

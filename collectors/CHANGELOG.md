@@ -10,6 +10,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- On a case-insensitive filesystem (macOS, Windows), catalog entries that
+  differ only by case (`.config/goose` and `.config/Goose`,
+  `.config/PearAI/User` and `.config/pearai/User`, `.config/Cursor/User`
+  inside `.config/cursor`) no longer collect the same files twice: the first
+  catalog line keeps the directory and the later one is logged and skipped,
+  also with `--inventory`. On Linux both directories are still collected.
+  The sh collector compares device and inode; the PowerShell collector
+  compares on-disk names and records paths in their on-disk spelling (#29).
+
 ## [1.7.0] - 2026-10-04
 
 ### Added

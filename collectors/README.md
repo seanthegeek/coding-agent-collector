@@ -167,6 +167,33 @@ Antigravity CLI does under `~/.gemini/antigravity-cli`, the nested catalog
 entry wins: those files are collected once, attributed to the nested agent,
 and left out of the enclosing agent's walk.
 
+Some tools use paths that differ only by case on Linux, where both can exist:
+`.config/goose` and `.config/Goose`, `.config/PearAI/User` and
+`.config/pearai/User`, and `.config/Cursor/User` inside `.config/cursor`. On
+a case-insensitive filesystem (macOS by default, Windows, a directory under
+`/mnt/c` in WSL) such entries name one directory, which is
+collected once: the catalog line listed first keeps it, and the later line
+collects nothing and leaves one log line ending `(case-insensitive
+filesystem), collected there`, with no manifest row. A case variant of a path
+inside another match (`.config/Cursor/User` inside `.config/cursor`) is
+treated as the nested entry it is. On a case-sensitive filesystem every
+variant that exists is collected as before. How the two collectors decide
+that two spellings are one directory, and how the path is spelled in the
+manifest, differs:
+
+| | `collect-agent-artifacts.sh` | `Collect-AgentArtifacts.ps1` |
+| --- | --- | --- |
+| Which matches are compared | Matches whose paths are equal once ASCII-lowercased, or where one lowercased path lies inside another. | Every match, after each literal path segment is replaced by its on-disk name. |
+| Test for one directory | Same device and inode (`lstat`): `stat -c '%d:%i'` (GNU), `stat -f '%d:%i'` (BSD), or the inode from `ls -di` when neither `stat` works. | Same path string after the on-disk names are taken. The on-disk name of a segment is the single entry that `Directory.GetFileSystemEntries(parent, segment)` returns; when it returns none or several (two names that differ by case on a case-sensitive filesystem), the segment is kept as written. |
+| Spelling in `path` and the archive | The first catalog line's spelling (`.config/PearAI/User/...` even when the directory on disk is `pearai`); a nested variant takes the enclosing match's spelling for the shared part (`.config/cursor/User/...`). | The on-disk spelling. |
+| Log line for the dropped entry | `[agent] <path>: same file as <kept path> (case-insensitive filesystem), collected there` | `[agent] <path>: catalog line <glob> names the same path as an earlier line (case-insensitive filesystem), collected there` |
+
+Claimed paths of nested entries are compared case-insensitively by the
+PowerShell collector on Windows and case-sensitively elsewhere, so pwsh on
+Linux keeps `.config/cursor/User` and `.config/Cursor/User` apart. With
+`--inventory` (`-Inventory`) the same folding applies, and the dropped line's
+glob is left out of the agent's `evidence`.
+
 Claude Code reads its whole config home from `CLAUDE_CONFIG_DIR` when that
 variable is set, and a second account in `~/.claude-work` or a similar
 `~/.claude-<name>` directory is common. Such a directory is collected as
