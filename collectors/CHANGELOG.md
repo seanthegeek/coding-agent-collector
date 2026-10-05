@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-04
+
 ### Added
 
 - Meta's Muse Code CLI as catalog agent `muse-code`, with an evidence
@@ -31,9 +33,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `history.jsonl` are project discovery sources. The entries name
   Claude-only files, so `~/.claude-code-router`, `~/.claude-mem` and
   `~/.claude-squad` are not collected.
+- `collection.json` field `users_with_artifacts`: the users whose home
+  produced at least one manifest row. `users` and `homes` still list
+  every home scanned.
 
 ### Changed
 
+- The stdout `users:` line counts only homes that produced at least one
+  manifest row, and the `User` progress line is written only for a home
+  with a catalog match.
+- The stdout `size:` and `collected:` lines add the size in binary units
+  after the byte count, such as `74779093 (71.3 MiB)`.
+- The sh collector's final progress line on stderr is `done`; the archive
+  path, size and sha256 stay in the log file's `done:` line and on stdout.
+  The PowerShell collector now prints the same `done` line.
 - PowerShell collector: the internal logging function is renamed from
   `Write-Log` to `Write-CollectorLog` so it no longer shadows a Windows
   built-in command name; output and behaviour are unchanged. Found by
@@ -247,7 +260,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.6.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.7.0...HEAD
+[1.7.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.6.0...collector-v1.7.0
 [1.6.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.5.0...collector-v1.6.0
 [1.5.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.4.0...collector-v1.5.0
 [1.4.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.3.0...collector-v1.4.0

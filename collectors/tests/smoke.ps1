@@ -79,6 +79,8 @@ Mk 'Users/Public/Desktop/readme.txt' 'public'
 Mk 'Users/Default/NTUSER.DAT' 'default'
 Mk 'home/bob/.ollama/models/blobs/sha256-abc' 'blob'
 Mk 'home/bob/.ollama/history' 'hist'
+# 2026-10-04 a profile with no agent state: listed in users, not counted on stdout
+New-Item -ItemType Directory -Path (P 'Users/dave') -Force | Out-Null
 Mk 'home/bob/.bash_history' 'export FOO=1'
 # v1.3 catalog revision fixtures
 Mk 'Users/alice/.factory/cache/session-index/index.db' 'sqlite'
@@ -782,6 +784,12 @@ Check 'summary counts skipped_unmatched_volume' { $sum.counts.skipped_unmatched_
 Check 'summary docker counts' { $sum.docker.volumes_found -eq 3 -and $sum.docker.volumes_collected -eq 2 -and $sum.docker.unreadable -eq 0 -and $sum.docker.docker_desktop -eq $false }
 Check 'summary no_docker option false and notes empty' { $sum.options.no_docker -eq $false -and @($sum.notes).Count -eq 0 }
 Check 'stdout docker line' { $script:stdout -match '(?m)^docker:     3 volumes found, 2 collected, 0 unreadable\s*$' }
+Check 'profile without artifacts still listed in users' { @($sum.users) -contains 'dave' }
+Check 'profile without artifacts not in users_with_artifacts' { @($sum.users_with_artifacts).Count -gt 0 -and -not (@($sum.users_with_artifacts) -contains 'dave') }
+Check 'stdout users counts users_with_artifacts' { $script:stdout -match "(?m)^users:      $(@($sum.users_with_artifacts).Count)\s*$" }
+Check 'log has no progress line for a profile without artifacts' { $lg = Get-Content -LiteralPath (Get-ChildItem -LiteralPath (Join-Path $Out 'default') -Filter '*.log' | Select-Object -First 1).FullName -Raw; $lg -notmatch 'User dave' -and $lg -match 'User alice' }
+Check 'stdout size is human-readable' { $script:stdout -match '(?m)^size:       \d+ \([0-9.]+ (B|KiB|MiB)\)\s*$' }
+Check 'stdout collected bytes are human-readable' { $script:stdout -match '(?m)^collected:  \d+ files, \d+ bytes \([0-9.]+ (B|KiB|MiB)\)\s*$' }
 
 # cross-check archived bytes against manifest hashes
 $x = Join-Path $Work 'x'; New-Item -ItemType Directory -Path $x -Force | Out-Null

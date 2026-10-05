@@ -26,7 +26,7 @@
 #               or, with --inventory, the walk ran,
 #             1 usage error, 2 fatal (no output dir, no tar, ...).
 
-VERSION="1.6.0"
+VERSION="1.7.0"
 TOOL="collect-agent-artifacts"
 
 LC_ALL=C
@@ -1745,8 +1745,10 @@ collect_path() {
 # from the walk of any enclosing match (see NESTED_CLAIMS in collect_path).
 # With --inventory, each match of an inventoried agent first prints
 # M|agent|glob on stdout, and shared and shell-history matches still claim
-# their paths but are not walked.
+# their paths but are not walked. HEADER, when given, is logged once before
+# the first match, so a home with no matches leaves no progress line.
 collect_tree() {
+  _ct_header=${4:-}
   _ct_matches=$(printf '%s\n' "$3" | while IFS='|' read -r _ct_agent _ct_pat; do
     case "$_ct_agent" in (''|'#'*) continue ;; esac
     expand_glob "$2" "$_ct_pat" | while IFS= read -r _ct_m; do
@@ -1760,6 +1762,7 @@ collect_tree() {
       case "$_ct_agent" in shared|shell-history) continue ;; esac
       printf 'M|%s|%s\n' "$_ct_agent" "$_ct_pat"
     fi
+    if [ -n "$_ct_header" ]; then log_line "$_ct_header"; _ct_header=; fi
     log_line "  [$_ct_agent] $_ct_m"
     collect_path "$1" "$2" "$_ct_agent" "$_ct_m" </dev/null
   done
@@ -1812,8 +1815,7 @@ fi
 # shellcheck disable=SC2030 # _h is per-iteration; inv_secret reads it below
 [ "$INVENTORY" = 1 ] || printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
   [ -n "$_h" ] || continue
-  log_line "User $_u ($_h)"
-  collect_tree "$_u" "$_h" "$CATALOG"
+  collect_tree "$_u" "$_h" "$CATALOG" "User $_u ($_h)"
 done
 
 # ---------------------------------------------------------------------------
@@ -2162,9 +2164,8 @@ $USER_LIST
 EOF_INVUSERS
   INV_LINES=$(printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
     [ -n "$_h" ] || continue
-    log_line "User $_u ($_h)"
     _np=$(printf '%s\n' "$PROJECT_LIST" | awk -F: -v u="$_u" '$1 == u && length($0) > length(u) + 1 { n++ } END { print n + 0 }')
-    collect_tree "$_u" "$_h" "$CATALOG" | inv_aggregate | inv_emit "$_u" "$_np"
+    collect_tree "$_u" "$_h" "$CATALOG" "User $_u ($_h)" | inv_aggregate | inv_emit "$_u" "$_np"
   done)
   printf '{"type":"host","host":"%s","collector":"%s","mode":"%s","at":"%s","users_scanned":%s,"users_unreadable":%s,"docker_volumes":%s}\n' \
     "$(json_str "$HOST")" "$VERSION" "$MODE" "$START_TS" \
@@ -2178,6 +2179,17 @@ fi
 # Summary, archive, hashes
 END_TS=$(ts)
 count_status() { num "$(grep -c "\"status\":\"$1\"" "$MANIFEST" 2>/dev/null)"; }
+# Users whose home gave at least one manifest row, in enumeration order.
+ACTIVE_USERS=$(printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
+  [ -n "$_h" ] || continue
+  grep -F -q "\"home\":\"$(json_str "$_h")\"" "$MANIFEST" 2>/dev/null && printf '%s:%s\n' "$_u" "$_h"
+done)
+# human_size BYTES -> "512 B", "20.9 MiB"
+human_size() {
+  awk -v b="$(num "$1")" 'BEGIN { split("B KiB MiB GiB TiB", u, " "); i = 1
+    while (b >= 1024 && i < 5) { b /= 1024; i++ }
+    if (i == 1) printf "%d B", b; else printf "%.1f %s", b, u[i] }'
+}
 BYTES=$(awk -F'"size":' '/"status":"collected"/ {split($2,a,","); s+=a[1]} END{printf "%d", s}' "$MANIFEST")
 
 json_list() { # newline-separated -> JSON array
@@ -2207,6 +2219,7 @@ cat >"$SUMMARY" <<EOF
   "capabilities": {"hash_tool": "$HASH_TOOL", "stat_mode": "$STAT_MODE", "worker_shell": "$(json_str "$WORKER_SH")"},
   "users": $(json_list "$(printf '%s\n' "$USER_LIST" | cut -d: -f1)"),
   "homes": $(json_list "$(printf '%s\n' "$USER_LIST" | sed 's/^[^:]*://')"),
+  "users_with_artifacts": $(json_list "$(printf '%s\n' "$ACTIVE_USERS" | cut -d: -f1)"),
   "projects": $(json_list "$(printf '%s\n' "$PROJECT_LIST" | sed 's/^[^:]*://')"),
   "counts": {"collected": $(count_status collected), "symlink": $(count_status symlink), "skipped_excluded": $(count_status skipped_excluded), "skipped_size": $(count_status skipped_size), "skipped_secret": $(count_status skipped_secret), "error_copy": $(count_status error_copy), "skipped_unmatched_volume": $(count_status skipped_unmatched_volume), "collected_bytes": $BYTES},
   "docker": {"volumes_found": $DOCKER_FOUND, "volumes_collected": $DOCKER_COLLECTED, "unreadable": $DOCKER_UNREADABLE, "docker_desktop": $( [ "$DOCKER_DESKTOP" = 1 ] && printf true || printf false )},
@@ -2234,12 +2247,14 @@ fi
 ARCHIVE_SHA=$(hash_file "$ARCHIVE")
 ARCHIVE_SIZE=$(stat_file "$ARCHIVE"); ARCHIVE_SIZE=${ARCHIVE_SIZE%% *}
 printf '%s  %s\n' "$ARCHIVE_SHA" "${ARCHIVE##*/}" >"$ARCHIVE.sha256"
-log_line "done: $ARCHIVE ($ARCHIVE_SIZE bytes, sha256 $ARCHIVE_SHA)"
+# The archive's size and hash follow on stdout, so stderr gets only "done".
+printf '%s done: %s (%s bytes, sha256 %s)\n' "$(ts)" "$ARCHIVE" "$ARCHIVE_SIZE" "$ARCHIVE_SHA" >>"$LOG"
+[ "$QUIET" = 1 ] || printf 'done\n' >&2
 
-printf 'archive:    %s\nsize:       %s\nsha256:     %s\nmanifest:   %s\nsummary:    %s\nlog:        %s\nusers:      %s\nprojects:   %s\ncollected:  %s files, %s bytes\nskipped:    %s excluded, %s too large, %s secret\nerrors:     %s\n' \
-  "$ARCHIVE" "$ARCHIVE_SIZE" "$ARCHIVE_SHA" "$MANIFEST" "$SUMMARY" "$LOG" \
-  "$(printf '%s\n' "$USER_LIST" | grep -c .)" "$(printf '%s\n' "$PROJECT_LIST" | grep -c .)" \
-  "$(count_status collected)" "$BYTES" "$(count_status skipped_excluded)" "$(count_status skipped_size)" "$(count_status skipped_secret)" "$(count_status error_copy)"
+printf 'archive:    %s\nsize:       %s (%s)\nsha256:     %s\nmanifest:   %s\nsummary:    %s\nlog:        %s\nusers:      %s\nprojects:   %s\ncollected:  %s files, %s bytes (%s)\nskipped:    %s excluded, %s too large, %s secret\nerrors:     %s\n' \
+  "$ARCHIVE" "$ARCHIVE_SIZE" "$(human_size "$ARCHIVE_SIZE")" "$ARCHIVE_SHA" "$MANIFEST" "$SUMMARY" "$LOG" \
+  "$(printf '%s\n' "$ACTIVE_USERS" | grep -c .)" "$(printf '%s\n' "$PROJECT_LIST" | grep -c .)" \
+  "$(count_status collected)" "$BYTES" "$(human_size "$BYTES")" "$(count_status skipped_excluded)" "$(count_status skipped_size)" "$(count_status skipped_secret)" "$(count_status error_copy)"
 if [ "$DOCKER_SEEN" = 1 ]; then
   printf 'docker:     %s volumes found, %s collected, %s unreadable' "$DOCKER_FOUND" "$DOCKER_COLLECTED" "$DOCKER_UNREADABLE"
   [ "$DOCKER_UNREADABLE" -gt 0 ] && printf ' (run as root to collect)'

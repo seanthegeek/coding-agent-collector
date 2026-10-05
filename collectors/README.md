@@ -53,27 +53,35 @@ When the run finishes, the collector prints a summary on stdout:
 
 ```text
 archive:    /var/tmp/ir/host01_20261003T165531Z_agent-artifacts.tar.gz
-size:       55959669
+size:       55959669 (53.4 MiB)
 sha256:     19c47a0e...
 manifest:   /var/tmp/ir/host01_20261003T165531Z_agent-artifacts.manifest.jsonl
 summary:    /var/tmp/ir/host01_20261003T165531Z_agent-artifacts.collection.json
 log:        /var/tmp/ir/host01_20261003T165531Z_agent-artifacts.log
 users:      4
 projects:   12
-collected:  5985 files, 110669230 bytes
+collected:  5985 files, 110669230 bytes (105.5 MiB)
 skipped:    7 excluded, 0 too large, 0 secret
 errors:     2
 docker:     4 volumes found, 1 collected, 0 unreadable
 ```
 
-`size` and `sha256` are the archive's. `users` and `projects` count the
-homes and project directories collected from. `collected` counts the
-manifest rows with status `collected` and their bytes. `skipped` counts the
+`size` and `sha256` are the archive's; `size` is in bytes, followed by
+the same size in binary units (`B`, `KiB`, `MiB`, `GiB`, `TiB`, one
+decimal). `users` counts the homes that produced at least one manifest
+row, the `users_with_artifacts` list in `collection.json`; homes that were
+scanned and held nothing are left out of the count but stay in `users`
+there. `projects` counts the project directories collected from.
+`collected` counts the manifest rows with status `collected` and their
+bytes, followed by the same total in binary units. `skipped` counts the
 `skipped_excluded`, `skipped_size` and `skipped_secret` rows, and `errors`
 counts the `error_copy` rows. The `docker:` line appears only when a Docker
 or Podman volume directory or Docker Desktop data was found; see
 [Docker volumes](#docker-volumes). Progress lines (each user, catalog match
 and project) go to stderr unless `-q` is given. They always go to the log.
+A `User` line is written only for a home with at least one catalog match,
+just before that match. The last progress line is `done`; the log file's
+`done:` line also records the archive path, size in bytes and sha256.
 
 ### Windows
 
@@ -378,8 +386,7 @@ log gets a `WARNING: not running as root` (or `as Administrator`) line,
 and:
 
 - A home the responder cannot enter is still listed in `users`. The sh
-  collector finds no catalog paths in it and logs nothing beyond the
-  `User` line. Inside a readable home, a directory that cannot be listed
+  collector finds no catalog paths in it and logs no `User` line for it. Inside a readable home, a directory that cannot be listed
   shows up only in the log, with no manifest row: as `find:` errors from
   the sh collector, or as `list failed:` and `stat failed:` lines from the
   PowerShell collector. A file that can be listed but not read is an
@@ -566,7 +573,8 @@ the root, as on other platforms.
 | `started`, `finished` | UTC to the second, `2026-10-03T16:55:31Z`. `finished` is taken before archiving. |
 | `options` | `full`, `no_secrets`, `max_file_size_bytes` (`0` means no limit), `users_filter` (the `-u` string), `no_docker`. `--no-projects` and `-p` are not recorded. |
 | `capabilities` | sh: `hash_tool` (`sha256sum`, `shasum`, `sha256`, `openssl` or `none`), `stat_mode` (`gnu`, `gnu0` for GNU `stat` without birth time, `bsd` or `none`) and `worker_shell`. PowerShell: `hash_tool` (`Get-FileHash`) and `archiver` (`tar.exe` or `ZipFile`, as chosen at startup). |
-| `users`, `homes` | Parallel lists of the users and homes collected. |
+| `users`, `homes` | Parallel lists of every user and home scanned, including homes with no agent state. |
+| `users_with_artifacts` | The users whose home produced at least one manifest row, in the order of `users`. Rows from discovered projects and Docker volumes do not count. The stdout `users:` line is its length. |
 | `projects` | The project directories collected from, discovered or given with `-p`. |
 | `counts` | Rows per status (`collected`, `symlink`, `skipped_excluded`, `skipped_size`, `skipped_secret`, `error_copy`, `skipped_unmatched_volume`) and `collected_bytes`. |
 | `docker` | `volumes_found`, `volumes_collected`, `unreadable` and `docker_desktop`; see [Docker volumes](#docker-volumes). |

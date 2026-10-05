@@ -74,7 +74,7 @@ param(
 
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
-$ToolVersion = '1.6.0'
+$ToolVersion = '1.7.0'
 $TOOL = 'collect-agent-artifacts'
 
 # ---------------------------------------------------------------------------
@@ -1637,6 +1637,8 @@ if (-not $Inventory) {
 $script:Counts = @{ collected = 0; symlink = 0; skipped_excluded = 0; skipped_size = 0; skipped_secret = 0; error_copy = 0; skipped_unmatched_volume = 0; bytes = [int64]0 }
 $script:WalkErrors = 0
 $script:ClaimedPaths = @{}
+# Homes (and other bases) that gave at least one manifest row
+$script:RowHomes = @{}
 
 function Write-CollectorLog([string]$msg) {
   $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -1654,6 +1656,7 @@ function Write-Row([string]$user, [string]$homeDir, [string]$agent, [string]$pat
   }
   $script:ManifestWriter.WriteLine(($row | ConvertTo-Json -Compress -Depth 2))
   if ($script:Counts.ContainsKey($status)) { $script:Counts[$status]++ }
+  $script:RowHomes[$homeDir] = $true
   if ($status -eq 'collected') { $script:Counts['bytes'] += $size }
 }
 
@@ -1778,10 +1781,11 @@ function Add-Path([string]$user, [string]$homeDir, [string]$agent, [string]$path
   if ($item.PSIsContainer -and -not $isLink) { Add-Tree $user $homeDir $agent $path } else { Add-File $user $homeDir $agent $item }
 }
 
-function Invoke-CatalogCollection([string]$user, [string]$base, [string]$table) {
+function Invoke-CatalogCollection([string]$user, [string]$base, [string]$table, [string]$header = '') {
   # Expand every entry first so a nested match (.gemini/antigravity-cli inside
   # .gemini) is attributed to its own agent and collected once; Add-Tree skips
-  # children that another entry claimed.
+  # children that another entry claimed. $header, when given, is logged once
+# before the first match, so a home with no matches leaves no progress line.
   # ($matches would shadow PowerShell's automatic regex variable.)
   $claimed = @()
   $script:ClaimedPaths = @{}
@@ -1802,6 +1806,7 @@ function Invoke-CatalogCollection([string]$user, [string]$base, [string]$table) 
       if ($agent -eq 'shared' -or $agent -eq 'shell-history') { continue }
       Add-InvEvidence $agent $pair[2]
     }
+    if ($header) { Write-CollectorLog $header; $header = '' }
     Write-CollectorLog "  [$agent] $m"
     Add-Path $user $base $agent $m
   }
@@ -1864,9 +1869,8 @@ foreach ($ih in $script:InaccessibleHomes) { Write-CollectorLog "profile not acc
 # ---------------------------------------------------------------------------
 $script:InvUsers = @()
 foreach ($u in $UserList) {
-  Write-CollectorLog "User $($u.user) ($($u.home))"
   $script:Inv = [ordered]@{}
-  Invoke-CatalogCollection $u.user $u.home $CATALOG
+  Invoke-CatalogCollection $u.user $u.home $CATALOG "User $($u.user) ($($u.home))"
   if ($Inventory) { $script:InvUsers += , @($u, $script:Inv) }
 }
 
@@ -2213,6 +2217,16 @@ if ($Inventory) {
 # Summary, archive, hashes
 # ---------------------------------------------------------------------------
 $EndTs = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+# Users whose home gave at least one manifest row, in enumeration order
+$ActiveUsers = @($UserList | Where-Object { $script:RowHomes.ContainsKey($_.home) })
+# 512 -> "512 B", 21868755 -> "20.9 MiB"
+function Format-HumanSize([int64]$bytes) {
+  $units = @('B', 'KiB', 'MiB', 'GiB', 'TiB')
+  $v = [double]$bytes; $i = 0
+  while ($v -ge 1024 -and $i -lt 4) { $v /= 1024; $i++ }
+  if ($i -eq 0) { return "$bytes B" }
+  return $v.ToString('0.0', [Globalization.CultureInfo]::InvariantCulture) + ' ' + $units[$i]
+}
 $summary = [ordered]@{
   tool = $TOOL; version = $ToolVersion; hostname = $HostName; mode = $Mode
   root = $(if ($Root) { $Root } else { '\' })
@@ -2224,6 +2238,7 @@ $summary = [ordered]@{
   capabilities = [ordered]@{ hash_tool = 'Get-FileHash'; archiver = $(if ($TarExe) { 'tar.exe' } else { 'ZipFile' }) }
   users = @($UserList | ForEach-Object { $_.user })
   homes = @($UserList | ForEach-Object { $_.home })
+  users_with_artifacts = @($ActiveUsers | ForEach-Object { $_.user })
   projects = @($ProjectList | ForEach-Object { $_.path })
   counts = [ordered]@{ collected = $script:Counts.collected; symlink = $script:Counts.symlink; skipped_excluded = $script:Counts.skipped_excluded; skipped_size = $script:Counts.skipped_size; skipped_secret = $script:Counts.skipped_secret; error_copy = $script:Counts.error_copy; skipped_unmatched_volume = $script:Counts.skipped_unmatched_volume; collected_bytes = $script:Counts.bytes }
   docker = [ordered]@{ volumes_found = $script:Docker.found; volumes_collected = $script:Docker.collected; unreadable = $script:Docker.unreadable; docker_desktop = $script:Docker.desktop }
@@ -2260,19 +2275,21 @@ $ArchiveSha = Get-FileSha256 $Archive
 $ArchiveSize = (Get-Item -LiteralPath $Archive).Length
 [System.IO.File]::WriteAllText("$Archive.sha256", "$ArchiveSha  $(Split-Path -Leaf $Archive)`n", $Utf8NoBom)
 [System.IO.File]::AppendAllText($LogPath, "$EndTs done: $Archive ($ArchiveSize bytes, sha256 $ArchiveSha)`n", $Utf8NoBom)
+# The archive's size and hash follow on stdout, so stderr gets only "done".
+if (-not $Quiet) { [Console]::Error.WriteLine('done') }
 
 if (-not $KeepStaging) { try { Remove-Item -LiteralPath $Stage -Recurse -Force -ErrorAction Stop } catch { } }
 
 $c = $script:Counts
 Write-Output "archive:    $Archive"
-Write-Output "size:       $ArchiveSize"
+Write-Output "size:       $ArchiveSize ($(Format-HumanSize $ArchiveSize))"
 Write-Output "sha256:     $ArchiveSha"
 Write-Output "manifest:   $ManifestPath"
 Write-Output "summary:    $SummaryPath"
 Write-Output "log:        $LogPath"
-Write-Output "users:      $($UserList.Count)"
+Write-Output "users:      $($ActiveUsers.Count)"
 Write-Output "projects:   $($ProjectList.Count)"
-Write-Output "collected:  $($c.collected) files, $($c.bytes) bytes"
+Write-Output "collected:  $($c.collected) files, $($c.bytes) bytes ($(Format-HumanSize $c.bytes))"
 Write-Output "skipped:    $($c.skipped_excluded) excluded, $($c.skipped_size) too large, $($c.skipped_secret) secret"
 Write-Output "errors:     $($c.error_copy)"
 if ($script:Docker.seen) {

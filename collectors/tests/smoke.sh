@@ -23,12 +23,13 @@ mkdir -p "$ROOT/etc" "$ROOT/home/alice/.claude/projects/-srv-proj" "$ROOT/home/a
   "$ROOT/Users/bob/Library/Application Support/Cursor/User/globalStorage/ms-python.python" \
   "$ROOT/Users/bob/Library/Application Support/Cursor/User/workspaceStorage/abc" \
   "$ROOT/Users/bob/.codex/sessions/2026/10/03" "$ROOT/srv/proj/.claude" "$ROOT/Users/bob/Documents/app" \
-  "$ROOT/home/ollama/.ollama/models/blobs" "$ROOT/nonexistent"
+  "$ROOT/home/ollama/.ollama/models/blobs" "$ROOT/nonexistent" "$ROOT/home/dave"
 cat >"$ROOT/etc/passwd" <<EOF
 root:x:0:0:root:/root:/bin/sh
 alice:x:1000:1000:Alice:/home/alice:/bin/bash
 ollama:x:999:999::/home/ollama:/usr/sbin/nologin
 nobody:x:65534:65534::/nonexistent:/usr/sbin/nologin
+dave:x:1001:1001:Dave:/home/dave:/bin/sh
 EOF
 printf '{"type":"user","message":{"role":"user","content":"hi"},"timestamp":"2026-10-03T00:00:00Z"}\n' >"$ROOT/home/alice/.claude/projects/-srv-proj/s1.jsonl"
 printf '{"display":"do things","timestamp":1759449600000,"project":"/srv/proj","sessionId":"s1"}\n' >"$ROOT/home/alice/.claude/history.jsonl"
@@ -749,6 +750,14 @@ check "summary counts skipped_unmatched_volume" "grep -q '\"skipped_unmatched_vo
 check "summary docker counts" "grep -q '\"docker\": {\"volumes_found\": 3, \"volumes_collected\": 2, \"unreadable\": 0' \"\$S\""
 check "summary no_docker option false" "grep -q '\"no_docker\": false' \"\$S\""
 check "stdout docker line" "grep -q '^docker:     3 volumes found, 2 collected, 0 unreadable\$' \"$OUT/default.stdout\""
+# 2026-10-04 summary: only homes with manifest rows are counted and logged; sizes are also human-readable
+check "home without artifacts still listed in users" "tr -d '\n' <\"\$S\" | grep -q '\"users\": \\[[^]]*\"dave\"'"
+check "home without artifacts not in users_with_artifacts" "grep -q '\"users_with_artifacts\": \\[\"' \"\$S\" && ! grep '\"users_with_artifacts\"' \"\$S\" | grep -q dave"
+check "stdout users counts users_with_artifacts" "[ \"\$(sed -n 's/^users: *//p' \"$OUT/default.stdout\")\" = \"\$(grep '\"users_with_artifacts\"' \"\$S\" | tr ',' '\\n' | grep -c '\"')\" ]"
+check "log has no progress line for a home without artifacts" "! grep -q 'User dave' \"$OUT\"/default/*.log && grep -q 'User alice' \"$OUT\"/default/*.log"
+check "stdout size is human-readable" "grep -q '^size:       [0-9]* ([0-9.]* \\(B\\|KiB\\|MiB\\))\$' \"$OUT/default.stdout\""
+check "stdout collected bytes are human-readable" "grep -q '^collected:  [0-9]* files, [0-9]* bytes ([0-9.]* \\(B\\|KiB\\|MiB\\))\$' \"$OUT/default.stdout\""
+check "log done line keeps size and sha256" "grep -q ' done: .* ([0-9]* bytes, sha256 [0-9a-f]\\{64\\})\$' \"$OUT\"/default/*.log"
 # 2026-10-04 Muse Code
 printf '%s\n' "$CASES_MUSE" >"$WORK/casesmuse"
 while IFS='|' read -r _k _a _r; do
