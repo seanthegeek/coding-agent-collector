@@ -10,6 +10,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The PowerShell collector recreates symlinks and other reparse points in
+  the archive, with the target string as stored, and sets their
+  `archive_path`, as the sh collector does (#30). Where Windows refuses to
+  create a link (no Administrator or Developer Mode) or the archive is a
+  `.zip`, which cannot hold links, the `symlink` row keeps an empty
+  `archive_path`, its `error` field says why, and `collection.json`
+  `notes` counts them; a late fall back from `tar.exe` to zip removes the
+  staged links first and rewrites their manifest rows, so a zip never
+  holds a link target's bytes. Manifest change: `error` is now set on such
+  `symlink` rows, and `archive_path` on recreated ones.
+
 ## [1.7.0] - 2026-10-04
 
 ### Added
