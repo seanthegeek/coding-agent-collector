@@ -334,26 +334,14 @@ local-deep-research|.local/share/local-deep-research
 local-deep-research|Library/Application Support/local-deep-research
 local-deep-research|AppData/Local/local-deep-research
 local-deep-research|Documents/LocalDeepResearch
-# Shared cross-agent directories (skills, instructions, env files read by several agents)
+# Shared cross-agent directories (skills and instructions read by several agents)
 shared|.agents
 shared|.config/AGENTS.md
 shared|.config/agents
-shared|.env
 # Ollama
 ollama|.ollama
 ollama|Library/Application Support/Ollama
 ollama|AppData/Local/Ollama
-# Shell history
-shell-history|.bash_history
-shell-history|.zsh_history
-shell-history|.zsh_sessions
-shell-history|.sh_history
-shell-history|.history
-shell-history|.local/share/fish/fish_history
-shell-history|.config/fish/fish_history
-shell-history|AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt
-shell-history|.local/share/powershell/PSReadLine/ConsoleHost_history.txt
-shell-history|.bash_sessions
 # project artifacts (relative to each discovered project)
 project|.claude
 project|CLAUDE.md
@@ -479,7 +467,6 @@ project|HEARTBEAT.md
 project|memory/MEMORY.md
 project|memory/history.jsonl
 project|memory/HISTORY.md
-project|.env
 # excluded unless --full
 .claude/cache
 .claude/plugins/marketplaces

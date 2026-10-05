@@ -14,8 +14,12 @@ VS Code, VSCodium and their forks are collected through their `User`
 directories, which hold Copilot Chat sessions and extension state. The
 globalStorage of the Cline, Roo Code, Kilo Code, Continue, Sourcegraph Cody
 and Twinny extensions is claimed by nested catalog entries, so those files are attributed to the
-extension's agent rather than to the editor, whichever editor they sit in. Shell histories and shared cross-agent
-directories such as `~/.agents` and `~/.env` are collected too.
+extension's agent rather than to the editor, whichever editor they sit in. Shared cross-agent
+directories such as `~/.agents` are collected too. Shell histories and
+general-purpose `.env` files in the home or a project are not: like process
+lists and logons, they are the EDR's job. An agent's own `.env` inside its
+state directory, such as `~/.codex/.env` or `~/.hermes/.env`, is collected
+and flagged `secret: true`.
 
 There are two collectors with the same catalog, manifest schema and archive
 layout:
@@ -161,9 +165,7 @@ Shared directories read by several agents are collected under the `shared`
 agent name. When one tool keeps its state inside another tool's directory, as
 Antigravity CLI does under `~/.gemini/antigravity-cli`, the nested catalog
 entry wins: those files are collected once, attributed to the nested agent,
-and left out of the enclosing agent's walk. Project `.env` files are collected from discovered project
-directories because Aider, Gemini CLI, Qwen Code and Continue read them; they
-are flagged `secret: true` like every other credential file.
+and left out of the enclosing agent's walk.
 
 Claude Code reads its whole config home from `CLAUDE_CONFIG_DIR` when that
 variable is set, and a second account in `~/.claude-work` or a similar
@@ -457,8 +459,7 @@ directory, a symlink, an excluded-only tree, or a `~/.gemini` that holds
 only the `antigravity-cli` directory claimed by the nested `antigravity`
 entry. The same rule applies to Docker volumes. `files` is therefore never
 `0`.
-The `shared` and `shell-history` entries are not inventoried, and `project`
-never appears.
+The `shared` entries are not inventoried, and `project` never appears.
 
 | Field | Type | Meaning |
 | --- | --- | --- |

@@ -6,11 +6,11 @@
   Windows counterpart of collect-agent-artifacts.sh. Collects the on-disk state
   of AI coding agents (Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot
   CLI, Cursor, Windsurf, Continue, Aider, Ollama, ...) for every user profile on
-  a host, from Docker and Podman named volumes it can reach on disk, plus
-  PowerShell history, into a single
-  tar.gz (via the built-in tar.exe on Windows 10 1803+) or zip, with a JSONL
+  a host, from Docker and Podman named volumes it can reach on disk, into a
+  single tar.gz (via the built-in tar.exe on Windows 10 1803+) or zip, with a JSONL
   manifest. Same catalog, manifest schema and archive layout as the sh script.
-  Host state (processes, users, network) is left to the EDR it supplements.
+  Host state (processes, users, network, shell histories) is left to the EDR
+  it supplements.
 
   Windows PowerShell 5.1 compatible. No modules, no prompts, nothing from stdin.
   Run as:  powershell.exe -ExecutionPolicy Bypass -File Collect-AgentArtifacts.ps1 -OutputDir C:\ir
@@ -417,26 +417,14 @@ local-deep-research|.local/share/local-deep-research
 local-deep-research|Library/Application Support/local-deep-research
 local-deep-research|AppData/Local/local-deep-research
 local-deep-research|Documents/LocalDeepResearch
-# Shared cross-agent directories (skills, instructions, env files read by several agents)
+# Shared cross-agent directories (skills and instructions read by several agents)
 shared|.agents
 shared|.config/AGENTS.md
 shared|.config/agents
-shared|.env
 # Ollama
 ollama|.ollama
 ollama|Library/Application Support/Ollama
 ollama|AppData/Local/Ollama
-# Shell history
-shell-history|.bash_history
-shell-history|.zsh_history
-shell-history|.zsh_sessions
-shell-history|.sh_history
-shell-history|.history
-shell-history|.local/share/fish/fish_history
-shell-history|.config/fish/fish_history
-shell-history|AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt
-shell-history|.local/share/powershell/PSReadLine/ConsoleHost_history.txt
-shell-history|.bash_sessions
 '@
 
 $PROJECT_CATALOG = @'
@@ -564,7 +552,6 @@ project|HEARTBEAT.md
 project|memory/MEMORY.md
 project|memory/history.jsonl
 project|memory/HISTORY.md
-project|.env
 '@
 
 $EXCLUDES = @'
@@ -1800,10 +1787,10 @@ function Invoke-CatalogCollection([string]$user, [string]$base, [string]$table, 
   }
   foreach ($pair in $claimed) {
     $agent = $pair[0]; $m = $pair[1]
-    # -Inventory: shared and shell-history still claim their paths above but
+    # -Inventory: shared entries still claim their paths above but
     # are not walked; every other match is recorded as evidence.
     if ($Inventory) {
-      if ($agent -eq 'shared' -or $agent -eq 'shell-history') { continue }
+      if ($agent -eq 'shared') { continue }
       Add-InvEvidence $agent $pair[2]
     }
     if ($header) { Write-CollectorLog $header; $header = '' }

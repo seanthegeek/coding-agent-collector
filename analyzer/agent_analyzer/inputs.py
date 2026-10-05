@@ -308,7 +308,7 @@ def _discover_loose(col: Collection, catalog: Catalog) -> None:
         names = dirnames + filenames
         if any(rx.fullmatch(n) for n in names for rx in first_rx):
             hits = list(catalog.matches_in_home(here))
-            # A directory holding only shared files (AGENTS.md, .env) is a
+            # A directory holding only shared files (AGENTS.md) is a
             # project, not a home; it needs a hit from a real agent.
             if any(entry.agent != "shared" for entry, _ in hits):
                 homes.append(_make_home(here, tree, col.host))

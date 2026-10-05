@@ -60,6 +60,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   programs are read from here-documents without `$(cat <<...)`; the
   programs are byte-identical. The smoke test now passes under posh.
 
+### Removed
+
+- Shell history collection: the `shell-history` catalog agent and its ten
+  entries (`.bash_history`, `.zsh_history`, `.zsh_sessions`, `.sh_history`,
+  `.history`, `.bash_sessions`, both fish `fish_history` paths and both
+  PSReadLine `ConsoleHost_history.txt` paths). Shell history is the EDR's
+  job, like process lists and logons. Manifests no longer hold
+  `shell-history` rows, and `--list` and `-List` no longer print them.
+- General-purpose `.env` files: the `shared|.env` entry for `~/.env` and
+  the `project|.env` entry for a `.env` at a discovered project's root.
+  They hold whatever secrets the user or project keeps, not only AI keys,
+  and are left to the EDR. An agent's own `.env` inside its state
+  directory (`~/.codex/.env`, `~/.gemini/.env`, `~/.hermes/.env`, the
+  Agent Zero `usr/.env` and the others in `SECRET_GLOBS`) is still
+  collected and flagged secret.
+
 ## [1.6.0] - 2026-10-04
 
 ### Added

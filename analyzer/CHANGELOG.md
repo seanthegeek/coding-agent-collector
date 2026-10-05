@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- The `shell-history` catalog agent, following collector 1.7.0, which no
+  longer collects shell history. Loose input no longer attributes
+  `.bash_history`, `.zsh_history` and the other shell history files to an
+  agent.
+- The `shared|.env` and `project|.env` catalog entries, following collector
+  1.7.0. Loose input no longer attributes a home or project `.env` file to
+  `shared` or `project`.
+
 ## [0.7.0] - 2026-10-04
 
 ### Added

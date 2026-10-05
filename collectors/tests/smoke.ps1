@@ -630,8 +630,8 @@ Check 'antigravity bin excluded' { (StatusOf 'antigravity-cli/bin') -eq 'skipped
 Check 'codex packages excluded' { (StatusOf 'Users/alice/.codex/packages') -eq 'skipped_excluded' }
 Check 'ollama models excluded' { (StatusOf 'home/bob/.ollama/models') -eq 'skipped_excluded' }
 Check 'ollama history collected (linux-style home in same image)' { (StatusOf 'home/bob/.ollama/history') -eq 'collected' }
-Check 'bash history collected' { (StatusOf 'home/bob/.bash_history') -eq 'collected' }
-Check 'PSReadLine history collected' { (StatusOf 'PSReadLine/ConsoleHost_history.txt') -eq 'collected' }
+Check 'bash history not collected' { -not ($script:Rows | Where-Object { $_.path -like '*.bash_history' }) }
+Check 'PSReadLine history not collected' { -not ($script:Rows | Where-Object { $_.path -like '*ConsoleHost_history.txt' }) }
 Check 'oversized file skipped_size' { (StatusOf 'Cursor/User/globalStorage/state.vscdb') -eq 'skipped_size' }
 Check 'ms-python globalStorage excluded' { (StatusOf 'globalStorage/ms-python.python') -eq 'skipped_excluded' }
 Check 'cline checkpoints excluded' { (StatusOf 'saoudrizwan.claude-dev/checkpoints') -eq 'skipped_excluded' }
@@ -653,7 +653,7 @@ Check 'continue globalContext flagged secret' { (Row 'index/globalContext.json')
 Check 'continue lancedb excluded' { (StatusOf 'index/lancedb') -eq 'skipped_excluded' }
 Check 'cline providers.json flagged secret' { (Row 'settings/providers.json').secret -eq $true }
 Check 'codex auth.json flagged secret' { (Row 'Users/alice/.codex/auth.json').secret -eq $true }
-Check 'home .env flagged secret' { (Row 'Users/alice/.env').secret -eq $true }
+Check 'home .env not collected' { -not (Row 'Users/alice/.env') }
 Check 'claude desktop config.json flagged secret' { (Row 'Roaming/Claude/config.json').secret -eq $true }
 $r = Row 'Claude/claude_desktop_config.json'
 Check 'factory session index not swallowed by cache exclusion' { (StatusOf 'Users/alice/.factory/cache/session-index/index.db') -eq 'collected' }
@@ -878,7 +878,7 @@ $r = InvAgent 'docker' 'agent-zero'
 Check 'Inventory docker volume line' { $r -and $r.files -eq 2 -and $r.bytes -eq 61 -and $r.projects -eq 0 -and $r.evidence -eq '*a0_usr' }
 $r = InvAgent 'docker' 'tabby'
 Check 'Inventory rootless docker volume line' { $r -and $r.files -eq 1 -and $r.bytes -eq 22 -and $r.evidence -eq '*tabby*' }
-Check 'Inventory shared and shell-history not inventoried' { -not ($script:inv | Where-Object { $_.type -eq 'agent' } | Where-Object { @('shared', 'shell-history', 'project', 'live') -contains $_.agent }) }
+Check 'Inventory shared not inventoried' { -not ($script:inv | Where-Object { $_.type -eq 'agent' } | Where-Object { @('shared', 'project', 'live') -contains $_.agent }) }
 Check 'Inventory prints no path below a home' { -not ($script:invLines | Where-Object { $_.Contains($Root) -or $_.Contains($Root.Replace('\', '\\')) }) }
 $invO = Join-Path $Out 'inv-o'
 Inv @{ OutputDir = $invO }

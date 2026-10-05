@@ -53,7 +53,7 @@ python3 -m agent_analyzer inventory /cases/fleet/inventory -o /cases/fleet/fleet
 
 In loose mode the analyzer walks the tree and treats a directory as a home
 when at least one catalog entry for a real agent matches under it. A
-directory that holds only shared files such as `AGENTS.md` or `.env` is a
+directory that holds only shared files such as `AGENTS.md` is a
 project, not a home. A home is never nested inside another, so project-level
 `.claude` directories inside a home are not mistaken for a second user. The
 user is taken from `home/<user>`, `Users/<user>`, `usr/home/<user>`,
@@ -147,8 +147,8 @@ so that file is offered to them too and the rows come out under `cody` or
 
 Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
-`augment`, `ollama` and `local-deep-research`, plus the `shared` and
-`shell-history` entries, which are not agents.
+`augment`, `ollama` and `local-deep-research`, plus the `shared` entries,
+which are not agents.
 Windsurf and Cursor need format work first.
 
 Protobuf stores are decoded by `agent_analyzer/protobuf.py`, a small

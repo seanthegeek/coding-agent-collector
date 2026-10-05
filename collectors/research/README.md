@@ -65,8 +65,7 @@ file names to check only those. It exits `1` when any link fails.
 | `pi` | [pi.md](pi.md) | source | same path on every OS; shared with little-coder |
 | `qwen-code` | [qwen-code.md](qwen-code.md) | source | second root `QWEN_RUNTIME_DIR` |
 | `roo-code` | [roo-code.md](roo-code.md) | source | platform-branched MCP clone dirs |
-| `shared` | [shared.md](shared.md) | derived from the per-agent documents | cross-agent instruction and skill dirs, `.env` |
-| `shell-history` | [shell-history.md](shell-history.md) | shell documentation | formats and which carry timestamps |
+| `shared` | [shared.md](shared.md) | derived from the per-agent documents | cross-agent instruction and skill dirs |
 | `shellgpt` | [shellgpt.md](shellgpt.md) | source | chat history in the system temp dir, collected only on Windows |
 | `tabby` | [tabby.md](tabby.md) | source, JetBrains docs | self-hosted server; Docker `TABBY_ROOT=/data` reached only through a named volume matching `*tabby*` |
 | `twinny` | [twinny.md](twinny.md) | source | chats in `state.vscdb`; project root inferred from the embeddings manifest |

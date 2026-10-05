@@ -2,17 +2,12 @@
 
 Catalog agent: `shared`. Files and directories read by several agents at
 once, so they cannot be attributed to one tool: cross-agent instruction and
-skill directories, and the home-level `.env` file that Aider, Gemini CLI,
-Qwen Code and Continue read for API keys. Evidence level: the per-agent
+skill directories. Evidence level: the per-agent
 documents in this directory, which cite each reader.
 
 ## 1. Source and evidence level
 
-Each path below is justified by at least two agents' source. `.env` reading:
-Aider (`aider/main.py`, `--env-file`, see `aider.md`), Gemini CLI and Qwen
-Code (`.env` and `.gemini/.env` / `.qwen/.env` lookup in their `settings`
-loaders, see `gemini-cli.md` and `qwen-code.md`), Continue (`.env` in the
-global directory, see `continue.md`). `AGENTS.md` is read by Codex CLI, Amp,
+Each path below is justified by at least two agents' source. `AGENTS.md` is read by Codex CLI, Amp,
 OpenCode, Crush, Factory Droid, Kilo Code and Copilot CLI (see their
 documents). `~/.agents` and `~/.config/agents` hold cross-tool skill and
 agent definitions adopted by Codex, Copilot CLI and others.
@@ -24,16 +19,17 @@ agent definitions adopted by Codex, Copilot CLI and others.
 | `.agents` | skills and agent definitions in the cross-tool "agents" layout (`skills/<name>/SKILL.md`) | Codex CLI, Copilot CLI, Amp, others |
 | `.config/agents` | XDG variant of the same | same |
 | `.config/AGENTS.md` | user-level instructions | Codex CLI, Amp, OpenCode |
-| `.env` | environment variables, usually API keys | Aider, Gemini CLI, Qwen Code, Continue |
 
 The layout is identical on every OS because the readers use `homedir()`
 without platform branching.
 
 ## 3. Credentials
 
-`.env` is flagged `secret: true` (credential glob `.env`). Project-level
-`.env` files are collected from discovered project directories with the same
-flag.
+None. The home-level and project-level `.env` files that Aider, Gemini
+CLI, Qwen Code and Continue read for API keys are general-purpose
+environment files and are not collected (collector 1.7.0); they are left to
+the EDR. Agent-specific `.env` files inside an agent's own directory, such
+as `.gemini/.env` and `.qwen/.env`, are collected under that agent.
 
 ## 4. Exclusions
 

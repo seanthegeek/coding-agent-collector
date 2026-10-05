@@ -89,8 +89,8 @@ response cache ([`app.py:222-239`](https://github.com/TheR1D/shell_gpt/blob/a082
 [`default_handler.py:17-22`](https://github.com/TheR1D/shell_gpt/blob/a082bd5327ce0c4ef5a0284d9060e833be9444a6/sgpt/handlers/default_handler.py#L17-L22)).
 The interactive `[E]xecute` prompt uses an in-memory `PromptSession` with no
 history file ([`app.py:241`](https://github.com/TheR1D/shell_gpt/blob/a082bd5327ce0c4ef5a0284d9060e833be9444a6/sgpt/app.py#L241)).
-The command line itself lands in the shell history, which the
-`shell-history` entries already collect.
+The command line itself lands in the shell history, which the collector
+leaves to the EDR.
 
 `--install-integration` appends a `Shell-GPT integration` block binding
 Ctrl+L to `sgpt --shell` to `~/.zshrc` or `~/.bashrc`

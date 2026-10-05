@@ -8,8 +8,8 @@
 # Collects the on-disk state of AI coding agents (Claude Code, Gemini CLI,
 # Antigravity, Codex CLI, Copilot CLI, Cursor, Windsurf, Continue, Aider,
 # Ollama, ...) for every user on a host, from Docker and Podman named
-# volumes, plus shell histories, into a single tar.gz with a JSONL manifest.
-# Host state (processes, users, network) is left to the EDR it supplements.
+# volumes, into a single tar.gz with a JSONL manifest. Host state (processes,
+# users, network, shell histories) is left to the EDR it supplements.
 #
 # Portability: POSIX sh only. Runs under bash 3.2 (macOS /bin/sh), dash,
 # ash/busybox, FreeBSD/OpenBSD sh and zsh in sh emulation. External tools used:
@@ -376,26 +376,14 @@ local-deep-research|.local/share/local-deep-research
 local-deep-research|Library/Application Support/local-deep-research
 local-deep-research|AppData/Local/local-deep-research
 local-deep-research|Documents/LocalDeepResearch
-# Shared cross-agent directories (skills, instructions, env files read by several agents)
+# Shared cross-agent directories (skills and instructions read by several agents)
 shared|.agents
 shared|.config/AGENTS.md
 shared|.config/agents
-shared|.env
 # Ollama
 ollama|.ollama
 ollama|Library/Application Support/Ollama
 ollama|AppData/Local/Ollama
-# Shell history
-shell-history|.bash_history
-shell-history|.zsh_history
-shell-history|.zsh_sessions
-shell-history|.sh_history
-shell-history|.history
-shell-history|.local/share/fish/fish_history
-shell-history|.config/fish/fish_history
-shell-history|AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt
-shell-history|.local/share/powershell/PSReadLine/ConsoleHost_history.txt
-shell-history|.bash_sessions
 '
 
 # Project-level artifacts, relative to each discovered project directory.
@@ -524,7 +512,6 @@ project|HEARTBEAT.md
 project|memory/MEMORY.md
 project|memory/history.jsonl
 project|memory/HISTORY.md
-project|.env
 '
 
 # Paths (globs relative to home, project dir or Docker volume _data) skipped
@@ -1744,7 +1731,7 @@ collect_path() {
 # Every entry is expanded first so that each matched path can be excluded
 # from the walk of any enclosing match (see NESTED_CLAIMS in collect_path).
 # With --inventory, each match of an inventoried agent first prints
-# M|agent|glob on stdout, and shared and shell-history matches still claim
+# M|agent|glob on stdout, and shared matches still claim
 # their paths but are not walked. HEADER, when given, is logged once before
 # the first match, so a home with no matches leaves no progress line.
 collect_tree() {
@@ -1759,7 +1746,7 @@ collect_tree() {
   printf '%s\n' "$_ct_matches" | while IFS='|' read -r _ct_agent _ct_pat _ct_m; do
     [ -n "$_ct_agent" ] || continue
     if [ "$INVENTORY" = 1 ]; then
-      case "$_ct_agent" in shared|shell-history) continue ;; esac
+      case "$_ct_agent" in shared) continue ;; esac
       printf 'M|%s|%s\n' "$_ct_agent" "$_ct_pat"
     fi
     if [ -n "$_ct_header" ]; then log_line "$_ct_header"; _ct_header=; fi

@@ -8,16 +8,15 @@ Guidance for AI coding agents and humans working in this repository.
 It gathers the on-disk artifacts of AI agents that run on the host, coding
 agents first (Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot CLI,
 Cursor, VS Code chat extensions, Windsurf, Aider, Ollama, and others), for
-every user on a host, plus shell histories, into one archive with a hashed
-manifest. The criterion for the catalog is an agent that executes tools or
+every user on a host, into one archive with a hashed manifest. The criterion for the catalog is an agent that executes tools or
 shell commands on the host and leaves transcripts, configuration or
 credentials on disk; it need not be an editor or coding tool. When a non-coding agent is added, widen the wording in the top-level
 README in the same commit.
 
 The project supplements the EDR a responder already has during an incident
 response investigation; it never duplicates EDR features. Process lists,
-logged-on users, network connections, services and scheduled tasks are the
-EDR's job and are not collected. What the collector adds is what EDR does
+logged-on users, network connections, services, scheduled tasks and shell
+histories are the EDR's job and are not collected. What the collector adds is what EDR does
 not see: the agents' own transcripts, configuration, credentials and project
 references on disk, and the catalog that says where to find them. A proposed
 feature that an EDR console already provides is out of scope, however cheap
