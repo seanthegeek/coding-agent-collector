@@ -118,7 +118,7 @@ import re
 from collections.abc import Iterator
 from typing import cast
 
-from ..inputs import Artifact
+from ..inputs import Artifact, error_reason
 from ..model import Row, compact
 from ..timeutil import to_utc
 from .base import Options, Parser, compact_json, iter_jsonl, text_of
@@ -526,7 +526,7 @@ class RolloutParser(Parser):
             with open(artifact.disk_path, "rb") as fh:
                 data = json.loads(fh.read().decode("utf-8", errors="replace"))
         except (OSError, ValueError) as e:
-            yield self._system(artifact, "parser: unreadable import ledger: %s" % e)
+            yield self._system(artifact, "parser: unreadable import ledger: %s" % error_reason(e))
             return
         records = data.get("records") if isinstance(data, dict) else None
         if not isinstance(records, list):

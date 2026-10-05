@@ -179,7 +179,7 @@ class InventoryTests(unittest.TestCase):
             ["inventory", "-o", str(self.tmp / "m.csv"), str(self.tmp / "missing")]
         )
         self.assertEqual(rc, 2)
-        self.assertIn("does not exist", err)
+        self.assertIn("no such file or directory", err)
 
     @unittest.skipUnless(shutil.which("sh"), "needs sh")
     def test_collector_inventory_end_to_end(self):

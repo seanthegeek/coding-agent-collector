@@ -18,6 +18,8 @@ PowerShell error record) is junk: skipped and counted, never fatal.
 from __future__ import annotations
 
 import json
+import os
+import stat
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -47,17 +49,23 @@ TIME_FIELDS = ("at", "first", "last")
 
 def input_files(paths: Iterable[Path]) -> list[Path]:
     """Each INPUT as given, or for a directory its regular files (not
-    recursive, symlinks not followed), sorted by name."""
+    recursive, symlinks not followed), sorted by name. Raises OSError when an
+    input cannot be stat'ed or listed, and ValueError for a symlink or an
+    input that is neither a file nor a directory."""
     out: list[Path] = []
     for p in paths:
-        if p.is_symlink():
-            raise FileNotFoundError("%s is a symlink; give its target" % p)
-        if p.is_dir():
-            out.extend(sorted(c for c in p.iterdir() if c.is_file() and not c.is_symlink()))
-        elif p.is_file():
+        # lstat, not exists(): exists() hides the reason, and on Python 3.14
+        # also returns False for a permission error.
+        mode = os.lstat(p).st_mode
+        if stat.S_ISLNK(mode):
+            raise ValueError("%s is a symlink; give its target" % p)
+        if stat.S_ISDIR(mode):
+            with os.scandir(p) as it:
+                out.extend(sorted(Path(e.path) for e in it if e.is_file(follow_symlinks=False)))
+        elif stat.S_ISREG(mode):
             out.append(p)
         else:
-            raise FileNotFoundError("%s does not exist" % p)
+            raise ValueError("%s is neither a regular file nor a directory" % p)
     return out
 
 

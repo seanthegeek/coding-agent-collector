@@ -57,7 +57,7 @@ class Catalog:
             seen.setdefault(e.first_segment, e.regexes[0])
         return list(seen.values())
 
-    def nested_matches(self, agent_dir: Path) -> Iterator[tuple[Entry, Path]]:
+    def nested_matches(self, agent_dir: Path, onerror=None) -> Iterator[tuple[Entry, Path]]:
         """Yield (entry, path) for catalog globs that live inside agent_dir
         when agent_dir itself is the first segment of their glob, for example
         .gemini/antigravity-cli inside a .gemini directory given as the root."""
@@ -65,19 +65,20 @@ class Catalog:
         for entry in self.entries:
             if len(entry.segments) < 2 or entry.regexes[0].fullmatch(agent_dir.name) is None:
                 continue
-            for hit in _expand(agent_dir, entry.regexes[1:], listing_cache):
+            for hit in _expand(agent_dir, entry.regexes[1:], listing_cache, onerror):
                 yield entry, hit
 
-    def matches_in_home(self, home: Path) -> Iterator[tuple[Entry, Path]]:
+    def matches_in_home(self, home: Path, onerror=None) -> Iterator[tuple[Entry, Path]]:
         """Yield (entry, path) for every catalog glob that exists under home.
 
         Expansion is segment by segment through real directory listings, so
         the cost is proportional to the catalog, not to the size of the tree.
-        Symlinks are never followed.
+        Symlinks are never followed. A directory that cannot be listed
+        matches nothing and is passed, as the OSError, to `onerror` once.
         """
         listing_cache: dict[Path, list[str]] = {}
         for entry in self.entries:
-            for hit in _expand(home, entry.regexes, listing_cache):
+            for hit in _expand(home, entry.regexes, listing_cache, onerror):
                 yield entry, hit
 
 
@@ -110,7 +111,10 @@ def glob_segment_to_regex(seg: str) -> re.Pattern[str]:
 
 
 def _expand(
-    base: Path, regexes: tuple[re.Pattern[str], ...], cache: dict[Path, list[str]]
+    base: Path,
+    regexes: tuple[re.Pattern[str], ...],
+    cache: dict[Path, list[str]],
+    onerror=None,
 ) -> Iterator[Path]:
     if not regexes:
         yield base
@@ -119,8 +123,10 @@ def _expand(
     if names is None:
         try:
             names = os.listdir(base)
-        except OSError:
+        except OSError as e:
             names = []
+            if onerror is not None:
+                onerror(e)
         cache[base] = names
     rx = regexes[0]
     rest = regexes[1:]
@@ -130,7 +136,7 @@ def _expand(
         child = base / name
         if rest:
             if child.is_dir() and not child.is_symlink():
-                yield from _expand(child, rest, cache)
+                yield from _expand(child, rest, cache, onerror)
         else:
             yield child
 

@@ -14,7 +14,7 @@ from . import VERSION
 from . import catalog as catalog_mod
 from . import inventory as inventory_mod
 from .filters import FORMS_HELP, RowFilter, parse_bound
-from .inputs import Collection, open_input
+from .inputs import Collection, describe_error, error_reason, open_input
 from .model import Row, summarise
 from .parsers import ALL, Options, by_agent
 
@@ -145,7 +145,10 @@ def main(argv: list[str] | None = None) -> int:
     cat = catalog_mod.load()
     try:
         col = open_input(args.input, cat, work_dir=args.work_dir, host=args.host)
-    except (FileNotFoundError, ValueError) as e:
+    except OSError as e:
+        print("error: %s" % describe_error(args.input, e), file=sys.stderr)
+        return 2
+    except ValueError as e:
         print("error: %s" % e, file=sys.stderr)
         return 2
     try:
@@ -184,6 +187,9 @@ def cmd_inventory(args: argparse.Namespace) -> int:
     try:
         files = inventory_mod.input_files(args.input)
     except OSError as e:
+        print("error: %s" % describe_error("", e), file=sys.stderr)
+        return 2
+    except ValueError as e:
         print("error: %s" % e, file=sys.stderr)
         return 2
     rows: list[list[str]] = []
@@ -191,7 +197,7 @@ def cmd_inventory(args: argparse.Namespace) -> int:
         try:
             got, junk = inventory_mod.read_file(f)
         except OSError as e:
-            print("error: %s: %s" % (f, e), file=sys.stderr)
+            print("error: %s" % describe_error(f, e), file=sys.stderr)
             return 2
         if junk:
             print(
@@ -261,6 +267,7 @@ def cmd_detect(args: argparse.Namespace, col: Collection) -> int:
                 {"user": h.user, "home": h.original, "inferred": h.inferred} for h in col.homes
             ],
             "agents": table,
+            "problems": col.problems,
         }
         if args.files:
             out["files"] = [
@@ -280,6 +287,8 @@ def cmd_detect(args: argparse.Namespace, col: Collection) -> int:
     print("host:    %s" % (col.host or "(unknown)"))
     for n in col.notes:
         print("note:    %s" % n)
+    for p in col.problems:
+        print("problem: %s" % p)
     if not table:
         print("no agent artifacts found")
         return 1
@@ -328,7 +337,7 @@ def collect_rows(
     parsers = by_agent()
     rows: list[Row] = []
     counts: Counter = Counter()
-    problems: list[str] = []
+    problems: list[str] = list(col.problems)
     for a in col.artifacts:
         for p in parsers_for(a, parsers):
             # Filter on the parser's agent, so --agent aider also takes the
@@ -342,7 +351,7 @@ def collect_rows(
                     rows.append(row)
                     counts[(p.agent, row.turn_type)] += 1
             except OSError as e:
-                problems.append("%s: %s" % (a.original, e))
+                problems.append("%s: %s" % (a.original, error_reason(e)))
     rows.sort(key=lambda r: (r.timestamp_utc == "", r.timestamp_utc, r.source_file, r.source_line))
     return rows, counts, problems
 
@@ -413,6 +422,7 @@ def cmd_timeline(args: argparse.Namespace, col: Collection) -> int:
                 "host": col.host,
                 "notes": col.notes,
                 "agents": detect,
+                "problems": problems,
             },
             fh,
             indent=2,
