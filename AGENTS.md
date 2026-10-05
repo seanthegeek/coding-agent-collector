@@ -722,7 +722,10 @@ list together. Run the commands from the repository root before pushing.
   together: each commit that implements it names it in the body
   (`Refs #<n>`), and each changelog line for it ends with `(#<n>)`. Use
   `Refs`, not `Fixes` or `Closes`, so the push does not close the issue
-  before CI is green; the issue is closed after the release is tagged,
+  before CI is green. GitHub closes an issue for any closing keyword
+  (`close`, `fix`, `resolve` and their `-s` and `-d` forms) followed by
+  `#<n>` anywhere in a commit message, prose included, so write "the fix
+  for #29" or "#29 is fixed", never "fixes #29"; the issue is closed after the release is tagged,
   with a comment that explains the fix and names the commit and the
   release that contains it. Changes with no behaviour of their own
   (typos, formatting, a test-only refactor, these conventions) need no
