@@ -606,6 +606,20 @@ printf '{"PORT":3456}\n' >"$H/.claude-code-router/config.json"
 printf '{}\n' >"$ROOT/srv/ccwork/.claude/settings.json"
 printf '{}\n' >"$ROOT/srv/cchist/.claude/settings.json"
 
+# 2026-10-04 bug round: #29. Catalog entries that differ only by case:
+# .config/PearAI/User before .config/pearai/User, and .config/Cursor/User
+# nested under .config/cursor. Distinct directories on a case-sensitive
+# filesystem (Linux $TMPDIR); one directory each on a case-insensitive one
+# (macOS), where the checks below expect one row per file. The same files
+# are in smoke.ps1.
+mkdir -p "$H/.config/PearAI/User" "$H/.config/pearai/User" "$H/.config/cursor" "$H/.config/Cursor/User"
+printf '{}\n' >"$H/.config/PearAI/User/case29-upper.json"
+printf '{}\n' >"$H/.config/pearai/User/case29-lower.json"
+printf '{}\n' >"$H/.config/cursor/case29-cli.json"
+printf '{}\n' >"$H/.config/Cursor/User/case29-editor.json"
+CASE_INSENSITIVE=0
+[ -e "$H/.config/pearai/User/case29-upper.json" ] && CASE_INSENSITIVE=1
+
 run() { # run NAME ARGS...
   _n=$1; shift
   mkdir -p "$OUT/$_n"
@@ -618,7 +632,11 @@ run() { # run NAME ARGS...
   S=$(ls "$OUT/$_n"/*.collection.json 2>/dev/null)
   return "$_rc"
 }
-row() { grep -F "\"path\":\"$1\"" "$M" | head -n1; }
+# On a case-insensitive filesystem a path is recorded in its first catalog
+# spelling (#29), so the lookup ignores case there.
+row() {
+  if [ "$CASE_INSENSITIVE" = 1 ]; then grep -iF "\"path\":\"$1\"" "$M"; else grep -F "\"path\":\"$1\"" "$M"; fi | head -n1
+}
 # shellcheck disable=SC2317,SC2329 # called from the eval'd check strings
 status_of() { row "$1" | sed 's/.*"status":"\([^"]*\)".*/\1/'; }
 
@@ -705,7 +723,7 @@ while IFS='|' read -r _k _a _r; do
     agent) case "$_row" in *"\"agent\":\"$_a\""*'"status":"collected"'*) ok "$_a: $_r" ;; *) bad "$_a: $_r" ;; esac ;;
   esac
 done <"$WORK/cases14"
-check "pearai lowercase .config/pearai collected" "[ \"\$(grep -c '/.config/pearai/User/globalStorage/state.vscdb\"' \"\$M\")\" = 1 ]"
+check "pearai lowercase .config/pearai collected" "[ \"\$(grep -ci '/.config/pearai/User/globalStorage/state.vscdb\"' \"\$M\")\" = 1 ]"
 check "cody nested globalStorage collected exactly once" "[ \"\$(grep -c 'sourcegraph.cody-ai/symf/indexroot/meta.json' \"\$M\")\" = 1 ]"
 check "twinny nested globalStorage collected exactly once" "[ \"\$(grep -c 'globalStorage/rjmacarthy.twinny/twinny-providers.json' \"\$M\")\" = 1 ]"
 check "little-coder history nested in .pi collected exactly once" "[ \"\$(grep -c 'little-coder-prompt-history.json' \"\$M\")\" = 1 ]"
@@ -804,6 +822,21 @@ assert n>5
 PY"
 fi
 
+# 2026-10-04 bug round: #29
+# shellcheck disable=SC2317,SC2329 # called from the eval'd check strings
+count_of() { grep -ci "/$1\"" "$M"; }
+if [ "$CASE_INSENSITIVE" = 1 ]; then
+  printf 'note: %s is case-insensitive; checking the folded layout\n' "$WORK"
+  check "#29 case variants of one directory collected once" "[ \"\$(count_of case29-upper.json)\" = 1 ] && [ \"\$(count_of case29-lower.json)\" = 1 ]"
+  check "#29 first catalog spelling wins" "grep -qF '\"path\":\"$H/.config/PearAI/User/case29-lower.json\"' \"\$M\""
+  check "#29 nested case variant collected once under the nested entry" "[ \"\$(count_of case29-editor.json)\" = 1 ] && grep -qF '\"path\":\"$H/.config/cursor/User/case29-editor.json\"' \"\$M\""
+  check "#29 dropped variant logged" "grep -q '/.config/pearai/User: same file as .*/.config/PearAI/User (case-insensitive filesystem)' \"$OUT\"/default/*.log"
+else
+  check "#29 PearAI and pearai are distinct here and both collected" "[ \"\$(status_of \"$H/.config/PearAI/User/case29-upper.json\")\" = collected ] && [ \"\$(status_of \"$H/.config/pearai/User/case29-lower.json\")\" = collected ] && [ \"\$(count_of case29-upper.json)\" = 1 ] && [ \"\$(count_of case29-lower.json)\" = 1 ]"
+  check "#29 nested Cursor/User distinct from cursor and both collected" "row \"$H/.config/cursor/case29-cli.json\" | grep -q '\"agent\":\"cursor\".*\"status\":\"collected\"' && row \"$H/.config/Cursor/User/case29-editor.json\" | grep -q '\"agent\":\"cursor\".*\"status\":\"collected\"' && [ \"\$(count_of case29-editor.json)\" = 1 ]"
+  check "#29 nothing folded on a case-sensitive filesystem" "! grep -q 'case-insensitive filesystem' \"$OUT\"/default/*.log"
+fi
+
 # ---- --no-secrets ---------------------------------------------------------
 run nosecrets --no-secrets; check "no-secrets exit 0" "[ $? -eq 0 ]"
 check "credentials skipped_secret" "[ \"\$(status_of \"$ROOT/home/alice/.claude/.credentials.json\")\" = skipped_secret ]"
@@ -892,6 +925,12 @@ check "inventory --full counts excluded files" "agent_line inventory-full ollama
 inv inventory-u -q -u bob --no-docker
 check "inventory -u keeps one user" "! grep -q '\"user\":\"alice\"' \"$OUT/inventory-u.stdout\" && grep -q '\"user\":\"bob\"' \"$OUT/inventory-u.stdout\""
 check "inventory --no-docker: no volumes, no docker lines" "head -n1 \"$OUT/inventory-u.stdout\" | grep -q '\"users_scanned\":1,\"users_unreadable\":0,\"docker_volumes\":0}' && ! grep -q '\"user\":\"docker\"' \"$OUT/inventory-u.stdout\""
+# 2026-10-04 bug round: #29
+if [ "$CASE_INSENSITIVE" = 1 ]; then
+  check "#29 inventory evidence keeps only the first spelling" "agent_line inventory alice pearai | grep -q '\"evidence\":\"[^\"]*.config/PearAI/User' && ! agent_line inventory alice pearai | grep -q '.config/pearai/User'"
+else
+  check "#29 inventory evidence keeps both distinct spellings" "agent_line inventory alice pearai | grep -q '.config/PearAI/User,.config/pearai/User'"
+fi
 rm -rf "$B/.gemini"
 if [ "$(id -u)" != 0 ]; then
   mkdir -p "$ROOT/home/carol/.claude"

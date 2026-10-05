@@ -1491,6 +1491,24 @@ function Join-PathSafe([string]$a, [string]$b) {
   return $a + $Sep + $b
 }
 
+# The name a literal catalog segment has on disk. On a case-insensitive
+# filesystem (Windows, macOS) .config/Goose finds .config/goose; the search
+# pattern returns the stored spelling, so two catalog entries that differ only
+# by case expand to one path and Invoke-CatalogCollection keeps the first.
+# When the pattern does not give exactly one entry (two names that differ by
+# case on a case-sensitive filesystem, or an error), the segment is kept as
+# written, so distinct directories stay distinct.
+function Get-OnDiskName([string]$dir, [string]$seg) {
+  try {
+    $found = @([System.IO.Directory]::GetFileSystemEntries($dir, $seg))
+    if ($found.Count -eq 1) {
+      $name = [System.IO.Path]::GetFileName($found[0])
+      if ([string]::Equals($name, $seg, [System.StringComparison]::OrdinalIgnoreCase)) { return $name }
+    }
+  } catch { }
+  return $seg
+}
+
 # Expand a catalog glob (segments split on /, * does not cross separators)
 # under a base directory. Returns full paths of existing items.
 function Expand-Glob([string]$base, [string]$pattern) {
@@ -1509,7 +1527,7 @@ function Expand-Glob([string]$base, [string]$pattern) {
         foreach ($child in $children) { if ($child.Name -match $rx) { $next += $child.FullName } }
       } else {
         $candidate = Join-PathSafe $dir $seg
-        if (Test-PathQuiet $candidate 'Any') { $next += $candidate }
+        if (Test-PathQuiet $candidate 'Any') { $next += (Join-PathSafe $dir (Get-OnDiskName $dir $seg)) }
       }
     }
     $current = $next
@@ -1623,7 +1641,16 @@ if (-not $Inventory) {
 }
 $script:Counts = @{ collected = 0; symlink = 0; skipped_excluded = 0; skipped_size = 0; skipped_secret = 0; error_copy = 0; skipped_unmatched_volume = 0; bytes = [int64]0 }
 $script:WalkErrors = 0
-$script:ClaimedPaths = @{}
+# Paths claimed by catalog matches. Keys are compared ordinally (the
+# Dictionary default) except on Windows, so pwsh on Linux keeps
+# .config/Cursor/User and .config/cursor/User apart; Expand-Glob gives
+# on-disk spellings, so the case-sensitive compare still meets the names
+# Get-ChildItem returns on macOS.
+function Get-ClaimTable {
+  if ($env:OS -eq 'Windows_NT') { return @{} }
+  return (New-Object 'System.Collections.Generic.Dictionary[string,bool]')
+}
+$script:ClaimedPaths = Get-ClaimTable
 # Homes (and other bases) that gave at least one manifest row
 $script:RowHomes = @{}
 
@@ -1774,19 +1801,29 @@ function Invoke-CatalogCollection([string]$user, [string]$base, [string]$table, 
   # children that another entry claimed. $header, when given, is logged once
 # before the first match, so a home with no matches leaves no progress line.
   # ($matches would shadow PowerShell's automatic regex variable.)
+  # Expand-Glob returns on-disk spellings, so entries that differ only by
+  # case and meet one directory give the same path: the first catalog line
+  # keeps it and the later one is logged and skipped (an empty agent below).
   $claimed = @()
-  $script:ClaimedPaths = @{}
+  $script:ClaimedPaths = Get-ClaimTable
   foreach ($line in (Get-TableLines $table)) {
     $parts = @($line -split '\|', 2)
     if ($parts.Count -lt 2) { continue }
     $agent = $parts[0]; $pattern = $parts[1]
     foreach ($m in @(Expand-Glob $base $pattern)) {
+      if ($script:ClaimedPaths.ContainsKey($m)) { $claimed += ,@('', $m, "$agent|$pattern"); continue }
       $claimed += ,@($agent, $m, $pattern)
       $script:ClaimedPaths[$m] = $true
     }
   }
   foreach ($pair in $claimed) {
     $agent = $pair[0]; $m = $pair[1]
+    if (-not $agent) {
+      if ($header) { Write-CollectorLog $header; $header = '' }
+      $dup = @($pair[2] -split '\|', 2)
+      Write-CollectorLog "  [$($dup[0])] ${m}: catalog line $($dup[1]) names the same path as an earlier line (case-insensitive filesystem), collected there"
+      continue
+    }
     # -Inventory: shared entries still claim their paths above but
     # are not walked; every other match is recorded as evidence.
     if ($Inventory) {
@@ -1797,7 +1834,7 @@ function Invoke-CatalogCollection([string]$user, [string]$base, [string]$table, 
     Write-CollectorLog "  [$agent] $m"
     Add-Path $user $base $agent $m
   }
-  $script:ClaimedPaths = @{}
+  $script:ClaimedPaths = Get-ClaimTable
 }
 
 # ---------------------------------------------------------------------------
@@ -1942,7 +1979,7 @@ function Invoke-VolumeDir([string]$base, [string]$rel) {
     } else {
       Write-CollectorLog "  [$agent] $data"
       $script:WalkErrors = 0
-      $script:ClaimedPaths = @{}
+      $script:ClaimedPaths = Get-ClaimTable
       if ($Inventory) {
         $saved = $script:Inv; $script:Inv = $script:InvDocker
         Add-InvEvidence $agent $rule[2]

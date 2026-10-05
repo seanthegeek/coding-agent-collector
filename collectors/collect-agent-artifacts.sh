@@ -1680,6 +1680,65 @@ expand_glob() {
   IFS=$_eg_ifs
 }
 
+# file_id PATH -> device:inode of PATH itself (lstat), or the inode alone from
+# ls -di when stat is unavailable; empty when PATH cannot be stat'ed.
+# shellcheck disable=SC2012 # ls -di is the POSIX inode; only its first field is read
+file_id() {
+  case "$STAT_MODE" in
+    gnu|gnu0) stat -c '%d:%i' "$1" 2>/dev/null ;;
+    bsd)      stat -f '%d:%i' "$1" 2>/dev/null ;;
+    *)        ls -di "$1" 2>/dev/null | awk 'NR==1 {print $1}' ;;
+  esac
+}
+
+# fold_matches: agent|glob|path lines on stdin, in catalog order, -> the same
+# lines with spellings of one on-disk path folded together. On a
+# case-insensitive filesystem (macOS, Windows images, /mnt/c under WSL),
+# entries that differ only by case (.config/goose and .config/Goose) match the
+# same directory: a match that case-folds to an earlier match's path and has
+# its device and inode is dropped, and the first catalog line wins; in its
+# place a #|message line tells collect_tree what to log.
+# A match that case-folds to a path inside another match (.config/Cursor/User
+# inside .config/cursor) is respelled with that match's prefix when the prefix
+# is the same directory, so the nested claim prunes it from the enclosing
+# walk. Only paths that collide when case-folded are stat'ed, so on a
+# case-sensitive filesystem, where the ids differ, every match is kept as is.
+fold_matches() {
+  LC_ALL=C awk -F'|' '
+    NF >= 3 { n++; line[n] = $0; ag[n] = $1; gl[n] = $2
+      path[n] = substr($0, length($1) + length($2) + 3); low[n] = tolower(path[n]) }
+    END { for (i = 1; i <= n; i++) {
+      ref = 0
+      for (j = 1; j < i; j++) if (low[j] == low[i]) { ref = j; break }
+      if (ref) { print "@|" path[ref]; print "D|" line[i]; continue }
+      best = 0
+      for (j = 1; j <= n; j++) {
+        if (j == i) continue; L = length(low[j])
+        if (length(low[i]) > L + 1 && substr(low[i], 1, L + 1) == low[j] "/" && substr(path[i], 1, L) != path[j]) {
+          if (!best || L < length(low[best])) best = j }
+      }
+      if (best) { L = length(path[best])
+        print "@|" path[best]; print "^|" substr(path[i], 1, L)
+        print "R|" ag[i] "|" gl[i] "|" substr(path[i], L + 1); continue }
+      print "K|" line[i] } }' | while IFS= read -r _fm_l; do
+    case "$_fm_l" in
+      ('@|'*) _fm_ref=${_fm_l#??} ;;
+      ('^|'*) _fm_pre=${_fm_l#??} ;;
+      ('K|'*) printf '%s\n' "${_fm_l#??}" ;;
+      ('D|'*) _fm_l=${_fm_l#??}; _fm_m=${_fm_l#*|}; _fm_m=${_fm_m#*|}
+        _fm_id=$(file_id "$_fm_m")
+        if [ "$_fm_m" = "$_fm_ref" ] || { [ -n "$_fm_id" ] && [ "$_fm_id" = "$(file_id "$_fm_ref")" ]; }; then
+          printf '#|  [%s] %s: same file as %s (case-insensitive filesystem), collected there\n' "${_fm_l%%|*}" "$_fm_m" "$_fm_ref"
+        else printf '%s\n' "$_fm_l"; fi ;;
+      ('R|'*) _fm_l=${_fm_l#??}; _fm_a=${_fm_l%%|*}; _fm_rest=${_fm_l#*|}; _fm_g=${_fm_rest%%|*}; _fm_rest=${_fm_rest#*|}
+        _fm_id=$(file_id "$_fm_pre")
+        if [ -n "$_fm_id" ] && [ "$_fm_id" = "$(file_id "$_fm_ref")" ]; then
+          printf '%s|%s|%s%s\n' "$_fm_a" "$_fm_g" "$_fm_ref" "$_fm_rest"
+        else printf '%s|%s|%s%s\n' "$_fm_a" "$_fm_g" "$_fm_pre" "$_fm_rest"; fi ;;
+    esac
+  done
+}
+
 # collect_path USER HOME AGENT PATH
 # With --inventory the same walk runs, but excluded subtrees are pruned
 # without a manifest row and regular files are only stat'ed by INV_PROG.
@@ -1729,7 +1788,8 @@ collect_path() {
 
 # collect_tree USER BASE CATALOG
 # Every entry is expanded first so that each matched path can be excluded
-# from the walk of any enclosing match (see NESTED_CLAIMS in collect_path).
+# from the walk of any enclosing match (see NESTED_CLAIMS in collect_path),
+# and case variants of one on-disk path are folded (see fold_matches).
 # With --inventory, each match of an inventoried agent first prints
 # M|agent|glob on stdout, and shared matches still claim
 # their paths but are not walked. HEADER, when given, is logged once before
@@ -1741,10 +1801,15 @@ collect_tree() {
     expand_glob "$2" "$_ct_pat" | while IFS= read -r _ct_m; do
       printf '%s|%s|%s\n' "$_ct_agent" "$_ct_pat" "$_ct_m"
     done
-  done)
-  NESTED_CLAIMS=$(printf '%s\n' "$_ct_matches" | cut -d'|' -f3-)
+  done | fold_matches)
+  NESTED_CLAIMS=$(printf '%s\n' "$_ct_matches" | grep -v '^#|' | cut -d'|' -f3-)
   printf '%s\n' "$_ct_matches" | while IFS='|' read -r _ct_agent _ct_pat _ct_m; do
     [ -n "$_ct_agent" ] || continue
+    if [ "$_ct_agent" = '#' ]; then
+      if [ -n "$_ct_header" ]; then log_line "$_ct_header"; _ct_header=; fi
+      if [ -n "$_ct_m" ]; then log_line "$_ct_pat|$_ct_m"; else log_line "$_ct_pat"; fi
+      continue
+    fi
     if [ "$INVENTORY" = 1 ]; then
       case "$_ct_agent" in shared) continue ;; esac
       printf 'M|%s|%s\n' "$_ct_agent" "$_ct_pat"
