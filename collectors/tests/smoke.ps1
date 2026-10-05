@@ -926,6 +926,68 @@ Check '-NoLive is no longer a parameter' { $threw = $false; try { & $Collector -
 Check '-List prints catalog' { @(& $Collector -List | Select-String -SimpleMatch 'claude-code|.claude').Count -ge 1 }
 Check '-List prints docker volume table' { @(& $Collector -List | Where-Object { $_ -eq 'agent-zero|*a0_usr' }).Count -eq 1 }
 
+# 2026-10-04 bug round: #32, #38, #39
+# A relative -Project is resolved against the current location (image mode
+# too); a -Project that does not exist gets an error_read row and a log line.
+Mk 'srv/relproj/AGENTS.md' '# rel'
+$missingProj = Join-Path $Work 'nonexistent-cac'
+$prevLoc = Get-Location
+Set-Location -LiteralPath (P 'srv')
+Run 'projargs' @{ Project = @('relproj', $missingProj) }
+Set-Location -LiteralPath $prevLoc.Path
+$sum = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
+Check '-Project arguments exit 0' { $script:rc -eq 0 }
+Check 'relative -Project resolved against the current location' { (StatusOf 'srv/relproj/AGENTS.md') -eq 'collected' -and @($sum.projects | Where-Object { $_ -eq (P 'srv/relproj') }).Count -eq 1 }
+$mr = @($script:Rows | Where-Object { $_.path -eq $missingProj })
+Check 'missing -Project gets one error_read dir row' { $mr.Count -eq 1 -and $mr[0].status -eq 'error_read' -and $mr[0].type -eq 'dir' -and $mr[0].home -eq $missingProj -and $mr[0].agent -eq '' -and $mr[0].archive_path -eq '' -and $mr[0].error -ne '' }
+$plog = Get-ChildItem -LiteralPath (Join-Path $Out 'projargs') -Filter '*.log' | Select-Object -First 1
+Check 'missing -Project logged' { (Get-Content -LiteralPath $plog.FullName -Raw).Contains("WARNING: project given with -Project is not a directory: ${missingProj}: ") }
+Check 'missing -Project not listed in projects' { @($sum.projects | Where-Object { $_ -like '*nonexistent-cac*' }).Count -eq 0 }
+Check 'missing -Project counted as error_read' { $sum.counts.error_read -eq 1 -and $script:stdout -match '(?m)^errors:     1 \(0 error_copy, 1 error_read\)\s*$' }
+$dsum = Get-Content -LiteralPath (Get-ChildItem -LiteralPath (Join-Path $Out 'default') -Filter '*.collection.json' | Select-Object -First 1).FullName -Raw | ConvertFrom-Json
+Check 'default run has no error_read rows' { $dsum.counts.error_read -eq 0 }
+Remove-Item -LiteralPath (P 'srv/relproj') -Recurse -Force
+
+# A read-only output directory exits 2 before any collection work: chmod on
+# POSIX (not as root), a deny ACE for creating files on Windows.
+$ro = Join-Path $Out 'readonly'
+New-Item -ItemType Directory -Path $ro -Force | Out-Null
+$roSet = $false
+if ($Sep -eq '/') {
+  if ((& id -u) -ne '0') { & chmod 555 $ro; $roSet = $true }
+} else {
+  $acl = Get-Acl -LiteralPath $ro
+  $denyRule = New-Object System.Security.AccessControl.FileSystemAccessRule([Security.Principal.WindowsIdentity]::GetCurrent().User, 'CreateFiles, AppendData', 'Deny')
+  $acl.AddAccessRule($denyRule); Set-Acl -LiteralPath $ro -AclObject $acl; $roSet = $true
+}
+if ($roSet) {
+  $roErr = Join-Path $Out 'readonly.stderr'
+  $null = & $self -NoProfile -ExecutionPolicy Bypass -File $Collector -Root $Root -OutputDir $ro -Quiet -NoDocker 2>$roErr
+  $roRc = $LASTEXITCODE
+  if ($Sep -eq '/') { & chmod 755 $ro } else { $acl = Get-Acl -LiteralPath $ro; [void]$acl.RemoveAccessRule($denyRule); Set-Acl -LiteralPath $ro -AclObject $acl }
+  Check 'read-only output dir exits 2 before collecting' { $roRc -eq 2 -and ((Get-Content -LiteralPath $roErr -Raw) -replace '\s+', ' ') -match 'Output dir not writable: ' -and @(Get-ChildItem -LiteralPath $ro -Force).Count -eq 0 }
+} else { Write-Output 'note: read-only output dir check needs a non-root user on POSIX, skipped' }
+
+# An unreadable home and an unlistable directory inside a walk: POSIX and not
+# root only, since chmod does not deny on Windows or to root.
+if ($Sep -eq '/' -and (& id -u) -ne '0') {
+  New-Item -ItemType Directory -Path (P 'home/erin/.claude') -Force | Out-Null
+  Mk 'Users/alice/.claude/locked/f' 'x'
+  & chmod 000 (P 'home/erin') (P 'Users/alice/.claude/locked')
+  Run 'readperm' @{}
+  & chmod 700 (P 'home/erin') (P 'Users/alice/.claude/locked')
+  $sum = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
+  Check 'unreadable paths exit 0' { $script:rc -eq 0 }
+  $er = @($script:Rows | Where-Object { $_.path -eq (P 'home/erin') })
+  Check 'unreadable home gets one error_read row' { $er.Count -eq 1 -and $er[0].status -eq 'error_read' -and $er[0].user -eq 'erin' -and $er[0].agent -eq '' -and $er[0].type -eq 'dir' -and $er[0].size -eq 0 -and $er[0].archive_path -eq '' -and $er[0].error -match 'denied' }
+  Check 'unreadable home stays in users, not in users_with_artifacts' { @($sum.users) -contains 'erin' -and -not (@($sum.users_with_artifacts) -contains 'erin') }
+  $lr = Row 'Users/alice/.claude/locked'
+  Check 'unlistable directory in a walk gets an error_read row' { $lr -and $lr.status -eq 'error_read' -and $lr.agent -eq 'claude-code' -and $lr.type -eq 'dir' -and $lr.error -match 'denied' }
+  Check 'rest of the home still collected' { (StatusOf 'Users/alice/.claude/projects/-C-proj/s1.jsonl') -eq 'collected' }
+  Check 'unreadable paths counted' { $sum.counts.error_read -eq 2 -and $script:stdout -match '(?m)^errors:     2 \(0 error_copy, 2 error_read\)\s*$' }
+  Remove-Item -LiteralPath (P 'home/erin'), (P 'Users/alice/.claude/locked') -Recurse -Force
+} else { Write-Output 'note: unreadable home and directory checks need a non-root POSIX host, skipped' }
+
 if ($script:fail -eq 0) { Write-Output "ALL PASSED ($($PSVersionTable.PSEdition) $($PSVersionTable.PSVersion))"; Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue }
 else { Write-Output "FAILURES; work dir kept: $Work" }
 exit $script:fail
