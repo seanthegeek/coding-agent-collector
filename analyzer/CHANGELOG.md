@@ -9,6 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-04
+
 ### Added
 
 - `timeline --since WHEN` and `--until WHEN` keep only the rows inside a
@@ -282,7 +284,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--summary-length` (default 400), `--include-thinking` and `--agent`;
   `detect --json` and `--files`; `catalog --agents`.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.7.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.8.0...HEAD
+[0.8.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.7.0...analyzer-v0.8.0
 [0.7.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.6.0...analyzer-v0.7.0
 [0.6.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.5.0...analyzer-v0.6.0
 [0.5.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.4.0...analyzer-v0.5.0
