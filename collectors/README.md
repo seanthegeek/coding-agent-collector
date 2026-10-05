@@ -112,9 +112,10 @@ On Windows 10 1803 and later, Windows 11, and Server 2019 and later the script
 writes a `tar.gz` through the built-in `tar.exe`, so the archive is identical in
 form to the sh collector's. When `tar.exe` is not on the `PATH` (older hosts)
 or fails, the script falls back to `System.IO.Compression` and produces a
-`.zip`. The summary's `capabilities.archiver` records which archiver was chosen
-at startup. It still says `tar.exe` after a `tar.exe` failure, so check the
-archive's extension.
+`.zip`. The summary's `capabilities.archiver` and `archive` name the archiver
+and the archive actually written: the summary is rewritten and restaged before
+the zip fallback, so both the copy inside the archive and the one beside it say
+`ZipFile` and `.zip` after a `tar.exe` failure.
 
 ## Options
 
@@ -523,9 +524,12 @@ host_20261003T165531Z_agent-artifacts.log             the log (the archive holds
 ```
 
 The sh collector writes the archive with `tar -czf`. If that fails, it pipes
-`tar` through `gzip`. If that fails too, it writes an uncompressed `.tar`.
-The PowerShell collector writes a `.tar.gz` with `tar.exe`, or a `.zip`
-(see [Windows](#windows)). The log is copied into the archive before
+`tar` through `gzip`. If that fails too, or `gzip` is not on the `PATH`, it
+writes an uncompressed `.tar`. The PowerShell collector writes a `.tar.gz`
+with `tar.exe`, or a `.zip` (see [Windows](#windows)). Both collectors
+rewrite `collection.json` and its staged copy before each fallback, so its
+`archive` and `capabilities.archiver` fields name the archive that was
+written. The log is copied into the archive before
 archiving starts, so only the copy outside has the final `done` line with
 the archive's size and hash.
 
@@ -599,15 +603,15 @@ the root, as on other platforms.
 | `run_as_uid` | sh only: the numeric uid the collector ran as, as a string. |
 | `run_as`, `run_as_admin` | PowerShell only: the account the collector ran as, and whether it was elevated. |
 | `started`, `finished` | UTC to the second, `2026-10-03T16:55:31Z`. `finished` is taken before archiving. |
-| `options` | `full`, `no_secrets`, `max_file_size_bytes` (`0` means no limit), `users_filter` (the `-u` string), `no_docker`. `--no-projects` and `-p` are not recorded. |
-| `capabilities` | sh: `hash_tool` (`sha256sum`, `shasum`, `sha256`, `openssl` or `none`), `stat_mode` (`gnu`, `gnu0` for GNU `stat` without birth time, `bsd` or `none`) and `worker_shell`. PowerShell: `hash_tool` (`Get-FileHash`) and `archiver` (`tar.exe` or `ZipFile`, as chosen at startup). |
+| `options` | `full`, `no_secrets`, `max_file_size_bytes` (`0` means no limit), `users_filter` (the `-u` string), `no_docker`, `no_projects` (boolean, `--no-projects` or `-NoProjects`) and `projects` (array of the `-p`/`--project` or `-Project` values in the order given, as typed, `[]` when none). They are recorded even with `no_projects`, which ignores them, and the sh collector uses only the absolute ones. |
+| `capabilities` | sh: `hash_tool` (`sha256sum`, `shasum`, `sha256`, `openssl` or `none`), `stat_mode` (`gnu`, `gnu0` for GNU `stat` without birth time, `bsd` or `none`), `worker_shell` and `archiver` (`tar -z` for `tar -czf`, `tar \| gzip` for the pipe, `tar` for the uncompressed `.tar`). PowerShell: `hash_tool` (`Get-FileHash`) and `archiver` (`tar.exe` or `ZipFile`). `archiver` names the one that wrote the archive. |
 | `users`, `homes` | Parallel lists of every user and home scanned, including homes with no agent state. |
 | `users_with_artifacts` | The users whose home produced at least one manifest row, in the order of `users`. Rows from discovered projects and Docker volumes do not count. The stdout `users:` line is its length. |
 | `projects` | The project directories collected from, discovered or given with `-p`. |
 | `counts` | Rows per status (`collected`, `symlink`, `skipped_excluded`, `skipped_size`, `skipped_secret`, `error_copy`, `skipped_unmatched_volume`) and `collected_bytes`. |
 | `docker` | `volumes_found`, `volumes_collected`, `unreadable` and `docker_desktop`; see [Docker volumes](#docker-volumes). |
 | `notes` | Messages about what could not be collected, such as an unreadable or symlinked Docker volume directory, or Docker Desktop data. |
-| `archive` | The archive file name as chosen at startup: `.tar.gz`, or `.zip` from the PowerShell collector without `tar.exe`. It does not reflect a later fallback to `.tar` or `.zip`. |
+| `archive` | The file name of the archive written: `.tar.gz`, `.tar` after the sh collector's uncompressed fallback, or `.zip` from the PowerShell collector without `tar.exe` or after it failed. |
 
 The copy of each file is hashed after staging, so the hash matches the bytes
 in the archive even if a running agent appended to the source afterwards.

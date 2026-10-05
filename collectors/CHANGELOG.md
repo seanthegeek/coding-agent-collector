@@ -10,6 +10,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `collection.json` `options.no_projects` (boolean) and `options.projects`
+  (the `-p`/`--project` or `-Project` values as given), and, in the sh
+  collector, `capabilities.archiver` (`tar -z`, `tar | gzip` or `tar`) (#31).
+
 ### Fixed
 
 - On a case-insensitive filesystem (macOS, Windows), catalog entries that
@@ -20,6 +26,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   also with `--inventory`. On Linux both directories are still collected.
   The sh collector compares device and inode; the PowerShell collector
   compares on-disk names and records paths in their on-disk spelling (#29).
+- `collection.json` `archive` and `capabilities.archiver` name the archive
+  and archiver actually used. Both collectors rewrite the summary and its
+  archived copy before each fallback, so they no longer say `.tar.gz` after
+  the sh collector's plain `.tar` fallback or `.tar.gz` and `tar.exe` after
+  the PowerShell collector's `.zip` fallback (#31).
 
 ## [1.7.0] - 2026-10-04
 

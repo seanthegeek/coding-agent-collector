@@ -2256,6 +2256,10 @@ json_list() { # newline-separated -> JSON array
   printf ']'
 }
 
+# write_summary ARCHIVE_NAME ARCHIVER: write collection.json and stage a copy.
+# Called again before each archive fallback, so the archived and the on-disk
+# summary name the archive and the archiver actually used.
+write_summary() {
 cat >"$SUMMARY" <<EOF
 {
   "tool": "$TOOL",
@@ -2267,8 +2271,8 @@ cat >"$SUMMARY" <<EOF
   "run_as_uid": "$(id -u 2>/dev/null)",
   "started": "$START_TS",
   "finished": "$END_TS",
-  "options": {"full": $( [ "$FULL" = 1 ] && printf true || printf false ), "no_secrets": $( [ "$NO_SECRETS" = 1 ] && printf true || printf false ), "max_file_size_bytes": $MAX_SIZE, "users_filter": "$(json_str "$USERS")", "no_docker": $( [ "$NO_DOCKER" = 1 ] && printf true || printf false )},
-  "capabilities": {"hash_tool": "$HASH_TOOL", "stat_mode": "$STAT_MODE", "worker_shell": "$(json_str "$WORKER_SH")"},
+  "options": {"full": $( [ "$FULL" = 1 ] && printf true || printf false ), "no_secrets": $( [ "$NO_SECRETS" = 1 ] && printf true || printf false ), "max_file_size_bytes": $MAX_SIZE, "users_filter": "$(json_str "$USERS")", "no_docker": $( [ "$NO_DOCKER" = 1 ] && printf true || printf false ), "no_projects": $( [ "$NO_PROJECTS" = 1 ] && printf true || printf false ), "projects": $(json_list "$EXTRA_PROJECTS")},
+  "capabilities": {"hash_tool": "$HASH_TOOL", "stat_mode": "$STAT_MODE", "worker_shell": "$(json_str "$WORKER_SH")", "archiver": "$(json_str "$2")"},
   "users": $(json_list "$(printf '%s\n' "$USER_LIST" | cut -d: -f1)"),
   "homes": $(json_list "$(printf '%s\n' "$USER_LIST" | sed 's/^[^:]*://')"),
   "users_with_artifacts": $(json_list "$(printf '%s\n' "$ACTIVE_USERS" | cut -d: -f1)"),
@@ -2276,21 +2280,25 @@ cat >"$SUMMARY" <<EOF
   "counts": {"collected": $(count_status collected), "symlink": $(count_status symlink), "skipped_excluded": $(count_status skipped_excluded), "skipped_size": $(count_status skipped_size), "skipped_secret": $(count_status skipped_secret), "error_copy": $(count_status error_copy), "skipped_unmatched_volume": $(count_status skipped_unmatched_volume), "collected_bytes": $BYTES},
   "docker": {"volumes_found": $DOCKER_FOUND, "volumes_collected": $DOCKER_COLLECTED, "unreadable": $DOCKER_UNREADABLE, "docker_desktop": $( [ "$DOCKER_DESKTOP" = 1 ] && printf true || printf false )},
   "notes": $(json_list "$NOTES"),
-  "archive": "$(json_str "$NAME.tar.gz")"
+  "archive": "$(json_str "$1")"
 }
 EOF
+cp "$SUMMARY" "$STAGE/collection.json"
+}
 
+write_summary "$NAME.tar.gz" 'tar -z'
 log_line "Archiving"
 cp "$MANIFEST" "$STAGE/manifest.jsonl"
-cp "$SUMMARY" "$STAGE/collection.json"
 cp "$LOG" "$STAGE/collector.log"
 
 rm -f "$ARCHIVE"
 if ! tar -czf "$ARCHIVE" -C "$STAGE" . 2>>"$LOG"; then
   rm -f "$ARCHIVE"
-  if command -v gzip >/dev/null 2>&1 && tar -cf - -C "$STAGE" . 2>>"$LOG" | gzip >"$ARCHIVE"; then :
+  if command -v gzip >/dev/null 2>&1 && write_summary "$NAME.tar.gz" 'tar | gzip' &&
+    tar -cf - -C "$STAGE" . 2>>"$LOG" | gzip >"$ARCHIVE"; then :
   else
     rm -f "$ARCHIVE"; ARCHIVE="$OUTDIR/$NAME.tar"
+    write_summary "$NAME.tar" 'tar'
     tar -cf "$ARCHIVE" -C "$STAGE" . 2>>"$LOG" || { log_line "FATAL: tar failed"; exit 2; }
   fi
 fi
