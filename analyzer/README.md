@@ -607,11 +607,22 @@ analyze-agent-artifacts --version
 ```sh
 cd analyzer
 tests/run.sh                 # python3 -m unittest discover -s tests -t tests
-tests/run.sh -p 'test_catalog*'   # extra arguments go to unittest discover
+tests/run.sh -v -k Glob      # options only: passed to unittest discover
+tests/run.sh test_catalog    # one module
+tests/run.sh test_parsers.ClaudeCodeTests            # one class
+tests/run.sh test_parsers.ClaudeCodeTests.test_rows  # one method
 ```
 
 `tests/run.sh` changes to the `analyzer/` directory itself, so it can be run
-from anywhere.
+from anywhere. What it runs depends on whether a test name is given:
+
+| Arguments | Command run | Options accepted |
+| --- | --- | --- |
+| none, or options only | `python3 -m unittest discover -s tests -t tests <options>` | every `unittest discover` option, including `-p`, `-k`, `-v`, `-f` |
+| one or more test names, module, `module.Class` or `module.Class.method` | `python3 -m unittest <options> <names>` with `tests/` prepended to `PYTHONPATH`, so the modules import under the same names as under discover | the `unittest` options `-v`, `-q`, `-k`, `-f`, `-c`, `-b`, `--locals`; `-p`, `-s` and `-t` (and their long forms) are discover-only, so the script prints `run.sh: <option> applies only without test names` and exits 2 |
+
+An argument that does not start with `-` and is not the value of `-k`,
+`-p`, `-s`, `-t` or `--durations` counts as a test name.
 
 The suite builds a fake image with two Linux users and a Windows profile
 tree, each holding synthetic state for every parsed agent in the exact shapes

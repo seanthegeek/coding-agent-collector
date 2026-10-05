@@ -9,6 +9,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `tests/run.sh` runs only the named tests when given a module, class or
+  method name (`tests/run.sh test_catalog`,
+  `tests/run.sh test_parsers.ClaudeCodeTests.test_rows`); before, it passed
+  the name to `unittest discover`, which ignored it and ran the whole suite.
+  With no names it still runs discover with the options given, and with
+  names it refuses the discover-only options `-p`, `-s` and `-t` (#34).
+
 ## [0.8.1] - 2026-10-05
 
 ### Added
