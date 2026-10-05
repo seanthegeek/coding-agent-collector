@@ -10,6 +10,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `collection.json` `options.no_projects` (boolean) and `options.projects`
+  (the `-p`/`--project` or `-Project` values as given), and, in the sh
+  collector, `capabilities.archiver` (`tar -z`, `tar | gzip` or `tar`).
+
+### Fixed
+
+- `collection.json` `archive` and `capabilities.archiver` name the archive
+  and archiver actually used. Both collectors rewrite the summary and its
+  archived copy before each fallback, so they no longer say `.tar.gz` after
+  the sh collector's plain `.tar` fallback or `.tar.gz` and `tar.exe` after
+  the PowerShell collector's `.zip` fallback.
+
 ## [1.7.0] - 2026-10-04
 
 ### Added

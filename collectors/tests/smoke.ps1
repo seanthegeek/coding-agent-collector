@@ -926,6 +926,52 @@ Check '-NoLive is no longer a parameter' { $threw = $false; try { & $Collector -
 Check '-List prints catalog' { @(& $Collector -List | Select-String -SimpleMatch 'claude-code|.claude').Count -ge 1 }
 Check '-List prints docker volume table' { @(& $Collector -List | Where-Object { $_ -eq 'agent-zero|*a0_usr' }).Count -eq 1 }
 
+# 2026-10-04 bug round: #31
+# collection.json names the archive and archiver actually used, and records
+# the project options. A tar that fails, first on PATH, forces the zip
+# fallback: a shell script on POSIX, a copy of where.exe named tar.exe on
+# Windows (it rejects -czf with exit 2).
+$ds = Get-Content -LiteralPath (Get-ChildItem -LiteralPath (Join-Path $Out 'default') -Filter '*.collection.json' | Select-Object -First 1).FullName -Raw
+$dj = $ds | ConvertFrom-Json
+$defArchive = (Get-ChildItem -LiteralPath (Join-Path $Out 'default') | Where-Object { $_.Name -match '\.(tar\.gz|zip)$' } | Select-Object -First 1).Name
+Check '#31 default summary names the archive written' { $dj.archive -eq $defArchive -and (($defArchive -like '*.tar.gz' -and $dj.capabilities.archiver -eq 'tar.exe') -or ($defArchive -like '*.zip' -and $dj.capabilities.archiver -eq 'ZipFile')) }
+Check '#31 default summary: no_projects false, projects empty' { $dj.options.no_projects -eq $false -and $ds -match '"no_projects":\s*false,\s*"projects":\s*\[\s*\]' }
+$shim = Join-Path $Work 'shim31'
+New-Item -ItemType Directory -Path $shim -Force | Out-Null
+$shimOk = $false
+if ($env:OS -eq 'Windows_NT') {
+  $where = Join-Path $env:SystemRoot 'System32\where.exe'
+  if (Test-Path -LiteralPath $where) { Copy-Item -LiteralPath $where -Destination (Join-Path $shim 'tar.exe'); $shimOk = $true }
+} else {
+  [System.IO.File]::WriteAllText((Join-Path $shim 'tar'), "#!/bin/sh`necho 'tar: broken' >&2`nexit 2`n", (New-Object System.Text.UTF8Encoding $false))
+  & chmod +x (Join-Path $shim 'tar'); $shimOk = $true
+}
+if ($shimOk) {
+  $oldPath = $env:PATH
+  $env:PATH = $shim + [System.IO.Path]::PathSeparator + $env:PATH
+  $p1 = P 'srv/p31-one'; $p2 = P 'srv/p31 two'
+  Run 'zip31' @{ Project = @($p1, $p2) }
+  $env:PATH = $oldPath
+  Check '#31 zip fallback exit 0, zip written' { $script:rc -eq 0 -and $script:A -and $script:A.Name -like '*.zip' -and @(Get-ChildItem -LiteralPath (Join-Path $Out 'zip31') -Filter '*.tar.gz').Count -eq 0 }
+  $zj = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
+  Check '#31 zip fallback: on-disk summary names the zip and ZipFile' { $zj.archive -eq $script:A.Name -and $zj.capabilities.archiver -eq 'ZipFile' }
+  Check '#31 zip fallback: archived summary matches on-disk' {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $z = [System.IO.Compression.ZipFile]::OpenRead($script:A.FullName)
+    try {
+      $e = $z.Entries | Where-Object { $_.FullName -eq 'collection.json' } | Select-Object -First 1
+      $rd = New-Object System.IO.StreamReader($e.Open())
+      try { $in = $rd.ReadToEnd() } finally { $rd.Dispose() }
+    } finally { $z.Dispose() }
+    $in -eq [System.IO.File]::ReadAllText($script:S.FullName)
+  }
+  Check '#31 zip fallback: sidecar names the zip' { (Get-Content -LiteralPath "$($script:A.FullName).sha256").EndsWith('  ' + $script:A.Name) }
+  Check '#31 -Project values recorded in options.projects' { $zj.options.no_projects -eq $false -and @($zj.options.projects).Count -eq 2 -and $zj.options.projects[0] -eq $p1 -and $zj.options.projects[1] -eq $p2 }
+} else { Write-Output 'note: no where.exe to stand in for tar.exe, zip fallback checks skipped' }
+Run 'noproj31' @{ NoProjects = $true }
+$ns = Get-Content -LiteralPath $script:S.FullName -Raw
+Check '#31 -NoProjects recorded' { ($ns | ConvertFrom-Json).options.no_projects -eq $true -and $ns -match '"no_projects":\s*true,\s*"projects":\s*\[\s*\]' }
+
 if ($script:fail -eq 0) { Write-Output "ALL PASSED ($($PSVersionTable.PSEdition) $($PSVersionTable.PSVersion))"; Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue }
 else { Write-Output "FAILURES; work dir kept: $Work" }
 exit $script:fail

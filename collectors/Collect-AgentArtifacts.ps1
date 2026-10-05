@@ -2221,7 +2221,7 @@ $summary = [ordered]@{
   run_as = $(try { [Security.Principal.WindowsIdentity]::GetCurrent().Name } catch { [Environment]::UserDomainName + '\' + [Environment]::UserName })
   run_as_admin = $IsAdmin
   started = $StartTs; finished = $EndTs
-  options = [ordered]@{ full = $Full.IsPresent; no_secrets = $NoSecrets.IsPresent; max_file_size_bytes = $MaxSize; users_filter = $Users; no_docker = $NoDocker.IsPresent }
+  options = [ordered]@{ full = $Full.IsPresent; no_secrets = $NoSecrets.IsPresent; max_file_size_bytes = $MaxSize; users_filter = $Users; no_docker = $NoDocker.IsPresent; no_projects = $NoProjects.IsPresent; projects = @($Project) }
   capabilities = [ordered]@{ hash_tool = 'Get-FileHash'; archiver = $(if ($TarExe) { 'tar.exe' } else { 'ZipFile' }) }
   users = @($UserList | ForEach-Object { $_.user })
   homes = @($UserList | ForEach-Object { $_.home })
@@ -2232,13 +2232,19 @@ $summary = [ordered]@{
   notes = @($script:Notes)
   archive = (Split-Path -Leaf $Archive)
 }
-[System.IO.File]::WriteAllText($SummaryPath, ($summary | ConvertTo-Json -Depth 4), $Utf8NoBom)
+# Write collection.json and stage a copy. Called again before the zip
+# fallback, so the archived and the on-disk summary name the archive and the
+# archiver actually used.
+function Write-Summary {
+  [System.IO.File]::WriteAllText($SummaryPath, ($summary | ConvertTo-Json -Depth 4), $Utf8NoBom)
+  Copy-Item -LiteralPath $SummaryPath -Destination (Join-PathSafe $Stage 'collection.json') -Force
+}
+Write-Summary
 
 Write-CollectorLog 'Archiving'
 $script:ManifestWriter.Close()
 $script:LogWriter.Close()
 Copy-Item -LiteralPath $ManifestPath -Destination (Join-PathSafe $Stage 'manifest.jsonl') -Force
-Copy-Item -LiteralPath $SummaryPath -Destination (Join-PathSafe $Stage 'collection.json') -Force
 Copy-Item -LiteralPath $LogPath -Destination (Join-PathSafe $Stage 'collector.log') -Force
 
 if (Test-PathQuiet $Archive 'Any') { Remove-Item -LiteralPath $Archive -Force }
@@ -2251,6 +2257,9 @@ if (-not $archiveOk) {
   try {
     if (Test-PathQuiet $Archive 'Any') { Remove-Item -LiteralPath $Archive -Force }
     $Archive = Join-PathSafe $OutputDir "$Name.zip"
+    $summary.archive = (Split-Path -Leaf $Archive)
+    $summary.capabilities.archiver = 'ZipFile'
+    Write-Summary
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::CreateFromDirectory($Stage, $Archive, [System.IO.Compression.CompressionLevel]::Optimal, $false)
     $archiveOk = (Test-PathQuiet $Archive 'Any')
