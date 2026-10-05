@@ -10,12 +10,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-10-05
+
 ### Fixed
 
 - sh collector: a `tar` that fails inside the `tar | gzip` fallback is now
   detected, logged as `tar | gzip: tar exited N`, and the collector falls
   through to the plain `.tar`, instead of hashing and reporting a truncated
-  `.tar.gz` as success (#40)
+  `.tar.gz` as success (#40).
 
 ## [1.8.0] - 2026-10-05
 
@@ -346,7 +348,8 @@ stdout `errors:` line now reads `errors:     N (X error_copy, Y error_read)`.
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.8.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.8.1...HEAD
+[1.8.1]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.8.0...collector-v1.8.1
 [1.8.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.7.0...collector-v1.8.0
 [1.7.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.6.0...collector-v1.7.0
 [1.6.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.5.0...collector-v1.6.0

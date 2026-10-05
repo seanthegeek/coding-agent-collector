@@ -26,7 +26,7 @@
 #               or, with --inventory, the walk ran,
 #             1 usage error, 2 fatal (no output dir, no tar, ...).
 
-VERSION="1.8.0"
+VERSION="1.8.1"
 TOOL="collect-agent-artifacts"
 
 LC_ALL=C
