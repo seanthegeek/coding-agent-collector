@@ -13,7 +13,7 @@
 #
 # Portability: POSIX sh only. Runs under bash 3.2 (macOS /bin/sh), dash,
 # ash/busybox, FreeBSD/OpenBSD sh and zsh in sh emulation. External tools used:
-# find, cp, tar, gzip, du, awk, grep, sed, sort, cut, readlink, mkdir, rm,
+# find, cp, ls, tar, gzip, du, awk, grep, sed, sort, cut, readlink, mkdir, rm,
 # and one of sha256sum / shasum / sha256 / openssl.
 #
 # Modes:
@@ -1435,6 +1435,33 @@ emit_row() {
     "$(num "${12}")" "$(num "${13}")" "$(num "${14}")" "${15}" "${16}" "${17}" "${18}" \
     "$(json_str "${19}")" "$(json_str "${20}")" >>"$1"
 }
+# dir_err DIR -> prints why DIR cannot be walked and returns 0, or returns 1
+# when it can be both listed (-r) and entered (-x). The decision comes from
+# test(1); the text is the first line ls(1) printed for the same access, so
+# it is the OS error (Permission denied, No such file or directory).
+dir_err() {
+  if [ ! -d "$1" ]; then
+    if [ -e "$1" ] || [ -L "$1" ]; then _de='Not a directory'
+    else _de=$(ls -ld "$1" 2>&1 >/dev/null); [ -n "$_de" ] || _de='No such file or directory'; fi
+  elif [ ! -r "$1" ]; then
+    _de=$(ls "$1" 2>&1 >/dev/null); [ -n "$_de" ] || _de='cannot be listed (no read permission)'
+  elif [ ! -x "$1" ]; then
+    _de=$(ls -ld "$1/." 2>&1 >/dev/null); [ -n "$_de" ] || _de='cannot be entered (no search permission)'
+  else
+    return 1
+  fi
+  printf '%s' "${_de%%"$_jn"*}"
+}
+# read_err_row MANIFEST USER HOME AGENT DIR ERROR: one error_read row for a
+# directory that could not be walked, with its lstat metadata and size 0.
+read_err_row() {
+  _rr_st=$(stat_file "$5"); [ -n "$_rr_st" ] || _rr_st='0 0 0 0 0 0 0 0'
+  case "$_rr_st" in ' '*) _rr_st="0$_rr_st" ;; esac
+  # shellcheck disable=SC2086 # split the stat fields
+  set -- "$@" $_rr_st
+  emit_row "$1" "$2" "$3" "$4" "$5" "" dir 0 "$8" "$9" "${10}" "${11}" "${12}" "${13}" "${14}" "" false error_read "" "$6"
+  log_line "read failed: $5: $6"
+}
 EOF_COMMON
 COMMON=$_hv
 eval "$COMMON"
@@ -1499,6 +1526,19 @@ for f in "$@"; do
 done
 EOF_SKIP
 SKIP_PROG="$COMMON
+$_hv"
+
+# Program run by find -exec for every directory in a walk: one error_read row
+# for each that cannot be listed or entered. find reports the same directory
+# in the log and goes on; the test, not find's localised message, decides.
+# args: user home agent manifest dirs...
+heredoc_var <<'EOF_DIRCHK'
+user=$1; home=$2; agent=$3; manifest=$4; shift 4
+for d in "$@"; do
+  if err=$(dir_err "$d"); then read_err_row "$manifest" "$user" "$home" "$agent" "$d" "$err"; fi
+done
+EOF_DIRCHK
+DIRCHK_PROG="$COMMON
 $_hv"
 
 # Program run by find -exec in --inventory mode for every regular file under a
@@ -1593,6 +1633,31 @@ fi
 
 case "$MAX_MB" in ''|*[!0-9]*) printf 'Invalid --max-file-size: %s\n' "$MAX_MB" >&2; exit 1 ;; esac
 MAX_SIZE=$(( MAX_MB * 1024 * 1024 ))
+
+# A relative -p is resolved against the current directory, in image mode too:
+# -p is a path on the machine running the collector and is never prefixed
+# with the root. An existing directory is resolved with cd and pwd (logical,
+# so a symlink in the path keeps its name); any other value is joined to the
+# current directory as given. Repeated values are kept once.
+_rp_out=
+while IFS= read -r _rp; do
+  [ -n "$_rp" ] || continue
+  case "$_rp" in
+    /*) ;;
+    *) _rp_abs=$(cd "./$_rp" 2>/dev/null && pwd) || _rp_abs=
+       [ -n "$_rp_abs" ] || _rp_abs="$(pwd)/${_rp#./}"
+       _rp=$_rp_abs ;;
+  esac
+  case "$_rp_out
+" in (*"
+$_rp
+"*) continue ;; esac
+  _rp_out="$_rp_out
+$_rp"
+done <<EOF_PROJECTS
+$EXTRA_PROJECTS
+EOF_PROJECTS
+EXTRA_PROJECTS=$_rp_out
 
 # Normalise root: "" for live, else absolute path without trailing slash.
 if [ -n "$ROOT" ]; then
@@ -1774,6 +1839,7 @@ collect_path() {
     if [ "$INVENTORY" = 1 ]; then
       set -- "$@" -type f -exec "$WORKER_SH" -c "$INV_PROG" sh "$_cp_agent" '{}' +
     else
+      set -- "$@" -type d -exec "$WORKER_SH" -c "$DIRCHK_PROG" sh "$_cp_user" "$_cp_home" "$_cp_agent" "$MANIFEST" '{}' + -o
       set -- "$@" '(' -type f -o -type l ')' -exec "$WORKER_SH" -c "$STAGE_PROG" sh "$STAGE" "$ROOT" "$_cp_user" "$_cp_home" "$_cp_agent" "$MANIFEST" '{}' +
     fi
     find "$@" 2>>"$LOG"
@@ -1867,6 +1933,10 @@ fi
 # shellcheck disable=SC2030 # _h is per-iteration; inv_secret reads it below
 [ "$INVENTORY" = 1 ] || printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
   [ -n "$_h" ] || continue
+  # A home that cannot be listed or entered gets one error_read row. The
+  # catalog is still tried: a home that can be entered but not listed
+  # (mode 711) still yields the entries that are not globs.
+  if _he=$(dir_err "$_h"); then read_err_row "$MANIFEST" "$_u" "$_h" "" "$_h" "$_he"; fi
   collect_tree "$_u" "$_h" "$CATALOG" "User $_u ($_h)"
 done
 
@@ -2132,9 +2202,12 @@ discover_projects() {
   done
   IFS=$_dp_ifs
   printf '%s\n' "$EXTRA_PROJECTS" | grep '^/' | while IFS= read -r _p; do
-    _owner=$(printf '%s\n' "$USER_LIST" | awk -F: -v p="$_p" '{h=substr($0,index($0,":")+1); if (index(p, h"/")==1) {print $1; exit}}')
-    printf '%s:%s\n' "$_owner" "$_p"
+    printf '%s:%s\n' "$(project_owner "$_p")" "$_p"
   done
+}
+# project_owner DIR -> the user whose home contains DIR, or nothing
+project_owner() {
+  printf '%s\n' "$USER_LIST" | awk -F: -v p="$1" '{h=substr($0,index($0,":")+1); if (index(p, h"/")==1) {print $1; exit}}'
 }
 
 PROJECT_LIST=
@@ -2151,10 +2224,19 @@ $USER_LIST" in (*":$_p
 "*|*":$_p") continue ;; esac
     printf '%s\n' "$_line"
   done)
+  # A -p value that is not a directory is left out of PROJECT_LIST above; it
+  # gets a log line and one error_read row, so it is never dropped silently.
+  printf '%s\n' "$EXTRA_PROJECTS" | while IFS= read -r _p; do
+    if [ -z "$_p" ] || [ -d "$_p" ]; then continue; fi
+    _pe=$(dir_err "$_p")
+    log_line "WARNING: project given with -p is not a directory: $_p: $_pe"
+    [ "$INVENTORY" = 1 ] || emit_row "$MANIFEST" "$(project_owner "$_p")" "$_p" "" "$_p" "" dir 0 0 0 0 0 0 0 "" "" false error_read "" "$_pe"
+  done
   [ "$INVENTORY" = 1 ] || printf '%s\n' "$PROJECT_LIST" | while IFS= read -r _line; do
     [ -n "$_line" ] || continue
     _owner=${_line%%:*}; _p=${_line#*:}
     log_line "Project ${_owner:+[$_owner] }$_p"
+    if _pe=$(dir_err "$_p"); then read_err_row "$MANIFEST" "$_owner" "$_p" "" "$_p" "$_pe"; fi
     collect_tree "$_owner" "$_p" "$PROJECT_CATALOG"
   done
 fi
@@ -2231,10 +2313,12 @@ fi
 # Summary, archive, hashes
 END_TS=$(ts)
 count_status() { num "$(grep -c "\"status\":\"$1\"" "$MANIFEST" 2>/dev/null)"; }
-# Users whose home gave at least one manifest row, in enumeration order.
+# Users whose home gave at least one manifest row, in enumeration order. The
+# error_read row for an unreadable home itself does not count.
 ACTIVE_USERS=$(printf '%s\n' "$USER_LIST" | while IFS=: read -r _u _h; do
   [ -n "$_h" ] || continue
-  grep -F -q "\"home\":\"$(json_str "$_h")\"" "$MANIFEST" 2>/dev/null && printf '%s:%s\n' "$_u" "$_h"
+  _hj=$(json_str "$_h")
+  grep -F "\"home\":\"$_hj\"" "$MANIFEST" 2>/dev/null | grep -F -v -q "\"path\":\"$_hj\",\"archive_path\":\"\",\"type\":\"dir\"" && printf '%s:%s\n' "$_u" "$_h"
 done)
 # human_size BYTES -> "512 B", "20.9 MiB"
 human_size() {
@@ -2277,7 +2361,7 @@ cat >"$SUMMARY" <<EOF
   "homes": $(json_list "$(printf '%s\n' "$USER_LIST" | sed 's/^[^:]*://')"),
   "users_with_artifacts": $(json_list "$(printf '%s\n' "$ACTIVE_USERS" | cut -d: -f1)"),
   "projects": $(json_list "$(printf '%s\n' "$PROJECT_LIST" | sed 's/^[^:]*://')"),
-  "counts": {"collected": $(count_status collected), "symlink": $(count_status symlink), "skipped_excluded": $(count_status skipped_excluded), "skipped_size": $(count_status skipped_size), "skipped_secret": $(count_status skipped_secret), "error_copy": $(count_status error_copy), "skipped_unmatched_volume": $(count_status skipped_unmatched_volume), "collected_bytes": $BYTES},
+  "counts": {"collected": $(count_status collected), "symlink": $(count_status symlink), "skipped_excluded": $(count_status skipped_excluded), "skipped_size": $(count_status skipped_size), "skipped_secret": $(count_status skipped_secret), "error_copy": $(count_status error_copy), "skipped_unmatched_volume": $(count_status skipped_unmatched_volume), "error_read": $(count_status error_read), "collected_bytes": $BYTES},
   "docker": {"volumes_found": $DOCKER_FOUND, "volumes_collected": $DOCKER_COLLECTED, "unreadable": $DOCKER_UNREADABLE, "docker_desktop": $( [ "$DOCKER_DESKTOP" = 1 ] && printf true || printf false )},
   "notes": $(json_list "$NOTES"),
   "archive": "$(json_str "$1")"
@@ -2311,10 +2395,11 @@ printf '%s  %s\n' "$ARCHIVE_SHA" "${ARCHIVE##*/}" >"$ARCHIVE.sha256"
 printf '%s done: %s (%s bytes, sha256 %s)\n' "$(ts)" "$ARCHIVE" "$ARCHIVE_SIZE" "$ARCHIVE_SHA" >>"$LOG"
 [ "$QUIET" = 1 ] || printf 'done\n' >&2
 
-printf 'archive:    %s\nsize:       %s (%s)\nsha256:     %s\nmanifest:   %s\nsummary:    %s\nlog:        %s\nusers:      %s\nprojects:   %s\ncollected:  %s files, %s bytes (%s)\nskipped:    %s excluded, %s too large, %s secret\nerrors:     %s\n' \
+printf 'archive:    %s\nsize:       %s (%s)\nsha256:     %s\nmanifest:   %s\nsummary:    %s\nlog:        %s\nusers:      %s\nprojects:   %s\ncollected:  %s files, %s bytes (%s)\nskipped:    %s excluded, %s too large, %s secret\nerrors:     %s (%s error_copy, %s error_read)\n' \
   "$ARCHIVE" "$ARCHIVE_SIZE" "$(human_size "$ARCHIVE_SIZE")" "$ARCHIVE_SHA" "$MANIFEST" "$SUMMARY" "$LOG" \
   "$(printf '%s\n' "$ACTIVE_USERS" | grep -c .)" "$(printf '%s\n' "$PROJECT_LIST" | grep -c .)" \
-  "$(count_status collected)" "$BYTES" "$(human_size "$BYTES")" "$(count_status skipped_excluded)" "$(count_status skipped_size)" "$(count_status skipped_secret)" "$(count_status error_copy)"
+  "$(count_status collected)" "$BYTES" "$(human_size "$BYTES")" "$(count_status skipped_excluded)" "$(count_status skipped_size)" "$(count_status skipped_secret)" \
+  "$(( $(count_status error_copy) + $(count_status error_read) ))" "$(count_status error_copy)" "$(count_status error_read)"
 if [ "$DOCKER_SEEN" = 1 ]; then
   printf 'docker:     %s volumes found, %s collected, %s unreadable' "$DOCKER_FOUND" "$DOCKER_COLLECTED" "$DOCKER_UNREADABLE"
   [ "$DOCKER_UNREADABLE" -gt 0 ] && printf ' (run as root to collect)'

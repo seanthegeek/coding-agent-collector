@@ -994,5 +994,67 @@ if command -v python3 >/dev/null 2>&1; then
   check "#31 fallback summaries are valid JSON" "python3 -c 'import json,sys; [json.load(open(f)) for f in sys.argv[1:]]' \"\$S\" \"$OUT\"/tgz31/*.collection.json"
 fi
 
+# 2026-10-04 bug round: #32, #38, #39
+# A relative -p is resolved against the current directory (image mode too); a
+# -p that does not exist gets an error_read row and a log line. The output
+# directory check is the existing [ -w ]: a read-only -o exits 2.
+mkdir -p "$ROOT/srv/relproj"
+printf '# rel\n' >"$ROOT/srv/relproj/AGENTS.md"
+_cwd=$(pwd)
+cd "$ROOT/srv" || exit 1
+run projargs -p relproj -p /nonexistent-cac/proj; _rc=$?
+cd "$_cwd" || exit 1
+check "-p arguments exit 0" "[ $_rc -eq 0 ]"
+check "relative -p resolved against the current directory" "[ \"\$(status_of \"$ROOT/srv/relproj/AGENTS.md\")\" = collected ] && grep -q '\"projects\": \\[.*\"$ROOT/srv/relproj\"' \"\$S\""
+check "#31 x #39 options.projects records the resolved -p values" "grep -q '\"no_projects\": false, \"projects\": \\[\"$ROOT/srv/relproj\",\"/nonexistent-cac/proj\"\\]' \"\$S\""
+check "missing -p gets one error_read dir row" "[ \"\$(grep -c '\"path\":\"/nonexistent-cac/proj\"' \"\$M\")\" = 1 ] && row /nonexistent-cac/proj | grep -q '\"home\":\"/nonexistent-cac/proj\",\"agent\":\"\",.*\"archive_path\":\"\",\"type\":\"dir\".*\"status\":\"error_read\",\"target\":\"\",\"error\":\"[^\"]*No such file or directory\"'"
+check "missing -p logged" "grep -q 'WARNING: project given with -p is not a directory: /nonexistent-cac/proj: ' \"$OUT\"/projargs/*.log"
+check "missing -p not listed in projects" "grep -q '^  \"projects\": \\[\"' \"\$S\" && ! grep '^  \"projects\"' \"\$S\" | grep -q nonexistent-cac"
+check "missing -p counted as error_read" "grep -q '\"error_read\": 1,' \"\$S\" && grep -q '^errors:     1 (0 error_copy, 1 error_read)\$' \"$OUT/projargs.stdout\""
+check "default run has no error_read rows" "grep -q '\"error_read\": 0,' \"$OUT\"/default/*.collection.json && grep -q '^errors:     0 (0 error_copy, 0 error_read)\$' \"$OUT/default.stdout\""
+rm -rf "$ROOT/srv/relproj"
+if [ "$(id -u)" != 0 ]; then
+  mkdir -p "$OUT/readonly"
+  chmod 555 "$OUT/readonly"
+  COLLECTOR_SH="$SHELL_UNDER_TEST" "$SHELL_UNDER_TEST" "$SCRIPT" -r "$ROOT" -o "$OUT/readonly" -q --no-docker >/dev/null 2>"$OUT/readonly.stderr"
+  check "read-only output dir exits 2 before collecting" "[ $? -eq 2 ] && grep -q '^Output dir not writable: ' \"$OUT/readonly.stderr\" && [ -z \"\$(ls -A \"$OUT/readonly\")\" ]"
+  chmod 755 "$OUT/readonly"
+  # an unreadable home, an unlistable directory and one that cannot be entered
+  mkdir -p "$ROOT/home/erin/.claude" "$H/.claude/locked" "$H/.claude/noenter"
+  printf 'x\n' >"$H/.claude/locked/f"
+  chmod 000 "$ROOT/home/erin" "$H/.claude/locked"
+  chmod 600 "$H/.claude/noenter"
+  run readperm; _rc=$?
+  chmod 700 "$ROOT/home/erin" "$H/.claude/locked" "$H/.claude/noenter"
+  check "unreadable paths exit 0" "[ $_rc -eq 0 ]"
+  check "unreadable home gets one error_read row" "[ \"\$(grep -c '\"path\":\"$ROOT/home/erin\"' \"\$M\")\" = 1 ] && row \"$ROOT/home/erin\" | grep -q '\"user\":\"erin\",\"home\":\"$ROOT/home/erin\",\"agent\":\"\",.*\"archive_path\":\"\",\"type\":\"dir\",\"size\":0,.*\"status\":\"error_read\",\"target\":\"\",\"error\":\"[^\"]*Permission denied\"'"
+  check "unreadable home stays in users, not in users_with_artifacts" "tr -d '\n' <\"\$S\" | grep -q '\"users\": \\[[^]]*\"erin\"' && ! grep '\"users_with_artifacts\"' \"\$S\" | grep -q erin"
+  check "unlistable directory in a walk gets an error_read row" "row \"$H/.claude/locked\" | grep -q '\"user\":\"alice\",\"home\":\"$H\",\"agent\":\"claude-code\",.*\"type\":\"dir\",.*\"status\":\"error_read\",.*\"error\":\"[^\"]*Permission denied\"'"
+  check "directory that cannot be entered gets an error_read row" "[ \"\$(status_of \"$H/.claude/noenter\")\" = error_read ]"
+  check "rest of the home still collected" "[ \"\$(status_of \"$ROOT/home/alice/.claude/projects/-srv-proj/s1.jsonl\")\" = collected ]"
+  check "unreadable paths counted" "grep -q '\"error_read\": 3,' \"\$S\" && grep -q '^errors:     3 (0 error_copy, 3 error_read)\$' \"$OUT/readperm.stdout\""
+  check "unreadable paths logged" "[ \"\$(grep -c ' read failed: ' \"$OUT\"/readperm/*.log)\" = 3 ]"
+  rm -rf "$ROOT/home/erin" "$H/.claude/locked" "$H/.claude/noenter"
+else
+  printf 'skip unreadable home, directory and output dir checks (running as root)\n'
+fi
+
+# 2026-10-04 bug round: #29 x #32
+# An unreadable catalog match gets one error_read row, and a case variant
+# folded into it (case-insensitive filesystem) gets none of its own.
+if [ "$(id -u)" != 0 ]; then
+  chmod 000 "$H/.config/pearai/User"
+  run fold32; _rc=$?
+  chmod 755 "$H/.config/pearai/User"
+  check "#29 x #32 unreadable case-variant match: exactly one error_read row" "[ $_rc -eq 0 ] && [ \"\$(grep '\"status\":\"error_read\"' \"\$M\" | grep -ciF '/.config/pearai/User\"')\" = 1 ] && grep -q '\"error_read\": 1,' \"\$S\""
+  if [ "$CASE_INSENSITIVE" = 1 ]; then
+    check "#29 x #32 folded variant has no rows of its own" "! grep -qF '\"path\":\"$H/.config/pearai/User' \"\$M\""
+  else
+    check "#29 x #32 the readable spelling is still collected" "[ \"\$(status_of \"$H/.config/PearAI/User/case29-upper.json\")\" = collected ]"
+  fi
+else
+  printf 'skip #29 x #32 unreadable case-variant check (running as root)\n'
+fi
+
 if [ "$fail" = 0 ]; then printf 'ALL PASSED (%s)\n' "$SHELL_UNDER_TEST"; rm -rf "$WORK"; else printf 'FAILURES (%s); work dir kept: %s\n' "$SHELL_UNDER_TEST" "$WORK"; fi
 exit "$fail"

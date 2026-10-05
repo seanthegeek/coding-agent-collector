@@ -66,7 +66,7 @@ users:      4
 projects:   12
 collected:  5985 files, 110669230 bytes (105.5 MiB)
 skipped:    7 excluded, 0 too large, 0 secret
-errors:     2
+errors:     2 (2 error_copy, 0 error_read)
 docker:     4 volumes found, 1 collected, 0 unreadable
 ```
 
@@ -79,7 +79,8 @@ there. `projects` counts the project directories collected from.
 `collected` counts the manifest rows with status `collected` and their
 bytes, followed by the same total in binary units. `skipped` counts the
 `skipped_excluded`, `skipped_size` and `skipped_secret` rows, and `errors`
-counts the `error_copy` rows. The `docker:` line appears only when a Docker
+is the number of `error_copy` and `error_read` rows together, followed by
+each of the two counts in parentheses. The `docker:` line appears only when a Docker
 or Podman volume directory or Docker Desktop data was found; see
 [Docker volumes](#docker-volumes). Progress lines (each user, catalog match
 and project) go to stderr unless `-q` is given. They always go to the log.
@@ -170,7 +171,7 @@ zipping through the link.
 | `-o, --output DIR` | Where to write the archive, manifest, summary and log. Created if missing. Default: current directory. |
 | `-r, --root DIR` | Alternate root such as a mounted disk image. Switches to image mode. `-r /` is live mode. |
 | `-u, --users LIST` | Comma-separated usernames to collect. Default: every home directory found. Names are compared with the user name from the password database, or with the directory name for a home found by globbing. The sh collector compares case-sensitively and the PowerShell collector does not. Also limits the rootless Docker directories. |
-| `-p, --project DIR` | Extra project directory whose project-level artifacts (`PROJECT_CATALOG`) are collected, as for a discovered project. Repeatable. Give the full path, including the mount point in image mode, because it is not prefixed with the root. The sh collector ignores a relative path. Has no effect with `--no-projects`. |
+| `-p, --project DIR` | Extra project directory whose project-level artifacts (`PROJECT_CATALOG`) are collected, as for a discovered project. Repeatable. It is a path on the machine running the collector and is never prefixed with the root, so in image mode give it including the mount point. A relative path is resolved against the current directory, in image mode too (sh: `cd` and `pwd` for an existing directory, otherwise joined to `pwd` as given; PowerShell: against the current location). A value given twice is collected once. A value that is not a directory (missing, a file, or not visible) is logged as `WARNING: project given with -p is not a directory: <path>: <error>` (`-Project` in the PowerShell message) and gets one `error_read` row; it is not listed in `collection.json` `projects`. Has no effect with `--no-projects`. |
 | `--full` | Disable the default size exclusions (model blobs, caches, extension and daemon binaries, marketplace clones). |
 | `--no-secrets` | Skip credential files. By default they are collected and flagged `secret: true` in the manifest. |
 | `--no-projects` | Skip project-level artifact discovery and `-p`. |
@@ -187,7 +188,7 @@ Exit codes:
 
 | Code | Meaning |
 | --- | --- |
-| `0` | An archive was written, even if individual files failed to copy (manifest status `error_copy`). With `--inventory`, the walk ran, even if homes or Docker data roots were unreadable. Also `--list`, `--version` and `--help`. |
+| `0` | An archive was written, even if individual files failed to copy (manifest status `error_copy`) or directories could not be read (`error_read`). With `--inventory`, the walk ran, even if homes or Docker data roots were unreadable. Also `--list`, `--version` and `--help`. |
 | `1` | Usage error: unknown option, missing option value, or a `--max-file-size` that is not a whole number. PowerShell: a negative `-MaxFileSizeMB` or a parameter binding error. |
 | `2` | Fatal: the root is not a directory, the output directory cannot be created or written, `tar` or `find` is missing (sh), the staging directory cannot be created (sh), or no archive could be written. With `--inventory` only the root and `find` checks apply. |
 | `130` | sh only: interrupted by `INT` or `TERM`. The staging directory is removed unless `-k` is given. |
@@ -275,7 +276,9 @@ de-duplicated by path:
   directories. Profiles named `Public`, `Default`, `Default User`,
   `All Users`, `Shared`, `defaultuser0`, `UMFD-<n>`, `DWM-<n>` or `TEMP` are
   skipped. A profile path that cannot be seen is logged as
-  `profile not accessible (skipped)`.
+  `profile not accessible (skipped)`. When its parent directory still
+  lists it (access denied rather than a deleted profile), it also gets an
+  `error_read` row, but it is not added to `users` and `homes`.
 
 Service accounts with real homes are included because agents run as them
 too, for example the `ollama` system user.
@@ -461,12 +464,29 @@ user. Without that privilege, a live run still finishes and exits `0`. The
 log gets a `WARNING: not running as root` (or `as Administrator`) line,
 and:
 
-- A home the responder cannot enter is still listed in `users`. The sh
-  collector finds no catalog paths in it and logs no `User` line for it. Inside a readable home, a directory that cannot be listed
-  shows up only in the log, with no manifest row: as `find:` errors from
-  the sh collector, or as `list failed:` and `stat failed:` lines from the
-  PowerShell collector. A file that can be listed but not read is an
-  `error_copy` row.
+- A home the responder cannot list or enter is still listed in `users`,
+  gets one `error_read` row (`agent` empty, `path` and `home` the home
+  directory), and is logged as `read failed: <home>: <error>`. The
+  catalog is still tried against it, so a home that can be entered but
+  not listed (mode `711`) still yields the entries that are not globs.
+  Its `error_read` row does not put the user in `users_with_artifacts`.
+  A discovered project directory or a `-p` directory that cannot be read
+  gets the same row.
+- Inside a walk, a directory that cannot be listed or entered gets one
+  `error_read` row under the agent being walked, and a `read failed:` log
+  line. sh: every directory `find` reaches is tested with `test -r` and
+  `test -x` in the worker, and `error` is the first line `ls` printed for
+  the same access, so the decision never depends on `find`'s localised
+  message; `find` still logs its own `find:` line for the directory. The
+  PowerShell collector writes the row when `Get-ChildItem` fails on the
+  directory, with the exception message as `error`. On Linux and macOS a
+  directory that can be listed but not entered fails that call only when
+  it has entries, so an empty one gets a row from the sh collector alone.
+  A catalog path whose parent cannot be entered is not seen by either
+  collector and gets no row; the PowerShell collector logs a
+  `stat failed:` line, with no row, for a matched path whose metadata it
+  cannot read. A file
+  that can be listed but not read is an `error_copy` row.
 - The root-owned Docker and Podman data roots are reported as unreadable
   (see [Docker volumes](#docker-volumes)).
 
@@ -604,19 +624,19 @@ Each manifest row is one JSON object:
 | --- | --- |
 | `user` | Owner of the home the path was found under. For a project file, the user whose agent state referenced the project (empty for a `-p` directory outside every home). `docker` for volume rows. |
 | `home` | The base the path was collected relative to: the home directory, the project directory, or a volume's `_data`, including the `-r` root. |
-| `agent` | Catalog agent name. `project` for files found through the project catalog, the `DOCKER_VOLUMES` agent for a matched volume, and empty for `skipped_unmatched_volume`. |
+| `agent` | Catalog agent name. `project` for files found through the project catalog, the `DOCKER_VOLUMES` agent for a matched volume, and empty for `skipped_unmatched_volume` and for the `error_read` row of a home, project or `-p` directory. |
 | `path` | The original full path, including the `-r` root in image mode. |
 | `archive_path` | Where the file is in the archive: `fs/<original path>`. Set for `collected` rows and for `symlink` rows whose link is in the archive: always from the sh collector, and from the PowerShell collector when the link was recreated and the archive is a tar (see [Windows](#windows)). Empty otherwise. |
-| `type` | `file`, `symlink`, or `dir` (an excluded directory or an unmatched volume). |
-| `size` | Bytes. For a `dir` row, the size of everything under it: `du -sk` × 1024 from the sh collector, the sum of file lengths from the PowerShell collector. |
-| `mtime`, `atime`, `ctime`, `btime` | Epoch seconds, read before the copy. `btime` (creation) is `0` where the platform cannot report it, and `ctime` is `0` from the PowerShell collector. All four are `0` for an excluded directory from the sh collector, for an unmatched volume, and on a host with neither GNU nor BSD `stat` (where `uid`, `gid` and `mode` are `0` too). |
+| `type` | `file`, `symlink`, or `dir` (an excluded directory, an unmatched volume, or an `error_read` directory). |
+| `size` | Bytes. `0` for an `error_read` row. For any other `dir` row, the size of everything under it: `du -sk` × 1024 from the sh collector, the sum of file lengths from the PowerShell collector. |
+| `mtime`, `atime`, `ctime`, `btime` | Epoch seconds, read before the copy. `btime` (creation) is `0` where the platform cannot report it, and `ctime` is `0` from the PowerShell collector. All four are `0` for an excluded directory from the sh collector, for an unmatched volume, for an `error_read` row of a `-p` value that does not exist, and on a host with neither GNU nor BSD `stat` (where `uid`, `gid` and `mode` are `0` too). |
 | `uid`, `gid`, `mode` | Numeric owner and group, and the permission bits as an octal string (`"644"`), from `lstat`. `0`, `0` and `""` from the PowerShell collector. |
 | `owner`, `attributes` | PowerShell collector only: the owning account name (or SID when the name cannot be resolved) and the attribute list, such as `Archive, ReparsePoint`. |
 | `sha256` | SHA-256 of the staged copy, set only for `collected` rows. The sh collector leaves it empty when it found no hash tool (`capabilities.hash_tool` is `none`). |
 | `secret` | `true` when the path, relative to `home`, matched a credential pattern. |
 | `status` | See below. |
 | `target` | For a symlink, its target as stored. The PowerShell collector joins several reparse point targets with `;`. |
-| `error` | For `error_copy`, why the copy failed: `cp`'s message or the .NET exception. For a PowerShell `symlink` row with no `archive_path`, why the link is not in the archive, starting `not recreated in the archive:` or `not in the archive:`. |
+| `error` | For `error_copy`, why the copy failed: `cp`'s message or the .NET exception. For `error_read`, why the directory could not be read: the first line of `ls`'s message (sh, for example `ls: cannot open directory '/home/carol': Permission denied`) or the .NET exception message. For a PowerShell `symlink` row with no `archive_path`, why the link is not in the archive, starting `not recreated in the archive:` or `not in the archive:`. |
 
 | Status | Meaning |
 | --- | --- |
@@ -627,6 +647,7 @@ Each manifest row is one JSON object:
 | `skipped_secret` | A credential file left out by `--no-secrets`. |
 | `error_copy` | Could not be read or copied; see `error`. |
 | `skipped_unmatched_volume` | A Docker or Podman volume that matched no `DOCKER_VOLUMES` line: one `dir` row with its size, `user` `docker`, an empty `agent`, and `home` and `path` both the volume's `_data`. |
+| `error_read` | A directory that could not be listed or entered: a home, a project directory, a `-p` value that is not a directory, or a directory inside a walk (see [Privileges](#privileges)). One `dir` row with size `0`, no `archive_path` and the reason in `error`; nothing under it is collected. |
 
 A path that was not excluded is checked first for being a symlink, then
 for `--no-secrets`, then for size. A symlink is therefore never skipped for
@@ -650,12 +671,12 @@ the root, as on other platforms.
 | `run_as_uid` | sh only: the numeric uid the collector ran as, as a string. |
 | `run_as`, `run_as_admin` | PowerShell only: the account the collector ran as, and whether it was elevated. |
 | `started`, `finished` | UTC to the second, `2026-10-03T16:55:31Z`. `finished` is taken before archiving. |
-| `options` | `full`, `no_secrets`, `max_file_size_bytes` (`0` means no limit), `users_filter` (the `-u` string), `no_docker`, `no_projects` (boolean, `--no-projects` or `-NoProjects`) and `projects` (array of the `-p`/`--project` or `-Project` values in the order given, as typed, `[]` when none). They are recorded even with `no_projects`, which ignores them, and the sh collector uses only the absolute ones. |
+| `options` | `full`, `no_secrets`, `max_file_size_bytes` (`0` means no limit), `users_filter` (the `-u` string), `no_docker`, `no_projects` (boolean, `--no-projects` or `-NoProjects`) and `projects` (array of the `-p`/`--project` or `-Project` values in the order given, resolved against the current directory to absolute paths and de-duplicated, by both collectors, `[]` when none). A value that is not a directory is still listed here. They are recorded even with `no_projects`, which ignores them. |
 | `capabilities` | sh: `hash_tool` (`sha256sum`, `shasum`, `sha256`, `openssl` or `none`), `stat_mode` (`gnu`, `gnu0` for GNU `stat` without birth time, `bsd` or `none`), `worker_shell` and `archiver` (`tar -z` for `tar -czf`, `tar \| gzip` for the pipe, `tar` for the uncompressed `.tar`). PowerShell: `hash_tool` (`Get-FileHash`) and `archiver` (`tar.exe` or `ZipFile`). `archiver` names the one that wrote the archive. |
 | `users`, `homes` | Parallel lists of every user and home scanned, including homes with no agent state. |
 | `users_with_artifacts` | The users whose home produced at least one manifest row, in the order of `users`. Rows from discovered projects and Docker volumes do not count. The stdout `users:` line is its length. |
-| `projects` | The project directories collected from, discovered or given with `-p`. |
-| `counts` | Rows per status (`collected`, `symlink`, `skipped_excluded`, `skipped_size`, `skipped_secret`, `error_copy`, `skipped_unmatched_volume`) and `collected_bytes`. |
+| `projects` | The project directories collected from, discovered or given with `-p`. A `-p` value that is not a directory is left out and has an `error_read` row instead. |
+| `counts` | Rows per status (`collected`, `symlink`, `skipped_excluded`, `skipped_size`, `skipped_secret`, `error_copy`, `skipped_unmatched_volume`, `error_read`) and `collected_bytes`. |
 | `docker` | `volumes_found`, `volumes_collected`, `unreadable` and `docker_desktop`; see [Docker volumes](#docker-volumes). |
 | `notes` | Messages about what could not be collected, such as an unreadable or symlinked Docker volume directory, Docker Desktop data, or (PowerShell) symlinks that are not in the archive and why. |
 | `archive` | The file name of the archive written: `.tar.gz`, `.tar` after the sh collector's uncompressed fallback, or `.zip` from the PowerShell collector without `tar.exe` or after it failed. |

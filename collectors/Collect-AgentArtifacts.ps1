@@ -22,7 +22,9 @@
 .PARAMETER Users
   Comma-separated profile names to collect (default: all).
 .PARAMETER Project
-  Extra project directory to collect (repeatable).
+  Extra project directory to collect (repeatable). A relative path is
+  resolved against the current location, and the path is never prefixed
+  with -Root.
 .PARAMETER Full
   Disable default size exclusions.
 .PARAMETER NoSecrets
@@ -1737,6 +1739,19 @@ function Clear-LinkArchivePaths([string]$reason) {
 # ---------------------------------------------------------------------------
 # Setup
 # ---------------------------------------------------------------------------
+# A relative -Project is resolved against the current location, in image mode
+# too: -Project is a path on the machine running the collector and is never
+# prefixed with the root, as in the sh collector. Repeated values are kept once.
+$resolvedProjects = @()
+foreach ($p in @($Project)) {
+  if (-not $p) { continue }
+  $rp = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($p)
+  if ($rp.Length -gt 1) { $rp = $rp.TrimEnd('\', '/') }
+  if ($rp.EndsWith(':')) { $rp += '\' }
+  if (-not ($resolvedProjects -contains $rp)) { $resolvedProjects += $rp }
+}
+$Project = $resolvedProjects
+
 $Mode = 'live'
 if ($Root -ne '') {
   if (-not (Test-PathQuiet $Root 'Container')) { Write-Error "Root is not a directory: $Root"; exit 2 }
@@ -1748,6 +1763,12 @@ if (-not $Inventory) {
 if (-not (Test-PathQuiet $OutputDir 'Any')) { try { New-Item -ItemType Directory -Path $OutputDir -Force -ErrorAction Stop | Out-Null } catch { Write-Error "Cannot create output dir: $OutputDir"; exit 2 } }
 $OutputDir = (Resolve-Path -LiteralPath $OutputDir).Path.TrimEnd('\', '/')
 if ($OutputDir -eq '') { $OutputDir = $Sep }
+# Same startup check as the sh collector's [ -w ]: create and remove a probe
+# file, so a read-only directory fails here rather than after the walk.
+$probe = Join-PathSafe $OutputDir ".write-probe-$([guid]::NewGuid().ToString('N'))"
+try { $fs = [System.IO.File]::Open($probe, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write); $fs.Close() }
+catch { Write-Error "Output dir not writable: $OutputDir"; exit 2 }
+try { [System.IO.File]::Delete($probe) } catch { }
 }
 
 $StartTs = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -1776,7 +1797,7 @@ if (-not $Inventory) {
   $script:ManifestWriter = New-Object System.IO.StreamWriter($ManifestPath, $false, $Utf8NoBom)
   $script:LogWriter.AutoFlush = $true
 }
-$script:Counts = @{ collected = 0; symlink = 0; skipped_excluded = 0; skipped_size = 0; skipped_secret = 0; error_copy = 0; skipped_unmatched_volume = 0; bytes = [int64]0 }
+$script:Counts = @{ collected = 0; symlink = 0; skipped_excluded = 0; skipped_size = 0; skipped_secret = 0; error_copy = 0; skipped_unmatched_volume = 0; error_read = 0; bytes = [int64]0 }
 $script:WalkErrors = 0
 # Paths claimed by catalog matches. Keys are compared ordinally (the
 # Dictionary default) except on Windows, so pwsh on Linux keeps
@@ -1807,7 +1828,8 @@ function Write-Row([string]$user, [string]$homeDir, [string]$agent, [string]$pat
   }
   $script:ManifestWriter.WriteLine(($row | ConvertTo-Json -Compress -Depth 2))
   if ($script:Counts.ContainsKey($status)) { $script:Counts[$status]++ }
-  $script:RowHomes[$homeDir] = $true
+  # The error_read row for an unreadable home itself does not make it a home with artifacts.
+  if (-not ($status -eq 'error_read' -and $path -eq $homeDir)) { $script:RowHomes[$homeDir] = $true }
   if ($status -eq 'collected') { $script:Counts['bytes'] += $size }
 }
 
@@ -1909,10 +1931,31 @@ function Add-Excluded([string]$user, [string]$homeDir, [string]$agent, $item) {
   Write-Row $user $homeDir $agent $full '' $type $size (Get-Epoch $item.LastWriteTimeUtc) (Get-Epoch $item.LastAccessTimeUtc) 0 (Get-Epoch $item.CreationTimeUtc) '' ([string]$item.Attributes) '' $false 'skipped_excluded' '' ''
 }
 
+# Why a directory cannot be walked (the exception message), or '' when it can
+# be listed. On Linux and macOS Get-ChildItem also fails on a directory that
+# can be listed but not entered, so this matches the sh collector's -r and -x tests.
+function Get-DirReadError([string]$dir) {
+  try { [void]@(Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop); return '' }
+  catch { return $_.Exception.Message }
+}
+
+# One error_read row (type dir, size 0) for a directory that could not be walked.
+function Add-ReadError([string]$user, [string]$homeDir, [string]$agent, [string]$dir, [string]$err) {
+  Write-CollectorLog "read failed: ${dir}: $err"
+  if ($Inventory) { return }
+  $mt = 0; $at = 0; $bt = 0; $attrs = ''
+  try {
+    $it = Get-Item -LiteralPath $dir -Force -ErrorAction Stop
+    $mt = Get-Epoch $it.LastWriteTimeUtc; $at = Get-Epoch $it.LastAccessTimeUtc; $bt = Get-Epoch $it.CreationTimeUtc; $attrs = [string]$it.Attributes
+  } catch { }
+  $owner = ''; if (Test-PathQuiet $dir 'Container') { $owner = Get-OwnerName $dir }
+  Write-Row $user $homeDir $agent $dir '' 'dir' 0 $mt $at 0 $bt $owner $attrs '' $false 'error_read' '' $err
+}
+
 function Add-Tree([string]$user, [string]$homeDir, [string]$agent, [string]$dir) {
   $children = @()
   try { $children = @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop) }
-  catch { $script:WalkErrors++; Write-CollectorLog "list failed: ${dir}: $($_.Exception.Message)"; return }
+  catch { $script:WalkErrors++; Add-ReadError $user $homeDir $agent $dir $_.Exception.Message; return }
   foreach ($child in $children) {
     # A path matched by another catalog entry is collected under that entry.
     if ($script:ClaimedPaths.ContainsKey($child.FullName)) { continue }
@@ -2029,9 +2072,22 @@ foreach ($ih in $script:InaccessibleHomes) { Write-CollectorLog "profile not acc
 # ---------------------------------------------------------------------------
 # Per-user collection
 # ---------------------------------------------------------------------------
+# A home is denied when .NET reports it missing although its parent directory
+# lists it (access denied; a ProfileList entry for a deleted profile is not
+# counted). Each denied or unlistable home gets one error_read row.
+$script:DeniedHomes = @($script:InaccessibleHomes | Where-Object {
+  $leaf = Split-Path -Leaf $_; $parent = Split-Path -Parent $_
+  try { @([System.IO.Directory]::GetDirectories($parent, $leaf)).Count -gt 0 } catch { $false } })
+if (-not $Inventory) {
+  foreach ($dh in $script:DeniedHomes) {
+    $e = 'access denied'; try { [void](Get-Item -LiteralPath $dh -Force -ErrorAction Stop) } catch { $e = $_.Exception.Message }
+    Add-ReadError (Split-Path -Leaf $dh) $dh '' $dh $e
+  }
+}
 $script:InvUsers = @()
 foreach ($u in $UserList) {
   $script:Inv = [ordered]@{}
+  if (-not $Inventory) { $e = Get-DirReadError $u.home; if ($e) { Add-ReadError $u.user $u.home '' $u.home $e } }
   Invoke-CatalogCollection $u.user $u.home $CATALOG "User $($u.user) ($($u.home))"
   if ($Inventory) { $script:InvUsers += , @($u, $script:Inv) }
 }
@@ -2267,6 +2323,11 @@ function Get-CommonDir([string[]]$paths) {
   if ($null -eq $common -or $common.Count -lt 2) { return $null }
   return ($common -join '/')
 }
+# The user whose home contains a -Project directory, or ''.
+function Get-ProjectOwner([string]$p) {
+  foreach ($u in $UserList) { if ($p.StartsWith($u.home + $Sep, [System.StringComparison]::OrdinalIgnoreCase)) { return $u.user } }
+  return ''
+}
 function Find-Projects {
   $found = @()
   foreach ($u in $UserList) {
@@ -2325,9 +2386,7 @@ function Find-Projects {
     }
   }
   foreach ($p in $Project) {
-    $owner = ''
-    foreach ($u in $UserList) { if ($p.StartsWith($u.home + $Sep, [System.StringComparison]::OrdinalIgnoreCase)) { $owner = $u.user; break } }
-    $found += @{ user = $owner; path = $p.TrimEnd('\', '/') }
+    $found += @{ user = (Get-ProjectOwner $p); path = $p.TrimEnd('\', '/') }
   }
   $seen = @{}; $out = @()
   $homeKeys = @{}; foreach ($u in $UserList) { $homeKeys[$u.home.ToLowerInvariant()] = $true }
@@ -2344,8 +2403,18 @@ function Find-Projects {
 $ProjectList = @()
 if (-not $NoProjects) {
   $ProjectList = @(Find-Projects)
+  # A -Project value that is not a directory is left out of the list above;
+  # it gets a log line and one error_read row, so it is never dropped silently.
+  foreach ($p in $Project) {
+    if (Test-PathQuiet $p 'Container') { continue }
+    if (Test-PathQuiet $p 'Leaf') { $e = 'Not a directory' }
+    else { $e = "Cannot find path '$p' because it does not exist."; try { [void](Get-Item -LiteralPath $p -Force -ErrorAction Stop) } catch { $e = $_.Exception.Message } }
+    Write-CollectorLog "WARNING: project given with -Project is not a directory: ${p}: $e"
+    if (-not $Inventory) { Write-Row (Get-ProjectOwner $p) $p '' $p '' 'dir' 0 0 0 0 0 '' '' '' $false 'error_read' '' $e }
+  }
   if (-not $Inventory) { foreach ($pj in $ProjectList) {
     Write-CollectorLog "Project $(if ($pj.user) { '[' + $pj.user + '] ' })$($pj.path)"
+    $e = Get-DirReadError $pj.path; if ($e) { Add-ReadError $pj.user $pj.path '' $pj.path $e }
     Invoke-CatalogCollection $pj.user $pj.path $PROJECT_CATALOG
   } }
 }
@@ -2358,9 +2427,7 @@ if ($Inventory) {
   # A home is unreadable when .NET reports it missing although its parent
   # directory lists it (access denied; a ProfileList entry for a deleted
   # profile is not counted), or when its entries cannot be listed.
-  $denied = @($script:InaccessibleHomes | Where-Object {
-    $leaf = Split-Path -Leaf $_; $parent = Split-Path -Parent $_
-    try { @([System.IO.Directory]::GetDirectories($parent, $leaf)).Count -gt 0 } catch { $false } })
+  $denied = $script:DeniedHomes
   $unreadable = $denied.Count
   foreach ($u in $UserList) { if (-not (Test-DirReadable $u.home)) { $unreadable++; Write-CollectorLog "WARNING: home of $($u.user) is not readable: $($u.home)" } }
   $hostLine = [ordered]@{ type = 'host'; host = $HostName; collector = $ToolVersion; mode = $Mode; at = $StartTs
@@ -2404,7 +2471,7 @@ $summary = [ordered]@{
   homes = @($UserList | ForEach-Object { $_.home })
   users_with_artifacts = @($ActiveUsers | ForEach-Object { $_.user })
   projects = @($ProjectList | ForEach-Object { $_.path })
-  counts = [ordered]@{ collected = $script:Counts.collected; symlink = $script:Counts.symlink; skipped_excluded = $script:Counts.skipped_excluded; skipped_size = $script:Counts.skipped_size; skipped_secret = $script:Counts.skipped_secret; error_copy = $script:Counts.error_copy; skipped_unmatched_volume = $script:Counts.skipped_unmatched_volume; collected_bytes = $script:Counts.bytes }
+  counts = [ordered]@{ collected = $script:Counts.collected; symlink = $script:Counts.symlink; skipped_excluded = $script:Counts.skipped_excluded; skipped_size = $script:Counts.skipped_size; skipped_secret = $script:Counts.skipped_secret; error_copy = $script:Counts.error_copy; skipped_unmatched_volume = $script:Counts.skipped_unmatched_volume; error_read = $script:Counts.error_read; collected_bytes = $script:Counts.bytes }
   docker = [ordered]@{ volumes_found = $script:Docker.found; volumes_collected = $script:Docker.collected; unreadable = $script:Docker.unreadable; docker_desktop = $script:Docker.desktop }
   notes = @($script:Notes)
   archive = (Split-Path -Leaf $Archive)
@@ -2482,7 +2549,7 @@ Write-Output "users:      $($ActiveUsers.Count)"
 Write-Output "projects:   $($ProjectList.Count)"
 Write-Output "collected:  $($c.collected) files, $($c.bytes) bytes ($(Format-HumanSize $c.bytes))"
 Write-Output "skipped:    $($c.skipped_excluded) excluded, $($c.skipped_size) too large, $($c.skipped_secret) secret"
-Write-Output "errors:     $($c.error_copy)"
+Write-Output "errors:     $($c.error_copy + $c.error_read) ($($c.error_copy) error_copy, $($c.error_read) error_read)"
 if ($script:Docker.seen) {
   $dl = "docker:     $($script:Docker.found) volumes found, $($script:Docker.collected) collected, $($script:Docker.unreadable) unreadable"
   if ($script:Docker.unreadable -gt 0) { $dl += ' (run as root to collect)' }

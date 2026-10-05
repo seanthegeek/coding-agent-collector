@@ -13,8 +13,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - `collection.json` `options.no_projects` (boolean) and `options.projects`
-  (the `-p`/`--project` or `-Project` values as given), and, in the sh
-  collector, `capabilities.archiver` (`tar -z`, `tar | gzip` or `tar`) (#31).
+  (the `-p`/`--project` or `-Project` values, resolved to absolute paths
+  and de-duplicated), and, in the sh collector, `capabilities.archiver`
+  (`tar -z`, `tar | gzip` or `tar`) (#31).
+- Manifest status `error_read`: one `dir` row, with the reason in `error`,
+  for a home, project directory or directory inside a walk that cannot be
+  listed or entered, and for a `-p`/`-Project` value that is not a
+  directory. `collection.json` `counts.error_read` counts them (#32, #39).
 
 ### Fixed
 
@@ -44,6 +49,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   staged links first and rewrites their manifest rows, so a zip never
   holds a link target's bytes. Manifest change: `error` is now set on such
   `symlink` rows, and `archive_path` on recreated ones.
+- A home or a directory inside a home that the collector could not read
+  was silent (sh) or only logged; it now has an `error_read` row and a
+  `read failed:` log line (#32).
+- The stdout `errors:` line counts `error_copy` and `error_read` rows
+  together and shows each in parentheses, `errors:     3 (1 error_copy,
+  2 error_read)`; it counted only `error_copy` before (#32).
+- The PowerShell collector checks that the output directory is writable
+  (a probe file created and removed) and exits 2 with
+  `Output dir not writable: <dir>` before collecting, as the sh collector
+  does (#38).
+- A `-p`/`-Project` directory that does not exist was dropped silently; it
+  is now logged and gets an `error_read` row. A relative `-p` was ignored
+  by the sh collector; both collectors now resolve it against the current
+  directory, in image mode too (#39).
 
 ## [1.7.0] - 2026-10-04
 
