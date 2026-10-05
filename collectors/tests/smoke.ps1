@@ -964,7 +964,10 @@ $junctionOk = $false
 if ($isWin) {
   try { New-Item -ItemType Junction -Path (LinkP 'home/eve/.gemini/antigravity-cli/jn') -Target (LinkP 'outside') -ErrorAction Stop | Out-Null; $junctionOk = $true }
   catch { Write-Output 'note: junction creation failed, #30 junction checks skipped' }
+  # A % in the name would be expanded by cmd.exe, so 5.1 must not run mklink for it.
+  if ($junctionOk) { New-Item -ItemType Junction -Path (LinkP 'home/eve/.gemini/antigravity-cli/jn%TEMP%x') -Target (LinkP 'outside') | Out-Null }
 }
+$isDesktop = ($PSVersionTable.PSEdition -eq 'Desktop')
 function LRun([string]$name) {
   $o = Join-Path $Out $name
   New-Item -ItemType Directory -Path $o -Force | Out-Null
@@ -1015,6 +1018,11 @@ if ($fileLinkOk -or $junctionOk) {
     Check '#30 junction failure noted in collection.json' { $r.archive_path -ne '' -or @($script:LSum.notes | Where-Object { $_ -like '*could not be recreated in the archive*' }).Count -eq 1 }
     Check '#30 junction target bytes not archived' { (ArchiveText) -notmatch 'OUTSIDE-BYTES' }
     Check '#30 junction target intact after staging cleanup' { Test-Path -LiteralPath (LinkP 'outside/secret.txt') }
+    if ($isDesktop) {
+      Check '#30 5.1: a failed mklink reports its message and exit code' { $r.archive_path -ne '' -or $r.error -match '\(mklink exit \d+\)$' }
+      $r = Row 'antigravity-cli/jn%TEMP%x'
+      Check '#30 5.1: a % in the link path is refused before cmd.exe' { $r -and $r.archive_path -eq '' -and $r.error -like '*contains % or "*' }
+    }
   }
 
   # zip from the start: no tar on PATH

@@ -14,7 +14,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - The PowerShell collector recreates symlinks and other reparse points in
   the archive, with the target string as stored, and sets their
-  `archive_path`, as the sh collector does (#30). Where Windows refuses to
+  `archive_path`, as the sh collector does (#30). Windows PowerShell 5.1
+  makes the link with `cmd.exe`'s `mklink` and skips a link path or target
+  containing `%` or `"`, which `cmd.exe` cannot take verbatim; PowerShell
+  7 uses .NET. Where Windows refuses to
   create a link (no Administrator or Developer Mode) or the archive is a
   `.zip`, which cannot hold links, the `symlink` row keeps an empty
   `archive_path`, its `error` field says why, and `collection.json`

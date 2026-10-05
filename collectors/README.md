@@ -127,9 +127,18 @@ descend into it,
 at v3.8.8); the libarchive 3.3.2 `tar.exe` of early Windows 10 builds
 stores the link entry without its target text. Creating a symlink on
 Windows needs the `SeCreateSymbolicLinkPrivilege` (Administrator) or
-Developer Mode; without either, or for a reparse point with no single link
+Developer Mode. Windows PowerShell 5.1 has no managed API for this, so it
+runs `cmd.exe /d /v:off /c mklink` (with `/D` for a directory link or a
+junction), which keeps the target string verbatim and accepts a target that
+does not exist; [Microsoft documents](https://blogs.windows.com/windowsdeveloper/2016/12/02/symlinks-windows-10/) that `mklink` creates links without
+elevation in Developer Mode from the Windows 10 Creators Update (1703).
+`cmd.exe` expands `%NAME%` even inside quotes, so a link whose path or
+target contains `%` or `"` is not passed to it. PowerShell 7 uses .NET's
+`CreateSymbolicLink` instead and has neither limit. Without the privilege,
+for a `%` or `"` under 5.1, or for a reparse point with no single link
 target, the row keeps `archive_path` empty
-and `error` says why, and `collection.json` `notes` counts the links that
+and `error` says why (under 5.1, `mklink`'s message and exit code), and
+`collection.json` `notes` counts the links that
 could not be recreated. A `.zip` cannot hold symlinks and `ZipFile` would
 copy the target's bytes in their place, possibly from outside the
 collection, so the zip archive never contains them:

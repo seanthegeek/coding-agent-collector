@@ -1583,19 +1583,19 @@ function Get-LinkTarget($item) {
 # Symlinks are recreated in the staging tree with their target string as
 # stored, as the sh collector does with ln -s, so tar archives the link
 # itself. PowerShell 7 (.NET 6+) has File/Directory.CreateSymbolicLink;
-# Windows PowerShell 5.1 calls CreateSymbolicLinkW through a P/Invoke stub
-# built in memory with Reflection.Emit (Add-Type would compile through temp
-# files outside -OutputDir). New-Item -ItemType SymbolicLink is not used: on
-# 5.1 it resolves a relative target against the current directory and refuses
-# a target that does not exist. ZipFile follows links, so the zip path never
-# has them: none are made when zip is the archiver from the start, and they
-# are removed before a fall back to zip.
+# Windows PowerShell 5.1 runs cmd.exe's mklink, which keeps the target
+# verbatim, accepts one that does not exist, and works unprivileged in
+# Developer Mode from Windows 10 1703. New-Item -ItemType SymbolicLink is not
+# used: on 5.1 it resolves a relative target against the current directory
+# and refuses a target that does not exist. ZipFile follows links, so the zip
+# path never has them: none are made when zip is the archiver from the start,
+# and they are removed before a fall back to zip.
 # ---------------------------------------------------------------------------
 $script:LinkApi = $null
 $script:LinkApiError = ''
-$script:LinkNative = $null
 $script:LinkFileMethod = $null
 $script:LinkDirMethod = $null
+$script:CmdExe = ''
 $script:StagedLinks = New-Object System.Collections.ArrayList
 $script:LinkCounts = @{ zip = 0; failed = 0 }
 function Get-LinkApi {
@@ -1606,22 +1606,41 @@ function Get-LinkApi {
   $script:LinkDirMethod = [System.IO.Directory].GetMethod('CreateSymbolicLink', [Type[]]@([string], [string]))
   if ($null -ne $script:LinkFileMethod -and $null -ne $script:LinkDirMethod) { $script:LinkApi = 'dotnet' }
   elseif ($env:OS -eq 'Windows_NT') {
-    try {
-      $an = New-Object System.Reflection.AssemblyName('AgentCollectorLinks')
-      $ab = [System.Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly($an, [System.Reflection.Emit.AssemblyBuilderAccess]::Run)
-      $tb = $ab.DefineDynamicModule('AgentCollectorLinks').DefineType('AgentCollectorLinks.Native', 'Public, Class')
-      # CreateSymbolicLinkW returns a one-byte BOOLEAN, not a four-byte BOOL.
-      $mb = $tb.DefineMethod('CreateSymbolicLinkW', 'Public, Static, PinvokeImpl', [byte], [Type[]]@([string], [string], [int]))
-      $dll = [System.Runtime.InteropServices.DllImportAttribute]
-      $cab = New-Object System.Reflection.Emit.CustomAttributeBuilder($dll.GetConstructor([Type[]]@([string])), [object[]]@('kernel32.dll'),
-        [System.Reflection.PropertyInfo[]]@(), [object[]]@(), [System.Reflection.FieldInfo[]]@($dll.GetField('SetLastError'), $dll.GetField('CharSet')),
-        [object[]]@($true, [System.Runtime.InteropServices.CharSet]::Unicode))
-      $mb.SetCustomAttribute($cab)
-      $script:LinkNative = $tb.CreateType()
-      $script:LinkApi = 'pinvoke'
-    } catch { $script:LinkApiError = $_.Exception.Message }
+    $c = ''
+    if ($env:SystemRoot) { $c = Join-PathSafe $env:SystemRoot 'System32\cmd.exe' }
+    if ($c -ne '' -and (Test-PathQuiet $c 'Leaf')) { $script:CmdExe = $c; $script:LinkApi = 'mklink' }
+    else { $script:LinkApiError = 'cmd.exe not found for mklink' }
   } else { $script:LinkApiError = 'no symlink API in this PowerShell' }
   return $script:LinkApi
+}
+
+# Runs cmd.exe /d /v:off /c mklink [/D] "link" "target" with an argument
+# string built here, so PowerShell's native-argument quoting is not involved.
+# Returns '' on success, otherwise mklink's message and exit code.
+function Invoke-Mklink([string]$dest, [string]$target, [bool]$isDir) {
+  # cmd expands %NAME% even inside quotes, and a quote would end the argument.
+  if ($dest.Contains('%') -or $dest.Contains('"') -or $target.Contains('%') -or $target.Contains('"')) {
+    return 'link path or target contains % or ", which cmd.exe mklink cannot take verbatim'
+  }
+  $sw = ''; if ($isDir) { $sw = '/D ' }
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $script:CmdExe
+  $psi.Arguments = '/d /v:off /c mklink ' + $sw + '"' + $dest + '" "' + $target + '"'
+  # The link path is absolute; a UNC current directory would add a cmd.exe warning to stderr.
+  $psi.WorkingDirectory = $env:SystemRoot
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError = $true
+  $pr = [System.Diagnostics.Process]::Start($psi)
+  # mklink's messages are short, so reading one stream to the end cannot block on the other.
+  $errText = $pr.StandardError.ReadToEnd()
+  [void]$pr.StandardOutput.ReadToEnd()
+  $pr.WaitForExit()
+  if ($pr.ExitCode -eq 0) { return '' }
+  $msg = ($errText -replace '\s+', ' ').Trim()
+  if ($msg -eq '') { $msg = 'mklink failed' }
+  return "$msg (mklink exit $($pr.ExitCode))"
 }
 
 # Makes the link at $dest; returns '' on success, otherwise the reason.
@@ -1633,17 +1652,9 @@ function Invoke-CreateSymlink([string]$dest, [string]$target, [bool]$isDir) {
       # Plain strings: Invoke rejects PSObject-wrapped arguments.
       $margs = New-Object 'object[]' 2; $margs[0] = [string]$dest; $margs[1] = [string]$target
       [void]$m.Invoke($null, $margs)
-    } elseif ($api -eq 'pinvoke') {
-      # 2 = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE (Developer Mode), 1 = directory.
-      # Windows before 10 1703 rejects flag 2 with ERROR_INVALID_PARAMETER (87).
-      $flags = 2; if ($isDir) { $flags = 3 }
-      $ok = $script:LinkNative::CreateSymbolicLinkW($dest, $target, $flags)
-      $code = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-      if ($ok -eq 0 -and $code -eq 87) {
-        $ok = $script:LinkNative::CreateSymbolicLinkW($dest, $target, $flags - 2)
-        $code = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
-      }
-      if ($ok -eq 0) { return (New-Object System.ComponentModel.Win32Exception($code)).Message }
+    } elseif ($api -eq 'mklink') {
+      $why = Invoke-Mklink $dest $target $isDir
+      if ($why -ne '') { return $why }
     } else { return $script:LinkApiError }
   } catch {
     # Invoke wraps the IOException; report the innermost message.
