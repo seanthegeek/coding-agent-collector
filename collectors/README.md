@@ -595,8 +595,12 @@ host_20261003T165531Z_agent-artifacts.log             the log (the archive holds
 ```
 
 The sh collector writes the archive with `tar -czf`. If that fails, it pipes
-`tar` through `gzip`. If that fails too, or `gzip` is not on the `PATH`, it
-writes an uncompressed `.tar`. The PowerShell collector writes a `.tar.gz`
+`tar` through `gzip`. The pipe counts as failed when either `tar` or `gzip`
+exits non-zero; `tar`'s exit status is passed through a temporary
+`.tar-status-<name>` file in the output directory, outside the staging
+directory, which is removed before archiving goes on, and a `tar` failure
+there is logged as `tar | gzip: tar exited N`. If the pipe fails, or `gzip`
+is not on the `PATH`, it writes an uncompressed `.tar` instead. The PowerShell collector writes a `.tar.gz`
 with `tar.exe`, or a `.zip` (see [Windows](#windows)). Both collectors
 rewrite `collection.json` and its staged copy before each fallback, so its
 `archive` and `capabilities.archiver` fields name the archive that was

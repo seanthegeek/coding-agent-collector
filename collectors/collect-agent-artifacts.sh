@@ -1701,9 +1701,10 @@ ARCHIVE="$OUTDIR/$NAME.tar.gz"
 LOG="$OUTDIR/$NAME.log"
 MANIFEST="$OUTDIR/$NAME.manifest.jsonl"
 SUMMARY="$OUTDIR/$NAME.collection.json"
+TAR_RC="$OUTDIR/.tar-status-$NAME"
 WORKER_SH=${COLLECTOR_SH:-sh}
 if [ "$INVENTORY" = 1 ]; then
-  STAGE=; LOG=/dev/null; MANIFEST=/dev/null
+  STAGE=; LOG=/dev/null; MANIFEST=/dev/null; TAR_RC=
 fi
 
 export HASH_TOOL STAT_MODE MAX_SIZE SECRET_GLOBS NO_SECRETS LOG QUIET
@@ -1713,6 +1714,7 @@ cleanup() {
   if [ "$KEEP" != 1 ] && [ -n "$STAGE" ] && [ -d "$STAGE" ]; then
     rm -rf "$STAGE"
   fi
+  [ -z "$TAR_RC" ] || rm -f "$TAR_RC"
 }
 trap 'cleanup' EXIT
 trap 'log_line "interrupted"; cleanup; trap - EXIT; exit 130' INT TERM
@@ -2375,11 +2377,25 @@ log_line "Archiving"
 cp "$MANIFEST" "$STAGE/manifest.jsonl"
 cp "$LOG" "$STAGE/collector.log"
 
+# tar_gzip: write $ARCHIVE with tar -cf - | gzip; succeed only when both do.
+# POSIX sh has no pipefail, so tar's exit status goes through a file under -o,
+# outside the staging directory, and is removed before returning.
+tar_gzip() {
+  [ -z "$TAR_RC" ] || rm -f "$TAR_RC"
+  { tar -cf - -C "$STAGE" . 2>>"$LOG"; echo "$?" >"$TAR_RC"; } | gzip >"$ARCHIVE"
+  _tg_gz=$?
+  _tg_tar=$(cat "$TAR_RC" 2>/dev/null)
+  [ -z "$TAR_RC" ] || rm -f "$TAR_RC"
+  [ "$_tg_gz" = 0 ] && [ "$_tg_tar" = 0 ] && return 0
+  [ "$_tg_tar" = 0 ] || log_line "tar | gzip: tar exited ${_tg_tar:-without a status}"
+  return 1
+}
+
 rm -f "$ARCHIVE"
 if ! tar -czf "$ARCHIVE" -C "$STAGE" . 2>>"$LOG"; then
   rm -f "$ARCHIVE"
   if command -v gzip >/dev/null 2>&1 && write_summary "$NAME.tar.gz" 'tar | gzip' &&
-    tar -cf - -C "$STAGE" . 2>>"$LOG" | gzip >"$ARCHIVE"; then :
+    tar_gzip; then :
   else
     rm -f "$ARCHIVE"; ARCHIVE="$OUTDIR/$NAME.tar"
     write_summary "$NAME.tar" 'tar'

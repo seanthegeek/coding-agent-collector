@@ -10,6 +10,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- sh collector: a `tar` that fails inside the `tar | gzip` fallback is now
+  detected, logged as `tar | gzip: tar exited N`, and the collector falls
+  through to the plain `.tar`, instead of hashing and reporting a truncated
+  `.tar.gz` as success (#40)
+
 ## [1.8.0] - 2026-10-05
 
 Interface changes: the manifest has a new status value, `error_read`;

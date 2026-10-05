@@ -1009,6 +1009,31 @@ if command -v python3 >/dev/null 2>&1; then
   check "#31 fallback summaries are valid JSON" "python3 -c 'import json,sys; [json.load(open(f)) for f in sys.argv[1:]]' \"\$S\" \"$OUT\"/tgz31/*.collection.json"
 fi
 
+# 2026-10-05 bug round: #40
+# A tar that fails inside tar -cf - | gzip must not leave a truncated .tar.gz
+# behind: the collector falls through to the plain .tar. The shim rejects -z,
+# writes some bytes and exits 1 for -cf -, and runs the real tar otherwise;
+# gzip is the real one. The forced-failure checks reuse the #31 probe.
+check "#40 tar | gzip success leaves no tar status file" "! ls -a \"$OUT/tgz31\" | grep -q 'tar-status'"
+if [ "$SHIMS31" = yes ]; then
+  SHIM40="$WORK/shim40"; mkdir -p "$SHIM40"
+  # shellcheck disable=SC2016 # $1, $2 and $@ belong to the shim, not to this script
+  printf '#!/bin/sh\ncase "$1" in *z*) echo "tar: -z not supported" >&2; exit 2 ;; esac\nif [ "$1" = -cf ] && [ "$2" = - ]; then printf "partial tar bytes"; echo "tar: forced failure" >&2; exit 1; fi\nexec "%s" "$@"\n' "$REAL_TAR" >"$SHIM40/tar"
+  chmod +x "$SHIM40/tar"
+  sed "s|^PATH=\"/usr/bin:|PATH=\"$SHIM40:/usr/bin:|" "$_sc31" >"$SHIM40/collector.sh"
+  SCRIPT="$SHIM40/collector.sh"
+  run tarfail40; _rc40=$?
+  SCRIPT=$_sc31
+  T40=$(ls "$OUT/tarfail40"/*.tar 2>/dev/null)
+  check "#40 tar failure in the pipe: exit 0, plain .tar, no .tar.gz left" "[ $_rc40 -eq 0 ] && [ -s \"$T40\" ] && [ -z \"\$A\" ]"
+  check "#40 tar failure in the pipe: summary names .tar and tar" "grep -q '\"archiver\": \"tar\"' \"\$S\" && grep -q \"\\\"archive\\\": \\\"\${T40##*/}\\\"\" \"\$S\""
+  check "#40 tar failure in the pipe: archived summary matches on-disk" "tar -xOf \"$T40\" ./collection.json | cmp -s - \"\$S\""
+  check "#40 tar failure in the pipe: logged" "grep -q 'tar | gzip: tar exited 1\$' \"$OUT\"/tarfail40/*.log"
+  check "#40 tar status file neither left nor archived" "! ls -a \"$OUT/tarfail40\" | grep -q 'tar-status' && ! tar -tf \"$T40\" | grep -q 'tar-status'"
+else
+  printf 'skip #40 forced tar failure in tar | gzip checks (the shell runs its own tar applet before PATH)\n'
+fi
+
 # 2026-10-04 bug round: #32, #38, #39
 # A relative -p is resolved against the current directory (image mode too); a
 # -p that does not exist gets an error_read row and a log line. The output
