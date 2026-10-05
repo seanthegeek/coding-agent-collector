@@ -6,7 +6,7 @@ on each OS, which files are credentials, which subtrees are large or
 worthless, which files it writes inside projects, and where it records the
 project path, ending with the confidence in each finding. These documents
 are the evidence behind the `CATALOG`, `PROJECT_CATALOG`, `EXCLUDES`,
-`SECRET_GLOBS` and `DOCKER_VOLUMES` tables; the collectors README table summarises the evidence
+`SECRET_GLOBS` and `DOCKER_VOLUMES` tables; the index table below summarises the evidence
 level. How transcripts are encoded is the analyzer's concern and lives in
 `analyzer/research/`.
 

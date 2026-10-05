@@ -120,7 +120,8 @@ before 1.104 ([`chatService.ts:1204-1209`](https://github.com/microsoft/vscode/b
 `variableData.variables[].value` and `usedContext` may hold attached file
 contents; `toolSpecificData.rawInput` and `commandLine` may hold command-line
 secrets. `state.vscdb` stores extension auth material under other keys (out
-of scope here; see the Cursor and Windsurf notes in the collectors README).
+of scope here; see the Cursor and Windsurf notes in
+[`collectors/docs/coverage.md`](../../collectors/docs/coverage.md#credentials)).
 
 ## 8. Parser plan
 

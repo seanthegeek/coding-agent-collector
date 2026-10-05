@@ -47,6 +47,9 @@ collectors/
   PSScriptAnalyzerSettings.psd1  PSScriptAnalyzer rules, including the 5.1 compatibility
                                profiles
   README.md                    collector user documentation, keep in sync with behaviour
+  docs/<topic>.md              detailed collector documentation: options, output and
+                               manifest schema, coverage, Docker, privileges, inventory,
+                               Windows, deployment, testing
   CHANGELOG.md                 collector release history, one entry per VERSION
   tests/smoke.sh               end-to-end test of the sh collector (fake disk image)
   tests/smoke.ps1              end-to-end test of the PowerShell collector
@@ -199,9 +202,9 @@ inside another tool's directory.
 **Manifest schema is an interface.** The v2 parser and analysts depend on
 `manifest.jsonl` and `collection.json`. Fields, status values
 (`collected`, `symlink`, `skipped_excluded`, `skipped_size`, `skipped_secret`,
-`error_copy`, `skipped_unmatched_volume`) and the `fs/<original path>` archive layout are documented in the
-collectors README. Add fields if needed, but do not rename or remove them
-without updating that README and noting it in the commit message.
+`error_copy`, `skipped_unmatched_volume`) and the `fs/<original path>` archive layout are documented in
+`collectors/docs/output.md`. Add fields if needed, but do not rename or remove them
+without updating that page and noting it in the commit message.
 
 ## Analyzer standards
 
@@ -319,8 +322,8 @@ to delegate the backlog.
 
 Prefer reading the tool's source over installing it. Most agents are open
 source even when their models are not, and the path constants are easy to
-find. The validation for every current entry is recorded in the table in
-`collectors/README.md`.
+find. The validation for every current entry is recorded in the index table in
+`collectors/research/README.md`.
 
 1. Shallow-clone the repository into the scratchpad and grep for `homedir`,
    `XDG`, `APPDATA`, `Application Support`, `.config/`, `.local/share`,
@@ -366,7 +369,7 @@ find. The validation for every current entry is recorded in the table in
 7. Write or update `collectors/research/<agent>.md` with the evidence
    (the eight sections in the research process below, less section 7), add
    a row to the index table in `collectors/research/README.md`, mention the
-   tool under "What gets collected" in `collectors/README.md` if it needs
+   tool in `collectors/docs/coverage.md` if it needs
    a note there, and close the matching GitHub issue. If the tool keeps
    transcripts worth parsing, also write `analyzer/research/<agent>.md` and
    its index row.
@@ -375,7 +378,7 @@ Every catalog entry has been validated against source, a shipped bundle, or
 official documentation. When a real-install check is wanted, run the tool in
 the `lab/` sandbox and point the collector at the exported home rather than
 installing it on the workstation (Linux layout only); `collectors/research/<agent>.md` records the evidence
-for each agent and the collectors README table summarises the level. Real-install checks
+for each agent and the index table in `collectors/research/README.md` summarises the level. Real-install checks
 exist for Claude Code, Antigravity CLI, Codex CLI, Copilot CLI and Ollama.
 Agents whose project paths live only in SQLite (Zed, Goose, OpenCode, Kilo
 Code, Kiro CLI) are not covered by `discover_projects`; that is v2 work.
@@ -544,7 +547,7 @@ And from the October 2026 round:
   number of agents from the documents in the tree, not from the brief, and
   says so when they differ.
 - Chat history outside the home (ShellGPT's temp directory) cannot become
-  a catalog line. Record it in the collectors README as a manual step and
+  a catalog line. Record it in `collectors/docs/coverage.md` as a manual step and
   file an issue, rather than stretching a glob. Docker and Podman named
   volumes are the exception since collector 1.5.0: they go in
   `DOCKER_VOLUMES`.

@@ -30,8 +30,9 @@ EDR the collectors supplement. With `--inventory` they write nothing and
 print one JSON line per user and agent found to stdout instead, for a
 fleet-wide audit through the EDR console.
 
-Usage, options, the list of covered tools, the manifest schema and the test
-matrix are in [collectors/README.md](collectors/README.md).
+Usage and options are in [collectors/README.md](collectors/README.md); the
+list of covered tools, the manifest schema, Windows specifics and the test
+matrix are in the pages under [collectors/docs/](collectors/docs/).
 
 ## Analyzer
 
