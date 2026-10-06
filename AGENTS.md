@@ -4,7 +4,7 @@ Guidance for AI coding agents and humans working in this repository.
 
 ## Purpose
 
-`coding-agent-collector` is a forensic collection tool for incident responders.
+`doubleagent` is a forensic collection tool for incident responders.
 It gathers the on-disk artifacts of AI agents that run on the host, coding
 agents first (Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot CLI,
 Cursor, VS Code chat extensions, Windsurf, Aider, Ollama, and others), for

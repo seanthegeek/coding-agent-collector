@@ -1,6 +1,6 @@
 # Analyzer
 
-The analyst-side half of coding-agent-collector. It takes a collector archive,
+The analyst-side half of doubleagent. It takes a collector archive,
 an extracted collection, or any loose directory tree, detects which AI coding
 agents left state in it, and parses the transcripts it knows how to read into
 one normalised JSONL timeline. It never runs on the host under investigation,

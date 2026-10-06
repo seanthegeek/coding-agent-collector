@@ -1,4 +1,4 @@
-# coding-agent-collector
+# doubleagent
 
 Tooling for incident responders investigating hosts where AI coding agents and
 assistants have been used: Claude Code, Gemini CLI, Antigravity, Codex CLI,

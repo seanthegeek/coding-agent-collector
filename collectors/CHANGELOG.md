@@ -366,15 +366,15 @@ stdout `errors:` line now reads `errors:     N (X error_copy, Y error_read)`.
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.9.0...HEAD
-[1.9.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.8.1...collector-v1.9.0
-[1.8.1]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.8.0...collector-v1.8.1
-[1.8.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.7.0...collector-v1.8.0
-[1.7.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.6.0...collector-v1.7.0
-[1.6.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.5.0...collector-v1.6.0
-[1.5.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.4.0...collector-v1.5.0
-[1.4.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.3.0...collector-v1.4.0
-[1.3.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.2.0...collector-v1.3.0
-[1.2.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.1.0...collector-v1.2.0
-[1.1.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.0.0...collector-v1.1.0
-[1.0.0]: https://github.com/seanthegeek/coding-agent-collector/releases/tag/collector-v1.0.0
+[Unreleased]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.9.0...HEAD
+[1.9.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.8.1...collector-v1.9.0
+[1.8.1]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.8.0...collector-v1.8.1
+[1.8.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.7.0...collector-v1.8.0
+[1.7.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.6.0...collector-v1.7.0
+[1.6.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.5.0...collector-v1.6.0
+[1.5.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.4.0...collector-v1.5.0
+[1.4.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.3.0...collector-v1.4.0
+[1.3.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.2.0...collector-v1.3.0
+[1.2.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.1.0...collector-v1.2.0
+[1.1.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.0.0...collector-v1.1.0
+[1.0.0]: https://github.com/seanthegeek/doubleagent/releases/tag/collector-v1.0.0

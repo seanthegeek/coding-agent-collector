@@ -1,4 +1,4 @@
-"""Analyst-side analyzer for coding-agent-collector output.
+"""Analyst-side analyzer for doubleagent collector output.
 
 Reads a collector archive, an extracted collection directory, or any loose
 directory tree (a copied home directory, a mounted image), detects which AI
