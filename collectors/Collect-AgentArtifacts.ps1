@@ -975,7 +975,6 @@ $SECRET_GLOBS = @'
 .claude/remote/.api_key
 .claude.json
 .claude-*/.credentials.json
-.claude-*/.device-keys.json
 .claude-*/hfi-auth.json
 .claude-*/.session_ingress_token
 .claude-*/remote/.oauth_token

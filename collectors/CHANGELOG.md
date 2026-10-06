@@ -10,6 +10,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- The credential pattern `.claude-*/.device-keys.json`, which could never
+  match: no catalog line collects that file from a `.claude-<name>` config
+  home, and Claude Code keeps it in `~/.claude` whatever `CLAUDE_CONFIG_DIR`
+  says. `.claude/.device-keys.json` is still collected and flagged (#41).
+
 ## [1.8.1] - 2026-10-05
 
 ### Fixed

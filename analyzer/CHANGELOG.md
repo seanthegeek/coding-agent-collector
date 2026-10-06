@@ -9,6 +9,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- The bundled catalog copy drops the collectors' unused credential pattern
+  `.claude-*/.device-keys.json`; detection is unchanged (#41).
+
 ### Fixed
 
 - `tests/run.sh` runs only the named tests when given a module, class or
