@@ -1192,11 +1192,19 @@ if ($Sep -eq '/') {
   $acl.AddAccessRule($denyRule); Set-Acl -LiteralPath $ro -AclObject $acl; $roSet = $true
 }
 if ($roSet) {
+  # Start-Process writes the child's stderr to the file as is. With 2> the
+  # 5.1 parent wraps each stderr line in a NativeCommandError record, and its
+  # position and category lines land inside a message the child wrapped at
+  # the console width (#42). Whitespace is stripped before matching, so a
+  # wrap anywhere in the message or the path still matches.
   $roErr = Join-Path $Out 'readonly.stderr'
-  $null = & $self -NoProfile -ExecutionPolicy Bypass -File $Collector -Root $Root -OutputDir $ro -Quiet -NoDocker 2>$roErr
-  $roRc = $LASTEXITCODE
+  $roArgs = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Root "{1}" -OutputDir "{2}" -Quiet -NoDocker' -f $Collector, $Root, $ro
+  $roProc = Start-Process -FilePath $self -ArgumentList $roArgs -NoNewWindow -PassThru -RedirectStandardError $roErr -RedirectStandardOutput (Join-Path $Out 'readonly.stdout')
+  $null = $roProc.Handle; $roProc.WaitForExit(); $roRc = $roProc.ExitCode
   if ($Sep -eq '/') { & chmod 755 $ro } else { $acl = Get-Acl -LiteralPath $ro; [void]$acl.RemoveAccessRule($denyRule); Set-Acl -LiteralPath $ro -AclObject $acl }
-  Check 'read-only output dir exits 2 before collecting' { $roRc -eq 2 -and ((Get-Content -LiteralPath $roErr -Raw) -replace '\s+', ' ') -match 'Output dir not writable: ' -and @(Get-ChildItem -LiteralPath $ro -Force).Count -eq 0 }
+  $roText = (Get-Content -LiteralPath $roErr -Raw) -replace '\s', ''
+  $roWant = ('Output dir not writable: ' + $ro) -replace '\s', ''
+  Check 'read-only output dir exits 2 before collecting' { $roRc -eq 2 -and $roText.Contains($roWant) -and @(Get-ChildItem -LiteralPath $ro -Force).Count -eq 0 }
 } else { Write-Output 'note: read-only output dir check needs a non-root user on POSIX, skipped' }
 
 # An unreadable home and an unlistable directory inside a walk: POSIX and not
