@@ -71,9 +71,24 @@ so that file is offered to them too and the rows come out under `cody` or
 
 Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
-`augment`, `ollama` and `local-deep-research`, plus the `shared` entries,
-which are not agents.
-Windsurf and Cursor need format work first.
+`augment`, `ollama` and `local-deep-research`.
+
+The Cursor and Windsurf storage formats are not documented, so a parser
+needs format research first: Windsurf's Cascade history is protobuf
+(`.pb`) with no published schema, and Cursor's chats are `state.vscdb`
+rows whose key layout changes between versions, beside a CLI `store.db`
+whose blobs may be encrypted. See
+[`cursor.md`](../../collectors/research/cursor.md) and
+[`windsurf.md`](../../collectors/research/windsurf.md) in the collector
+research.
+
+`shared` is detected but is not an agent. Its entries are configuration
+that several agents read, such as skills and instructions, not transcripts,
+so there is nothing to parse:
+
+- `~/.agents`
+- `~/.config/AGENTS.md`
+- `~/.config/agents`
 
 ## Protobuf and SQLite
 
