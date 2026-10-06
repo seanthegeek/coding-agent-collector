@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-06
+
 ### Changed
 
 - The Ollama exclusion `.ollama/models` is narrowed to `.ollama/models/blobs`,
@@ -364,7 +366,8 @@ stdout `errors:` line now reads `errors:     N (X error_copy, Y error_read)`.
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.8.1...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.9.0...HEAD
+[1.9.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.8.1...collector-v1.9.0
 [1.8.1]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.8.0...collector-v1.8.1
 [1.8.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.7.0...collector-v1.8.0
 [1.7.0]: https://github.com/seanthegeek/coding-agent-collector/compare/collector-v1.6.0...collector-v1.7.0
