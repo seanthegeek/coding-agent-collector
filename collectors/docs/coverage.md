@@ -21,9 +21,8 @@ inside them goes to the extension's agent.
   their globalStorage is claimed by nested catalog entries, so those files
   are attributed to the extension's agent rather than to the editor,
   whichever editor they sit in.
-- **Shared configuration** that several agents read (skills and
-  instructions) is collected under the `shared` agent name: `~/.agents`,
-  `~/.config/AGENTS.md` and `~/.config/agents`.
+- **Skills and configuration files** that several agents read are
+  collected too, with agent `shared` in the manifest.
 - **`.env` files:** an agent's own `.env` inside its state directory, such
   as `~/.codex/.env` or `~/.hermes/.env`, is collected and flagged
   `secret: true`. General-purpose `.env` files in the home or a project are
