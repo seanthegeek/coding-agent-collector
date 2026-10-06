@@ -37,6 +37,7 @@ it.
 | `little-coder` | [little-coder.md](little-coder.md) | pi session JSONL; prompt history as a JSON array | yes |
 | `muse-code` | [muse-code.md](muse-code.md) | event-sourced JSONL per session and subagent; closed source, from the binary's strings, vendor skills and a real install | yes |
 | `nanobot` | [nanobot.md](nanobot.md) | JSONL per session key under `sessions/<workspace-id>/` | yes |
+| `ollama` | [ollama.md](ollama.md) | desktop-app SQLite (WAL) on macOS and Windows; REPL prompt history without times; no server-side transcripts | no |
 | `open-interpreter` | [open-interpreter.md](open-interpreter.md) | Codex rollout JSONL under `~/.openinterpreter` | yes, the Codex parser |
 | `openclaw` | [openclaw.md](openclaw.md) | SQLite (WAL) per agent with JSON or zstd events, legacy JSONL | yes |
 | `opencode` | [opencode.md](opencode.md) | SQLite (WAL) with JSON columns | yes |
