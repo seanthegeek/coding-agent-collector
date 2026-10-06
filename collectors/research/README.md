@@ -56,7 +56,7 @@ file names to check only those. It exits `1` when any link fails.
 | `local-deep-research` | [local-deep-research.md](local-deep-research.md) | source, platformdirs source | history in a SQLCipher database keyed by the login password; no analyzer document |
 | `muse-code` | [muse-code.md](muse-code.md) | shipped binary strings (Linux and Windows builds), launcher and installer scripts, real install (Linux) | closed source; XDG dirs under the home on every OS; launcher state in `~/.local/bin` or `AppData/Local/Programs/muse` |
 | `nanobot` | [nanobot.md](nanobot.md) | source | `~/.nanobot-<name>` instances; workspace path in `.workspace` markers |
-| `ollama` | [ollama.md](ollama.md) | source, real install | desktop app chat database on macOS and Windows |
+| `ollama` | [ollama.md](ollama.md) | source, real install | desktop app chat database on macOS and Windows; model manifests collected, blobs excluded; `ollama launch chatgpt` writes into `~/.codex` |
 | `open-interpreter` | [open-interpreter.md](open-interpreter.md) | source | now a Codex CLI fork with the Codex layout under `~/.openinterpreter` |
 | `openclaw` | [openclaw.md](openclaw.md) | source | formerly Clawdbot and Moltbot; `~/.clawdbot` may be a symlink; JSON5 config |
 | `opencode` | [opencode.md](opencode.md) | source, crate sources | XDG on every OS; binaries moved to `.cache/opencode/bin` |

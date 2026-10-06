@@ -620,6 +620,19 @@ printf '{}\n' >"$H/.config/Cursor/User/case29-editor.json"
 CASE_INSENSITIVE=0
 [ -e "$H/.config/pearai/User/case29-upper.json" ] && CASE_INSENSITIVE=1
 
+# 2026-10-06 Ollama (#44): the model manifests under .ollama/models/manifests
+# are collected while the blobs beside them stay excluded, and the systemd
+# service account's home /usr/share/ollama, which none of the home globs
+# reaches, is found through etc/passwd. The same files are in smoke.ps1,
+# except the passwd home: the PowerShell collector does not read etc/passwd.
+OLM="$ROOT/home/ollama/.ollama/models/manifests/registry.ollama.ai/library/llama3.2/latest"
+mkdir -p "$(dirname "$OLM")" "$ROOT/usr/share/ollama/.ollama/models/blobs"
+printf '{"schemaVersion":2}\n' >"$OLM"
+TZ=UTC0 touch -t 202609140000.00 "$OLM"
+printf 'svc-ollama:x:998:998::/usr/share/ollama:/usr/sbin/nologin\n' >>"$ROOT/etc/passwd"
+printf 'hist\n' >"$ROOT/usr/share/ollama/.ollama/history"
+printf 'blob\n' >"$ROOT/usr/share/ollama/.ollama/models/blobs/sha256-def"
+
 run() { # run NAME ARGS...
   _n=$1; shift
   mkdir -p "$OUT/$_n"
@@ -656,7 +669,7 @@ check "nested entry attributed to its own agent" "row \"$ROOT/home/alice/.gemini
 check "nested entry collected exactly once" "[ \"\$(grep -c 'antigravity-cli/conversations/c1.db' \"\$M\")\" = 1 ]"
 check "enclosing entry still attributed to gemini-cli" "row \"$ROOT/home/alice/.gemini/projects.json\" | grep -q '\"agent\":\"gemini-cli\"'"
 check "antigravity bin excluded" "[ \"\$(status_of \"$ROOT/home/alice/.gemini/antigravity-cli/bin\")\" = skipped_excluded ]"
-check "ollama models excluded" "[ \"\$(status_of \"$ROOT/home/ollama/.ollama/models\")\" = skipped_excluded ]"
+check "ollama model blobs excluded" "[ \"\$(status_of \"$ROOT/home/ollama/.ollama/models/blobs\")\" = skipped_excluded ]"
 check "ollama history collected (service account home)" "[ \"\$(status_of \"$ROOT/home/ollama/.ollama/history\")\" = collected ]"
 check "oversized file skipped_size" "[ \"\$(status_of \"$ROOT/Users/bob/Library/Application Support/Cursor/User/globalStorage/state.vscdb\")\" = skipped_size ]"
 check "ms-python globalStorage excluded" "[ \"\$(status_of \"$ROOT/Users/bob/Library/Application Support/Cursor/User/globalStorage/ms-python.python\")\" = skipped_excluded ]"
@@ -837,6 +850,12 @@ else
   check "#29 nothing folded on a case-sensitive filesystem" "! grep -q 'case-insensitive filesystem' \"$OUT\"/default/*.log"
 fi
 
+# 2026-10-06 Ollama (#44)
+check "ollama model manifest collected" "row \"$OLM\" | grep -q '\"agent\":\"ollama\".*\"status\":\"collected\"'"
+check "ollama blob not collected" "! grep -q 'blobs/sha256-abc' \"\$M\""
+check "ollama /usr/share/ollama home from passwd collected" "row \"$ROOT/usr/share/ollama/.ollama/history\" | grep -q '\"user\":\"svc-ollama\",\"home\":\"$ROOT/usr/share/ollama\",\"agent\":\"ollama\".*\"status\":\"collected\"'"
+check "ollama /usr/share/ollama blobs excluded" "[ \"\$(status_of \"$ROOT/usr/share/ollama/.ollama/models/blobs\")\" = skipped_excluded ]"
+
 # ---- --no-secrets ---------------------------------------------------------
 run nosecrets --no-secrets; check "no-secrets exit 0" "[ $? -eq 0 ]"
 check "credentials skipped_secret" "[ \"\$(status_of \"$ROOT/home/alice/.claude/.credentials.json\")\" = skipped_secret ]"
@@ -902,7 +921,7 @@ check "inventory -q leaves stderr empty" "[ ! -s \"$OUT/inventory.stderr\" ]"
 check "inventory first line is the host line, keys in order" "head -n1 \"$OUT/inventory.stdout\" | grep -q '$INV_HOST_RE'"
 check "inventory host line counts" "head -n1 \"$OUT/inventory.stdout\" | grep -q '\"users_unreadable\":0,\"docker_volumes\":3}\$'"
 check "inventory every later line is an agent line, keys in order" "[ \"\$(sed 1d \"$OUT/inventory.stdout\" | grep -vc '$INV_AGENT_RE')\" = 0 ] && [ \"\$(grep -c . \"$OUT/inventory.stdout\")\" -gt 10 ]"
-check "inventory ollama line: one file, excluded models not counted" "agent_line inventory ollama ollama | grep -q '\"files\":1,\"bytes\":5,\"first\":\"2026-09-15T01:02:03Z\",\"last\":\"2026-09-15T01:02:03Z\",\"projects\":0,\"evidence\":\".ollama\"}\$'"
+check "inventory ollama line: history and manifest, excluded blobs not counted" "agent_line inventory ollama ollama | grep -q '\"files\":2,\"bytes\":25,\"first\":\"2026-09-14T00:00:00Z\",\"last\":\"2026-09-15T01:02:03Z\",\"projects\":0,\"evidence\":\".ollama\"}\$'"
 check "inventory claude-code evidence in catalog order" "agent_line inventory alice claude-code | grep -q '\"evidence\":\".claude,.claude.json\\*,.claude-\\*/projects,.claude-\\*/history.jsonl,.claude-\\*/.claude.json\\*,.claude-\\*/.credentials.json\"}\$'"
 check "inventory first and last set for alice claude-code" "agent_line inventory alice claude-code | grep -q '\"first\":\"20[0-9-]*T[0-9:]*Z\",\"last\":\"20[0-9-]*T[0-9:]*Z\"'"
 check "inventory nested entry claimed from the enclosing agent" "agent_line inventory alice antigravity | grep -q '\"evidence\":\"[^\"]*.gemini/antigravity-cli' && agent_line inventory alice gemini-cli | grep -q '\"evidence\":\".gemini\"'"
@@ -921,7 +940,7 @@ check "inventory with -o creates no output directory" "[ ! -e \"$OUT/inv-o\" ]"
 check "inventory with -o notes it on stderr" "grep -q 'NOTE: --inventory writes nothing; -o .*inv-o ignored' \"$OUT/inventory-o.stderr\""
 check "inventory without -q logs to stderr only" "[ -s \"$OUT/inventory-o.stderr\" ] && [ \"\$(grep -vc '$INV_HOST_RE' \"$OUT/inventory-o.stdout\" | head -n1)\" = \"\$(grep -c '$INV_AGENT_RE' \"$OUT/inventory-o.stdout\")\" ]"
 inv inventory-full -q --full
-check "inventory --full counts excluded files" "agent_line inventory-full ollama ollama | grep -q '\"files\":2,\"bytes\":10,'"
+check "inventory --full counts excluded files" "agent_line inventory-full ollama ollama | grep -q '\"files\":3,\"bytes\":30,'"
 inv inventory-u -q -u bob --no-docker
 check "inventory -u keeps one user" "! grep -q '\"user\":\"alice\"' \"$OUT/inventory-u.stdout\" && grep -q '\"user\":\"bob\"' \"$OUT/inventory-u.stdout\""
 check "inventory --no-docker: no volumes, no docker lines" "head -n1 \"$OUT/inventory-u.stdout\" | grep -q '\"users_scanned\":1,\"users_unreadable\":0,\"docker_volumes\":0}' && ! grep -q '\"user\":\"docker\"' \"$OUT/inventory-u.stdout\""

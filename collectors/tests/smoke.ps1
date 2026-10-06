@@ -576,6 +576,14 @@ Mk 'Users/alice/.config/pearai/User/case29-lower.json' '{}'
 Mk 'Users/alice/.config/cursor/case29-cli.json' '{}'
 Mk 'Users/alice/.config/Cursor/User/case29-editor.json' '{}'
 $caseInsensitive = [System.IO.File]::Exists((P 'Users/alice/.config/pearai/User/case29-upper.json'))
+
+# 2026-10-06 Ollama (#44): the model manifests under .ollama/models/manifests
+# are collected while the blobs beside them stay excluded. smoke.sh also
+# checks a /usr/share/ollama home listed only in etc/passwd; this collector
+# does not read etc/passwd (see docs/coverage.md), so that case is not here.
+$olm = 'home/bob/.ollama/models/manifests/registry.ollama.ai/library/llama3.2/latest'
+Mk $olm '{"schemaVersion":2}'
+[System.IO.File]::SetLastWriteTimeUtc((P $olm), (New-Object DateTime 2026, 9, 14, 0, 0, 0, ([DateTimeKind]::Utc)))
 $clawLinkOk = $false
 try {
   New-Item -ItemType SymbolicLink -Path (P 'home/bob/.clawdbot') -Target '.openclaw' -ErrorAction Stop | Out-Null
@@ -639,7 +647,7 @@ Check 'cache dir skipped_excluded with size' { $r -and $r.type -eq 'dir' -and $r
 Check 'cache contents not collected' { $null -eq (Row 'cache/junk.bin') }
 Check 'antigravity bin excluded' { (StatusOf 'antigravity-cli/bin') -eq 'skipped_excluded' }
 Check 'codex packages excluded' { (StatusOf 'Users/alice/.codex/packages') -eq 'skipped_excluded' }
-Check 'ollama models excluded' { (StatusOf 'home/bob/.ollama/models') -eq 'skipped_excluded' }
+Check 'ollama model blobs excluded' { (StatusOf 'home/bob/.ollama/models/blobs') -eq 'skipped_excluded' }
 Check 'ollama history collected (linux-style home in same image)' { (StatusOf 'home/bob/.ollama/history') -eq 'collected' }
 Check 'bash history not collected' { -not ($script:Rows | Where-Object { $_.path -like '*.bash_history' }) }
 Check 'PSReadLine history not collected' { -not ($script:Rows | Where-Object { $_.path -like '*ConsoleHost_history.txt' }) }
@@ -820,6 +828,11 @@ if ($caseInsensitive) {
   Check '#29 nothing folded on a case-sensitive filesystem' { $log29 -notmatch 'case-insensitive filesystem' }
 }
 
+# 2026-10-06 Ollama (#44)
+$r = Row $olm
+Check 'ollama model manifest collected' { $r -and $r.agent -eq 'ollama' -and $r.status -eq 'collected' }
+Check 'ollama blob not collected' { $null -eq (Row 'blobs/sha256-abc') }
+
 # cross-check archived bytes against manifest hashes
 $x = Join-Path $Work 'x'; New-Item -ItemType Directory -Path $x -Force | Out-Null
 if ($script:A.Name -like '*.tar.gz') { & tar -xzf $script:A.FullName -C $x 2>$null } else { [System.IO.Compression.ZipFile]::ExtractToDirectory($script:A.FullName, $x) }
@@ -895,7 +908,7 @@ Check 'Inventory first line is the host line, keys in order' { $script:inv[0].ty
 Check 'Inventory host line counts' { $script:inv[0].users_unreadable -eq 0 -and $script:inv[0].docker_volumes -eq 3 -and $script:inv[0].users_scanned -ge 2 }
 Check 'Inventory every later line is an agent line, keys in order' { $script:inv.Count -gt 10 -and @($script:inv | Select-Object -Skip 1 | Where-Object { $_.type -ne 'agent' -or (@($_.PSObject.Properties | ForEach-Object { $_.Name }) -join ',') -ne $agentKeys }).Count -eq 0 }
 $r = InvAgent 'bob' 'ollama'
-Check 'Inventory ollama line: one file, excluded models not counted' { $r -and $r.files -eq 1 -and $r.bytes -eq 4 -and (InvRaw 'bob' 'ollama').Contains('"first":"2026-09-15T01:02:03Z","last":"2026-09-15T01:02:03Z"') -and $r.evidence -eq '.ollama' }
+Check 'Inventory ollama line: history and manifest, excluded blobs not counted' { $r -and $r.files -eq 2 -and $r.bytes -eq 23 -and (InvRaw 'bob' 'ollama').Contains('"first":"2026-09-14T00:00:00Z","last":"2026-09-15T01:02:03Z"') -and $r.evidence -eq '.ollama' }
 $r = InvAgent 'alice' 'claude-code'
 Check 'Inventory claude-code evidence in catalog order' { $r -and $r.evidence -eq '.claude,.claude.json*,.claude-*/projects,.claude-*/history.jsonl,.claude-*/.claude.json*,.claude-*/.credentials.json' }
 Check 'Inventory first and last set for alice claude-code' { (InvRaw 'alice' 'claude-code') -match '"first":"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","last":"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ"' }
@@ -914,7 +927,7 @@ Inv @{ OutputDir = $invO }
 Check 'Inventory with -OutputDir exit 0' { $script:rc -eq 0 }
 Check 'Inventory with -OutputDir creates no output directory' { -not (Test-Path -LiteralPath $invO) }
 Inv @{ Full = $true }
-Check 'Inventory -Full counts excluded files' { $r = InvAgent 'bob' 'ollama'; $r -and $r.files -eq 2 -and $r.bytes -eq 8 }
+Check 'Inventory -Full counts excluded files' { $r = InvAgent 'bob' 'ollama'; $r -and $r.files -eq 3 -and $r.bytes -eq 27 }
 Inv @{ Users = 'bob'; NoDocker = $true }
 Check 'Inventory -Users keeps one user' { $a = @($script:inv | Where-Object { $_.type -eq 'agent' }); -not ($a | Where-Object { $_.user -eq 'alice' }) -and ($a | Where-Object { $_.user -eq 'bob' }) }
 Check 'Inventory -NoDocker: no volumes, no docker lines' { $script:inv[0].users_scanned -eq 1 -and $script:inv[0].docker_volumes -eq 0 -and -not ($script:inv | Where-Object { $_.type -eq 'agent' } | Where-Object { $_.user -eq 'docker' }) }

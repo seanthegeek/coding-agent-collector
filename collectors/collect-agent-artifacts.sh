@@ -876,7 +876,7 @@ AppData/Local/local-deep-research/local-deep-research/models
 AppData/Local/local-deep-research/local-deep-research/journal_data
 AppData/Local/local-deep-research/local-deep-research/library
 Documents/LocalDeepResearch/Library
-.ollama/models
+.ollama/models/blobs
 AppData/Local/Ollama/updates
 Library/Caches/ollama
 Library/Caches/com.electron.ollama

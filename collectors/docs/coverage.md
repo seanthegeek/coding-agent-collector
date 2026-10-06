@@ -260,6 +260,17 @@ by default:
 - agent worktrees
 - git clones of plugin marketplaces
 
+Ollama's model weights are excluded as `.ollama/models/blobs` only, so the
+rest of `.ollama/models` is collected: the small JSON manifests under
+`models/manifests/<registry>/<namespace>/<model>/<tag>`, whose names and
+pre-copy times record which models were pulled and when, and the per-blob
+metadata files under `models/metadata`. In a Docker volume the exclusion
+is the volume-relative `models`, which also covers Tabby, Hermes and
+Local Deep Research volumes, where `models` holds model weights. It stays
+whole, so a Docker Ollama volume's `models/manifests` is not collected;
+when the pulled models matter, copy `models/manifests` from the volume's
+`_data` by hand, or pass `--full` (`-Full`), which also takes the weights.
+
 ## Credentials
 
 Credential files are collected by default and flagged `secret: true`, since

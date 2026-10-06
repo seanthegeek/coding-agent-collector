@@ -10,6 +10,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- The Ollama exclusion `.ollama/models` is narrowed to `.ollama/models/blobs`,
+  so the model manifests under `.ollama/models/manifests` (an inventory of
+  pulled models, with pull times) and the per-blob `models/metadata` files
+  are collected; the weights stay `skipped_excluded`. The volume-relative
+  `models` exclusion is unchanged, so a Docker Ollama volume's manifests are
+  still not collected (#44).
+
 ### Removed
 
 - The credential pattern `.claude-*/.device-keys.json`, which could never
