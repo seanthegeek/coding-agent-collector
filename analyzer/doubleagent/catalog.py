@@ -6,7 +6,7 @@ collectors what to gather tells the analyzer what a loose directory contains.
 `collectors/tests/catalog-sync.sh` fails when the copy drifts. Regenerate it
 with:
 
-    collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.txt
+    collectors/collect-agent-artifacts.sh --list > analyzer/doubleagent/catalog.txt
 
 Glob semantics match the collectors: catalog globs do not cross `/`, exclusion
 and secret globs do, `[...]` classes work everywhere.

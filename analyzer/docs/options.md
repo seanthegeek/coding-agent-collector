@@ -6,13 +6,13 @@ in the [analyzer README](../README.md#options).
 ## Synopsis
 
 ```text
-analyze-agent-artifacts detect INPUT [--json] [--files] [common options]
-analyze-agent-artifacts timeline INPUT -o DIR [--include-thinking] [--agent NAME]...
+doubleagent detect INPUT [--json] [--files] [common options]
+doubleagent timeline INPUT -o DIR [--include-thinking] [--agent NAME]...
                          [--since WHEN] [--until WHEN] [--keep-undated] [--match REGEX]... [-i]
                          [common options]
-analyze-agent-artifacts inventory [-o FILE] INPUT...
-analyze-agent-artifacts catalog [--agents]
-analyze-agent-artifacts --version
+doubleagent inventory [-o FILE] INPUT...
+doubleagent catalog [--agents]
+doubleagent --version
 ```
 
 ## Option reference

@@ -32,10 +32,10 @@ jobs:
       - name: Regenerated copy matches the committed one
         run: |
           collectors/collect-agent-artifacts.sh --list > /tmp/catalog.txt
-          if ! cmp -s /tmp/catalog.txt analyzer/agent_analyzer/catalog.txt; then
-            echo "analyzer/agent_analyzer/catalog.txt is stale. Run:"
-            echo "  collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.txt"
-            diff /tmp/catalog.txt analyzer/agent_analyzer/catalog.txt || true
+          if ! cmp -s /tmp/catalog.txt analyzer/doubleagent/catalog.txt; then
+            echo "analyzer/doubleagent/catalog.txt is stale. Run:"
+            echo "  collectors/collect-agent-artifacts.sh --list > analyzer/doubleagent/catalog.txt"
+            diff /tmp/catalog.txt analyzer/doubleagent/catalog.txt || true
             exit 1
           fi
 

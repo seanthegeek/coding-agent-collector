@@ -36,7 +36,7 @@ Under either data root: `extensions`, `remote_extensions`, `node`, `languages`, 
 
 - `threads.db` table `threads` columns `folder_paths`, `folder_paths_order` ([`crates/agent/src/db.rs:469-470`](https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/agent/src/db.rs#L469-L470),[`545`](https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/agent/src/db.rs#L545)).
 - `db.sqlite` table `sidebar_threads` columns `folder_paths`, `folder_paths_order` ([`crates/agent_ui/src/thread_metadata_store.rs:1375-1383`](https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/agent_ui/src/thread_metadata_store.rs#L1375-L1383)) and table `workspaces` columns `local_paths_array`, `local_paths_order_array` ([`crates/workspace/src/persistence.rs:731-733`](https://github.com/zed-industries/zed/blob/a84689073d296dfd39987bc7dd478e43ef76d83a/crates/workspace/src/persistence.rs#L731-L733)).
-All SQLite, so v2 work.
+All SQLite, so left to the analyzer.
 
 ## 7. Confidence
 

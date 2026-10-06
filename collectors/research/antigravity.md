@@ -130,7 +130,7 @@ in favour of `cache/projects.json`). No per-project database.
   the binary: `workspace_uris`, `workspace_paths`, `workspace_uri`,
   `project_id`, `display_name`, `cwd`.
 - `conversation_summaries.db` and per-conversation `*.db`: see the analyzer
-  schema notes (SQLite-only; v2 parser).
+  schema notes (SQLite-only; analyzer).
 
 ## 7. Confidence
 

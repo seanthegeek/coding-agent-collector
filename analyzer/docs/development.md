@@ -58,12 +58,12 @@ version bump and the lists to update, is "Adding a parser" in
 
 1. Confirm the record format against source or a real install and write the
    field names into the module docstring, as the existing parsers do.
-2. Subclass `Parser` in `agent_analyzer/parsers/<agent>.py`: set `agent` to
+2. Subclass `Parser` in `doubleagent/parsers/<agent>.py`: set `agent` to
    the catalog name, implement `wants` on `artifact.rel` and `parse` yielding
    `Row` objects. Use `iter_jsonl` so a truncated line is reported, not fatal.
    Timestamps go through `to_utc`; text through `compact`, which strips
    leading and trailing whitespace and keeps inner line breaks.
-3. Register it in `agent_analyzer/parsers/__init__.py`. A parser that must
+3. Register it in `doubleagent/parsers/__init__.py`. A parser that must
    read a file the catalog attributes to another agent sets `reads_agents`.
 4. Add fixture records to `tests/fixtures.py` and a test class to
    `tests/test_parsers.py`. Then add the row to the table in

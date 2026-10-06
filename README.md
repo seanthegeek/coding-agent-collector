@@ -1,16 +1,17 @@
 # doubleagent
 
-Tooling for incident responders investigating hosts where AI coding agents and
-assistants have been used: Claude Code, Gemini CLI, Antigravity, Codex CLI,
-Copilot CLI, Cursor, Windsurf, Aider, Ollama, VS Code chat extensions and
-others. It has two parts, kept in separate directories because they run in
-different places and have different dependency rules, and a Docker lab for
-developers.
+Forensic analysis of AI agent use on a system, for incident responders.
+It covers agents that execute tools or shell commands on a host and leave
+transcripts, configuration or credentials on disk: Claude Code, Gemini CLI,
+Antigravity, Codex CLI, Copilot CLI, Cursor, Windsurf, Aider, Ollama, VS
+Code chat extensions, Hermes, Agent Zero, OpenClaw and others. It has two
+parts, kept in separate directories because they run in different places and
+have different dependency rules, and a Docker lab for developers.
 
 | Part | Directory | Runs on |
 | --- | --- | --- |
 | Collectors | [`collectors/`](collectors/README.md) | The host under investigation, or an analyst workstation with a mounted image |
-| Analyzer (v2, in progress) | [`analyzer/`](analyzer/README.md) | The analyst workstation |
+| Analyzer | [`analyzer/`](analyzer/README.md) | The analyst workstation |
 | Agent lab | [`lab/`](lab/README.md) | A developer's Docker host, to produce real-install fixtures without installing agents |
 
 ## Collectors
@@ -36,8 +37,9 @@ matrix are in the pages under [collectors/docs/](collectors/docs/).
 
 ## Analyzer
 
-A Python tool that reads a collector archive, an extracted collection, or any
-loose directory such as a copied home or a mounted image, detects which agents
+`doubleagent`, a Python command-line tool that reads a collector archive, an
+extracted collection, or any loose directory such as a copied home or a
+mounted image, detects which agents
 left state in it using the collectors' own catalog, and parses the transcripts
 it understands into a normalised JSONL timeline of turns, tool calls and tool
 results, plus a per-session summary. Parsers exist for Claude Code, Codex
@@ -50,8 +52,9 @@ the catalog (Claude Desktop, ChatGPT Desktop, Copilot CLI and the Copilot
 editor token store, Cursor, Windsurf, Amp, Factory Droid, Augment,
 Local Deep Research) is detected and reported but not yet parsed. Parsing never happens
 on the host, so the analyzer is free to carry its own requirements. It needs
-Python 3.10 or later and the packages in `analyzer/requirements.txt`:
-`python-dateutil`, required, and `zstandard`, optional, for Zed threads,
+Python 3.10 or later; `pip install ./analyzer` installs the `doubleagent`
+command and the packages in `analyzer/requirements.txt`:
+`python-dateutil` and `zstandard`, the second for Zed threads,
 zstd-compressed Codex and Open Interpreter rollouts, and OpenClaw's
 compressed transcript rows.
 

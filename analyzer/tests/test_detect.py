@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_analyzer import catalog, cli, model
-from agent_analyzer.inputs import open_input
+from doubleagent import catalog, cli, model
+from doubleagent.inputs import open_input
 from fixtures import build_home, build_image
 
 REPO = Path(__file__).resolve().parents[2]

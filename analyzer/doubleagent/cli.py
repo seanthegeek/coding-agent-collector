@@ -18,15 +18,13 @@ from .inputs import Collection, describe_error, error_reason, open_input
 from .model import Row, summarise
 from .parsers import ALL, Options, by_agent
 
-PROG = "analyze-agent-artifacts"
+PROG = "doubleagent"
 
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog=PROG,
-        description=(
-            "Detect AI coding agent state in a collection and parse it into a JSONL timeline."
-        ),
+        description="Detect AI agent state in a collection and parse it into a JSONL timeline.",
     )
     ap.add_argument("--version", action="version", version="%s %s" % (PROG, VERSION))
     sub = ap.add_subparsers(dest="command", required=True)

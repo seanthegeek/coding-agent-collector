@@ -8,7 +8,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd)
 SH="$HERE/../collect-agent-artifacts.sh"
 PS="$HERE/../Collect-AgentArtifacts.ps1"
-ANALYZER_COPY="$HERE/../../analyzer/agent_analyzer/catalog.txt"
+ANALYZER_COPY="$HERE/../../analyzer/doubleagent/catalog.txt"
 fail=0
 
 sh_table() { # sh_table NAME -> lines of the sh table (blank lines dropped)
@@ -48,7 +48,7 @@ fi
 if [ -f "$ANALYZER_COPY" ]; then
   if [ "$("$SH" --list)" = "$(cat "$ANALYZER_COPY")" ]; then printf 'ok   analyzer catalog.txt matches --list\n'
   else
-    printf 'FAIL analyzer catalog.txt is stale; run: collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.txt\n'; fail=1
+    printf 'FAIL analyzer catalog.txt is stale; run: collectors/collect-agent-artifacts.sh --list > analyzer/doubleagent/catalog.txt\n'; fail=1
   fi
 fi
 

@@ -2,7 +2,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from agent_analyzer import catalog
+from doubleagent import catalog
 
 REPO = Path(__file__).resolve().parents[2]
 COLLECTOR = REPO / "collectors" / "collect-agent-artifacts.sh"
@@ -55,7 +55,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(
             out,
             self.cat.text,
-            "catalog.txt drifted; run: collectors/collect-agent-artifacts.sh --list > analyzer/agent_analyzer/catalog.txt",
+            "catalog.txt drifted; run: collectors/collect-agent-artifacts.sh --list > analyzer/doubleagent/catalog.txt",
         )
 
 

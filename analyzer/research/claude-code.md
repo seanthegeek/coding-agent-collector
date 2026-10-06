@@ -344,7 +344,7 @@ inside the running turn) or a later `user` record with
 
 ## 8. Parser plan (what the parser does)
 
-`agent_analyzer/parsers/claude_code.py`, class `ClaudeCodeParser`.
+`doubleagent/parsers/claude_code.py`, class `ClaudeCodeParser`.
 `wants()`:
 
 ```text

@@ -36,7 +36,7 @@ Inside `~/.copilot` (docs table plus bundle):
 
 ## 6. Where the project path is recorded
 
-`session-state/<id>/workspace.yaml` persisted session cwd (app.js `workspaceLoadPersistedSessionCwd(FP(Wp(e,t),"workspace.yaml"))`); key name not visible in the JS (handled natively), grep for an absolute path. `permissions-config.json` is "organized by project location" (docs). `session-store.db` rows carry `session_id` and checkpoints (v2).
+`session-state/<id>/workspace.yaml` persisted session cwd (app.js `workspaceLoadPersistedSessionCwd(FP(Wp(e,t),"workspace.yaml"))`); key name not visible in the JS (handled natively), grep for an absolute path. `permissions-config.json` is "organized by project location" (docs). `session-store.db` rows carry `session_id` and checkpoints (analyzer).
 
 ## 7. Confidence
 

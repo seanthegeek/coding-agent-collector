@@ -44,9 +44,9 @@ ignore = [
 # and call it only within the iteration that defined it (the row is built
 # before the generator yields), so late binding of the loop variables
 # cannot be observed. B023 stays on everywhere else.
-"analyzer/agent_analyzer/parsers/{agent_zero,claude_code,codex,kilo_code,letta,opencode,pi,qwen_code}.py" = ["B023"]
+"analyzer/doubleagent/parsers/{agent_zero,claude_code,codex,kilo_code,letta,opencode,pi,qwen_code}.py" = ["B023"]
 
 [lint.isort]
 # Fixed here so import order does not depend on the directory ruff runs
 # from; the tests import their fixtures module as a top-level name.
-known-first-party = ["agent_analyzer", "fixtures"]
+known-first-party = ["doubleagent", "fixtures"]

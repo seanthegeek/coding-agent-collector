@@ -6,7 +6,7 @@ Closed-source agents such as Antigravity CLI store transcripts as protobuf
 blobs with no published schema. The shipped binary still carries the
 serialized FileDescriptorProto for every message it links, which gives field
 names, numbers, types and enum values. This is the evidence source for
-`agent_analyzer/parsers/antigravity.py`; re-run it when a new release changes
+`doubleagent/parsers/antigravity.py`; re-run it when a new release changes
 the format.
 
     tools/proto_descriptors.py extract ~/.local/bin/agy descriptors.json
@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from agent_analyzer.protobuf import iter_fields, read_varint
+from doubleagent.protobuf import iter_fields, read_varint
 
 TYPES = {
     1: "double",

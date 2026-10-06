@@ -48,7 +48,7 @@ All of these sit under `.codex` and are collected by the `codex-cli|.codex` line
 ## 6. Where the project path is recorded
 
 - First line of every rollout: `SessionMeta` with `cwd: PathBuf`, `timestamp`, `id`, `originator`, `cli_version`, `source`, `runtime_workspace_roots` ([protocol/src/protocol.rs:3123-3153](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/protocol/src/protocol.rs#L3123-L3153)). Compressed rollouts need zstd before grep.
-- `session_index.jsonl` ([rollout/src/session_index.rs](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/rollout/src/session_index.rs)) and `state_5.sqlite` threads table (v2 parser).
+- `session_index.jsonl` ([rollout/src/session_index.rs](https://github.com/openai/codex/blob/3e238776e857eccd3bde6bff3026e2e9798f6524/codex-rs/rollout/src/session_index.rs)) and `state_5.sqlite` threads table (analyzer).
 
 ## 7. Confidence
 

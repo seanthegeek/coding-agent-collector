@@ -70,7 +70,7 @@ on a POSIX host not run as root, that an unreadable home is counted in
 
 `tests/catalog-sync.sh` extracts the five tables from both scripts and fails
 if they differ. When `pwsh` is on the `PATH` it also compares `--list` with
-`-List`. It also fails when `analyzer/agent_analyzer/catalog.txt` is not
+`-List`. It also fails when `analyzer/doubleagent/catalog.txt` is not
 identical to `--list`. The repository's pre-commit hook in `.githooks/`
 (enable it once per clone with `git config core.hooksPath .githooks`)
 refuses a commit that stages either collector or the analyzer copy while the

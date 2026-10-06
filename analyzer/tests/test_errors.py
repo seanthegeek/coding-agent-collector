@@ -13,7 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_analyzer import cli
+from doubleagent import cli
 from fixtures import CLAUDE_SESSION, build_home
 
 CAN_DENY = os.name != "nt" and hasattr(os, "geteuid") and os.geteuid() != 0

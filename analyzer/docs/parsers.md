@@ -44,7 +44,7 @@ Back to the [analyzer README](../README.md).
 ## Row content
 
 The field names each parser relies on are listed in its module docstring
-under `agent_analyzer/parsers/`. Thinking and reasoning blocks are left out
+under `doubleagent/parsers/`. Thinking and reasoning blocks are left out
 unless `--include-thinking` is passed. The `text` field carries the full
 text of each event, line breaks included, so the timeline is a complete
 transcript, one event per line. History files are parsed even when the
@@ -88,7 +88,7 @@ are detected but not parsed.
 
 ## Protobuf and SQLite
 
-Protobuf stores are decoded by `agent_analyzer/protobuf.py`, a small
+Protobuf stores are decoded by `doubleagent/protobuf.py`, a small
 schema-driven wire decoder, from field tables written into each parser. For
 a closed-source agent the field names come from the descriptors embedded in
 its binary. `tools/proto_descriptors.py extract BINARY OUT.json` extracts

@@ -93,7 +93,7 @@ No per-message timestamp. `model` is on the assistant message.
 ## 5. SQLite or binary stores
 
 VS Code: read `ItemTable` from `state.vscdb` through
-`agent_analyzer/sqlite_util.py` (WAL sidecars). The value is UTF-8 JSON
+`doubleagent/sqlite_util.py` (WAL sidecars). The value is UTF-8 JSON
 text in a BLOB column. History over 50 MB triggers a size warning
 ([`LocalStorageProvider.ts:40`](https://github.com/sourcegraph/cody-public-snapshot/blob/8e20ac6c1460c08b0db581c0204658112a246eda/vscode/src/services/LocalStorageProvider.ts#L40);
 [`ChatHistoryManager.ts:104`](https://github.com/sourcegraph/cody-public-snapshot/blob/8e20ac6c1460c08b0db581c0204658112a246eda/vscode/src/chat/chat-view/ChatHistoryManager.ts#L104)),

@@ -9,6 +9,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- The analyzer is now `doubleagent`: `pip install .` installs the
+  distribution `doubleagent` (was `coding-agent-analyzer`) with the
+  command `doubleagent` (was `analyze-agent-artifacts`), and the Python
+  package is `doubleagent` (was `agent_analyzer`), so `python3 -m
+  doubleagent` runs it from a checkout. `--version` prints
+  `doubleagent <version>`. The output files and their fields are
+  unchanged (#47).
+- `pyproject.toml` reads the version from `doubleagent.VERSION`, so it is
+  set in one place (#47).
+
 ## [0.9.0] - 2026-10-06
 
 ### Added

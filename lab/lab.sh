@@ -108,7 +108,7 @@ case "$cmd" in
     if [ -n "$archive" ] && command -v python3 >/dev/null 2>&1; then
       printf 'lab: analyzing\n'
       rc=0
-      PYTHONPATH="$repo/analyzer" python3 -m agent_analyzer timeline "$archive" -o "$out/analysis" || rc=$?
+      PYTHONPATH="$repo/analyzer" python3 -m doubleagent timeline "$archive" -o "$out/analysis" || rc=$?
       case $rc in
         0) ;;
         1) printf 'lab: no parseable transcripts yet; run an agent for a few turns, then collect again\n' ;;

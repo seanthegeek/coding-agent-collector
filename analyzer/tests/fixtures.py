@@ -9,8 +9,8 @@ import os
 import sqlite3
 from pathlib import Path
 
-from agent_analyzer.parsers.antigravity import SCHEMA as AGY
-from agent_analyzer.protobuf import encode
+from doubleagent.parsers.antigravity import SCHEMA as AGY
+from doubleagent.protobuf import encode
 
 CLAUDE_SESSION = "11111111-2222-4333-8444-555555555555"
 CLAUDE_WORK_SESSION = "11111111-2222-4333-8444-666666666666"

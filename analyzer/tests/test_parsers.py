@@ -6,17 +6,17 @@ import unittest
 from pathlib import Path
 from typing import ClassVar, cast
 
-from agent_analyzer import catalog, cli, protobuf, sqlite_util
-from agent_analyzer.inputs import Artifact, open_input
-from agent_analyzer.model import compact, summarise
-from agent_analyzer.parsers import Options, by_agent
-from agent_analyzer.parsers.antigravity import AntigravityParser, tool_args_summary, uri_to_path
-from agent_analyzer.parsers.claude_code import ClaudeCodeParser, tool_summary
-from agent_analyzer.parsers.codex import CodexParser
-from agent_analyzer.parsers.crush import CrushParser, project_of
-from agent_analyzer.parsers.gemini_cli import GeminiCliParser, resolve_project
-from agent_analyzer.parsers.goose import GooseParser, unescape_history
-from agent_analyzer.timeutil import to_utc
+from doubleagent import catalog, cli, protobuf, sqlite_util
+from doubleagent.inputs import Artifact, open_input
+from doubleagent.model import compact, summarise
+from doubleagent.parsers import Options, by_agent
+from doubleagent.parsers.antigravity import AntigravityParser, tool_args_summary, uri_to_path
+from doubleagent.parsers.claude_code import ClaudeCodeParser, tool_summary
+from doubleagent.parsers.codex import CodexParser
+from doubleagent.parsers.crush import CrushParser, project_of
+from doubleagent.parsers.gemini_cli import GeminiCliParser, resolve_project
+from doubleagent.parsers.goose import GooseParser, unescape_history
+from doubleagent.timeutil import to_utc
 from fixtures import (
     AGY_CONVERSATION,
     CLAUDE_SESSION,
@@ -880,7 +880,7 @@ class AntigravityTests(ParserBase):
         self.assertEqual(tool_args_summary("not json"), "not json")
 
 
-from agent_analyzer.parsers.qwen_code import QwenCodeParser, args_summary
+from doubleagent.parsers.qwen_code import QwenCodeParser, args_summary
 from fixtures import QWEN_ARCHIVED, QWEN_SESSION, QWEN_TMP
 
 
@@ -994,7 +994,7 @@ class QwenCodeTests(ParserBase):
         self.assertEqual(args_summary(None), "")
 
 
-from agent_analyzer.parsers.kiro import KiroParser, salvage
+from doubleagent.parsers.kiro import KiroParser, salvage
 from fixtures import KIRO_EXPORT_SESSION, KIRO_SESSION, KIRO_SHELL_SESSION
 
 
@@ -1418,7 +1418,7 @@ class GooseTests(ParserBase):
         self.assertEqual(unescape_history("a\\nb\\\\c"), "a\nb\\c")
 
     def test_millisecond_timestamps(self):
-        from agent_analyzer.parsers.goose import epoch
+        from doubleagent.parsers.goose import epoch
 
         self.assertEqual(epoch(1772355600000), "2026-03-01T09:00:00.000Z")
         self.assertEqual(
@@ -1456,8 +1456,8 @@ class GooseTests(ParserBase):
         self.assertIn("content_json did not parse", rows[-1].text)
 
 
-from agent_analyzer.parsers.aider import AiderParser
-from agent_analyzer.parsers.continue_dev import ContinueParser, load_session
+from doubleagent.parsers.aider import AiderParser
+from doubleagent.parsers.continue_dev import ContinueParser, load_session
 from fixtures import CONTINUE_SESSION, build_aider
 
 
@@ -1688,9 +1688,9 @@ import sqlite3
 from types import SimpleNamespace
 from unittest import mock
 
-from agent_analyzer.parsers import zed as zed_mod
-from agent_analyzer.parsers.vscode import VsCodeParser, apply_mutation
-from agent_analyzer.parsers.zed import ZedParser
+from doubleagent.parsers import zed as zed_mod
+from doubleagent.parsers.vscode import VsCodeParser, apply_mutation
+from doubleagent.parsers.zed import ZedParser
 from fixtures import (
     VSCODE_LEGACY_SESSION,
     VSCODE_SESSION,
@@ -1950,10 +1950,10 @@ class VsCodeTests(ParserBase):
             apply_mutation(s, {"kind": 1, "k": ["missing", "x"], "v": 1})
 
 
-from agent_analyzer.parsers.kilo_code import KiloCodeParser
-from agent_analyzer.parsers.kilo_code import iter_json_array as kilo_iter_json_array
-from agent_analyzer.parsers.opencode import OpenCodeParser
-from agent_analyzer.parsers.opencode import tool_summary as opencode_tool_summary
+from doubleagent.parsers.kilo_code import KiloCodeParser
+from doubleagent.parsers.kilo_code import iter_json_array as kilo_iter_json_array
+from doubleagent.parsers.opencode import OpenCodeParser
+from doubleagent.parsers.opencode import tool_summary as opencode_tool_summary
 from fixtures import (
     KILO_SESSION,
     KILO_TASK,
@@ -2277,9 +2277,9 @@ class KiloCodeTests(ParserBase):
         self.assertEqual(kilo_iter_json_array('{"a":1}'), ([], "not a JSON array"))
 
 
-from agent_analyzer.parsers.cline import ClineParser
-from agent_analyzer.parsers.cline_legacy import iter_json_array
-from agent_analyzer.parsers.roo_code import RooCodeParser
+from doubleagent.parsers.cline import ClineParser
+from doubleagent.parsers.cline_legacy import iter_json_array
+from doubleagent.parsers.roo_code import RooCodeParser
 from fixtures import (
     CLINE_CLI_TASK,
     CLINE_OLD_SESSION,
@@ -2595,7 +2595,7 @@ class RooCodeTests(ParserBase):
         self.assertIn("parser:", rows[-1].text)
 
 
-from agent_analyzer.parsers.tabby import TabbyParser
+from doubleagent.parsers.tabby import TabbyParser
 from fixtures import TABBY_BACKUP_REL, TABBY_EVENTS_REL, TABBY_REL, TABBY_SECRETS
 
 
@@ -2754,8 +2754,8 @@ class TabbyTests(ParserBase):
             self.assertNotIn(secret, buf.getvalue())
 
 
-from agent_analyzer.parsers.openhands import OpenHandsParser
-from agent_analyzer.parsers.shellgpt import ShellGptParser, load_messages
+from doubleagent.parsers.openhands import OpenHandsParser
+from doubleagent.parsers.shellgpt import ShellGptParser, load_messages
 from fixtures import (
     OPENHANDS_CLI_CONV,
     OPENHANDS_CONV,
@@ -2947,10 +2947,10 @@ class ShellGptTests(ParserBase):
         self.assertTrue(err)
 
 
-from agent_analyzer.parsers.letta import LettaParser, decode_key
-from agent_analyzer.parsers.little_coder import LittleCoderParser
-from agent_analyzer.parsers.pi import PiParser
-from agent_analyzer.parsers.pi import args_summary as pi_args_summary
+from doubleagent.parsers.letta import LettaParser, decode_key
+from doubleagent.parsers.little_coder import LittleCoderParser
+from doubleagent.parsers.pi import PiParser
+from doubleagent.parsers.pi import args_summary as pi_args_summary
 from fixtures import (
     LC_FILE,
     LC_SESSION,
@@ -3252,8 +3252,8 @@ class LettaTests(ParserBase):
 
 from dataclasses import replace as dc_replace
 
-from agent_analyzer.parsers.agent_zero import AgentZeroParser, recover_logs
-from agent_analyzer.parsers.hermes import HermesParser, decode_content
+from doubleagent.parsers.agent_zero import AgentZeroParser, recover_logs
+from doubleagent.parsers.hermes import HermesParser, decode_content
 from fixtures import (
     AGENT_ZERO_CHAT,
     AGENT_ZERO_LONG,
@@ -3539,8 +3539,8 @@ class AgentZeroTests(ParserBase):
         self.assertEqual(recover_logs('{"logs": [{"no": 0}, {"no": 1'), [{"no": 0}])
 
 
-from agent_analyzer.parsers import codex as codex_mod
-from agent_analyzer.parsers.open_interpreter import OpenInterpreterParser
+from doubleagent.parsers import codex as codex_mod
+from doubleagent.parsers.open_interpreter import OpenInterpreterParser
 from fixtures import (
     OI_ARCHIVED,
     OI_IMPORTED,
@@ -3766,9 +3766,9 @@ class OpenInterpreterTests(ParserBase):
         self.assertEqual({r.agent for r in rows}, {"open-interpreter"})
 
 
-from agent_analyzer.parsers import openclaw as openclaw_mod
-from agent_analyzer.parsers.nanobot import NanobotParser, decode_stem
-from agent_analyzer.parsers.openclaw import OpenClawParser
+from doubleagent.parsers import openclaw as openclaw_mod
+from doubleagent.parsers.nanobot import NanobotParser, decode_stem
+from doubleagent.parsers.openclaw import OpenClawParser
 from fixtures import (
     NANOBOT_HISTORY_REL,
     NANOBOT_KEY,
@@ -4065,10 +4065,10 @@ class NanobotTests(ParserBase):
         self.assertIn("parser:", rows[-1].text)
 
 
-from agent_analyzer import vscode_state
-from agent_analyzer.parsers.cody import CodyParser, chat_time
-from agent_analyzer.parsers.pearai import PearAiParser
-from agent_analyzer.parsers.twinny import TwinnyParser
+from doubleagent import vscode_state
+from doubleagent.parsers.cody import CodyParser, chat_time
+from doubleagent.parsers.pearai import PearAiParser
+from doubleagent.parsers.twinny import TwinnyParser
 from fixtures import (
     CODY_ACCOUNT,
     CODY_AGENTIC_CHAT,
@@ -4473,8 +4473,8 @@ class PearAiTests(ParserBase):
         self.assertIn("parser:", rows[-1].text)
 
 
-from agent_analyzer.parsers.muse_code import MuseCodeParser, micros_to_utc, result_text
-from agent_analyzer.parsers.muse_code import args_summary as muse_args_summary
+from doubleagent.parsers.muse_code import MuseCodeParser, micros_to_utc, result_text
+from doubleagent.parsers.muse_code import args_summary as muse_args_summary
 from fixtures import (
     MUSE_CHILD,
     MUSE_CHILD_REL,
@@ -4678,7 +4678,7 @@ class MuseCodeTests(ParserBase):
         self.assertEqual((rows[-1].source_line, rows[-1].session_id), (23, MUSE_SESSION))
 
 
-from agent_analyzer.parsers.ollama import OllamaParser, call_text
+from doubleagent.parsers.ollama import OllamaParser, call_text
 from fixtures import (
     OLLAMA_ATTACHMENT,
     OLLAMA_CHAT,

@@ -49,7 +49,7 @@ Env: `KIRO_HOME`, `KIRO_API_KEY`, `KIRO_LOG_LEVEL`, `KIRO_ACP_RECORD_PATH` (JSON
 
 - `~/.kiro/workspace-roots/<hash>/.trust-migration.json` key `root` (issue 11282).
 - `~/.kiro/sessions/*/sess_*/session.json` key `workspacePaths` (array) (tokscale `:178-179`); `~/.kiro/sessions/cli/*.json` key `cwd` (tokscale `:135`).
-- `data.sqlite3` table `conversations(key, value)` keyed by cwd (Q [`mod.rs:402-410`](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/database/mod.rs#L402-L410), [migration 007](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/database/sqlite_migrations/007_conversations_table.sql)); 2.27.1 adds `conversations_v2(key, conversation_id, value, created_at, updated_at)` (binary migration `008_multiple_conversations_per_path`), still keyed by path. SQLite, so v2 work.
+- `data.sqlite3` table `conversations(key, value)` keyed by cwd (Q [`mod.rs:402-410`](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/database/mod.rs#L402-L410), [migration 007](https://github.com/aws/amazon-q-developer-cli/blob/15cc8f3cd18c4272925ce1c7053268eedff1ea0a/crates/chat-cli/src/database/sqlite_migrations/007_conversations_table.sql)); 2.27.1 adds `conversations_v2(key, conversation_id, value, created_at, updated_at)` (binary migration `008_multiple_conversations_per_path`), still keyed by path. SQLite, so left to the analyzer.
 - IDE `kiro.kiroagent/workspace-sessions/<base64url(path)>/` directory name decodes to the workspace path (codeburn; wakatime glob `*/workspace-sessions/*/*.json`). Grep-able without SQLite.
 
 ## 7. Confidence

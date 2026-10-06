@@ -5,7 +5,7 @@ fork of OpenAI Codex CLI that keeps Codex's protocol and file formats and
 moves the home to `~/.openinterpreter` (see
 [../../collectors/research/open-interpreter.md](../../collectors/research/open-interpreter.md)).
 Transcripts are Codex rollouts, byte for byte, so the existing Codex parser
-(`agent_analyzer/parsers/codex.py`) is the reference and this document
+(`doubleagent/parsers/codex.py`) is the reference and this document
 records only what was checked in the fork and what differs. Paths cited are
 relative to `codex-rs/` in the clone.
 

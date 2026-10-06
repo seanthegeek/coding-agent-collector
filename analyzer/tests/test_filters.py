@@ -9,9 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import ClassVar
 
-from agent_analyzer import cli
-from agent_analyzer.filters import BoundError, RowFilter, parse_bound
-from agent_analyzer.model import Row
+from doubleagent import cli
+from doubleagent.filters import BoundError, RowFilter, parse_bound
+from doubleagent.model import Row
 from fixtures import build_home
 
 NOW = datetime(2026, 3, 31, 14, 5, 9, 123000, tzinfo=timezone.utc)

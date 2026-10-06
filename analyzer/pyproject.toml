@@ -3,22 +3,25 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "coding-agent-analyzer"
-version = "0.9.0"
-description = "Analyst-side parser for doubleagent collector output: detects AI coding agent state and builds a JSONL timeline"
+name = "doubleagent"
+dynamic = ["version"]
+description = "Forensic analyzer of AI agent use on a system: detects agent state and builds a JSONL timeline from the agents' transcripts"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 dependencies = ["zstandard", "python-dateutil"]
 
 [project.scripts]
-analyze-agent-artifacts = "agent_analyzer.cli:main"
+doubleagent = "doubleagent.cli:main"
 
 [tool.setuptools]
-packages = ["agent_analyzer", "agent_analyzer.parsers"]
+packages = ["doubleagent", "doubleagent.parsers"]
+
+[tool.setuptools.dynamic]
+version = { attr = "doubleagent.VERSION" }
 
 [tool.setuptools.package-data]
-agent_analyzer = ["catalog.txt"]
+doubleagent = ["catalog.txt"]
 
 # The rule set lives in the repository root's ruff.toml so analyzer/,
 # analyzer/tools/ and tools/ share it; this makes ruff run from inside

@@ -4,14 +4,19 @@ Guidance for AI coding agents and humans working in this repository.
 
 ## Purpose
 
-`doubleagent` is a forensic collection tool for incident responders.
-It gathers the on-disk artifacts of AI agents that run on the host, coding
-agents first (Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot CLI,
-Cursor, VS Code chat extensions, Windsurf, Aider, Ollama, and others), for
-every user on a host, into one archive with a hashed manifest. The criterion for the catalog is an agent that executes tools or
+`doubleagent` is a forensic analysis tool for AI agent use on a system,
+for incident responders. It has two parts: collectors that gather the
+on-disk artifacts of AI agents that run on the host (Claude Code, Gemini
+CLI, Antigravity, Codex CLI, Copilot CLI, Cursor, VS Code chat extensions,
+Windsurf, Aider, Ollama, Hermes, Agent Zero, OpenClaw, and others), for
+every user on a host, into one archive with a hashed manifest; and an
+analyzer, the `doubleagent` Python command, that detects agent state in a
+collection or any loose directory tree and parses transcripts into a JSONL
+timeline. The criterion for the catalog is an agent that executes tools or
 shell commands on the host and leaves transcripts, configuration or
-credentials on disk; it need not be an editor or coding tool. When a non-coding agent is added, widen the wording in the top-level
-README in the same commit.
+credentials on disk; it need not be an editor or coding tool. When a new
+kind of agent is added, widen the wording in the top-level README in the
+same commit.
 
 The project supplements the EDR a responder already has during an incident
 response investigation; it never duplicates EDR features. Process lists,
@@ -22,7 +27,7 @@ references on disk, and the catalog that says where to find them. A proposed
 feature that an EDR console already provides is out of scope, however cheap
 it looks to add.
 
-It must work in three situations:
+The collectors must work in three situations:
 
 1. Remotely through an EDR remote shell (CrowdStrike RTR, SentinelOne
    RemoteOps, Defender Live Response, Palo Alto Networks Cortex XDR Live
@@ -31,12 +36,11 @@ It must work in three situations:
 3. Against a mounted disk image on an analyst workstation, including Windows
    images mounted on Linux or macOS.
 
-Roadmap: v1 (done) collects, with sh and PowerShell 5.1 collectors. v2, in
-progress under `analyzer/`, is the analyst-side Python tool that detects agent
-state in any collected directory and parses transcripts into a JSONL timeline;
-the parser table in `analyzer/docs/parsers.md` lists which agents are parsed, the
-rest of the catalog is detected but not yet parsed. Parsing never happens on
-the host.
+The collectors run on the host, with sh and PowerShell 5.1 collectors. The
+analyzer, under `analyzer/`, runs on the analyst's workstation and can be
+installed and used without the collectors; the parser table in
+`analyzer/docs/parsers.md` lists which agents are parsed, the rest of the
+catalog is detected but not yet parsed. Parsing never happens on the host.
 
 ## Repository layout
 
@@ -58,8 +62,8 @@ collectors/
   research/<agent>.md          where each agent stores state: paths, credentials,
                                exclusions, project files, discovery; one per agent
 analyzer/
-  agent_analyzer/              Python package: cli, inputs, catalog, model, parsers/
-  agent_analyzer/catalog.txt   verbatim copy of collect-agent-artifacts.sh --list
+  doubleagent/                 Python package: cli, inputs, catalog, model, parsers/
+  doubleagent/catalog.txt      verbatim copy of collect-agent-artifacts.sh --list
   research/<agent>.md          how each agent records transcripts; one per agent
   README.md                    analyzer user documentation: quick start, commands, options
   docs/<topic>.md              detailed analyzer documentation: inputs, parser table,
@@ -67,9 +71,9 @@ analyzer/
                                options, development
   CHANGELOG.md                 analyzer release history, one entry per VERSION
   tests/                       unittest suite with synthetic fixtures; tests/run.sh
-  pyproject.toml               installable as analyze-agent-artifacts
-  requirements.txt             third-party dependencies (python-dateutil, required;
-                               zstandard, optional, for compressed transcripts)
+  pyproject.toml               installable as the doubleagent command
+  requirements.txt             third-party dependencies (python-dateutil;
+                               zstandard, for compressed transcripts)
 lab/                           Docker sandbox for running CLI agents against a scratch
                                home and exporting it for the collector; see lab/README.md
 tools/check_research_links.py  verifies every citation link in the research documents
@@ -202,7 +206,7 @@ collected once under the most specific agent, and the analyzer applies the
 same rule in loose mode. Use a nested entry whenever one tool stores its state
 inside another tool's directory.
 
-**Manifest schema is an interface.** The v2 parser and analysts depend on
+**Manifest schema is an interface.** The analyzer and analysts depend on
 `manifest.jsonl` and `collection.json`. Fields, status values
 (`collected`, `symlink`, `skipped_excluded`, `skipped_size`, `skipped_secret`,
 `error_copy`, `skipped_unmatched_volume`) and the `fs/<original path>` archive layout are documented in
@@ -218,7 +222,7 @@ rules are different from the collectors'.
   allowed when a format needs them (protobuf, zstandard, a SQLite helper) and
   go in both `requirements.txt` and `pyproject.toml`. Avoid syntax newer
   than 3.10.
-- **The catalog is shared, not copied by hand.** `agent_analyzer/catalog.txt`
+- **The catalog is shared, not copied by hand.** `doubleagent/catalog.txt`
   is generated from `collect-agent-artifacts.sh --list`; both
   `collectors/tests/catalog-sync.sh` and the analyzer tests fail when it is
   stale, the CI workflow in `.github/workflows/ci.yml` runs that check on
@@ -240,8 +244,8 @@ rules are different from the collectors'.
   For a closed-source agent that stores protobuf, the shipped binary usually
   embeds its descriptors; `analyzer/tools/proto_descriptors.py` extracts
   them, and the parser's schema table cites the proto file they came from.
-  Decode protobuf with `agent_analyzer/protobuf.py` and open SQLite through
-  `agent_analyzer/sqlite_util.py` so WAL sidecars are read and the evidence
+  Decode protobuf with `doubleagent/protobuf.py` and open SQLite through
+  `doubleagent/sqlite_util.py` so WAL sidecars are read and the evidence
   copy is never opened directly.
   Bad lines are reported as a `system` row, never fatal: a transcript cut
   mid-write by a running agent must still yield its earlier turns.
@@ -273,7 +277,7 @@ fixture. Do not redo the research. The citations link to the commit that was
 reviewed, so check the record shape at that link, not on the default branch,
 and say in the module docstring if the shape has drifted since.
 
-1. Create `agent_analyzer/parsers/<agent>.py` with a class that subclasses
+1. Create `doubleagent/parsers/<agent>.py` with a class that subclasses
    `Parser` from `parsers/base.py`. Its `agent` attribute must equal the
    catalog name. `wants()` selects by `artifact.rel` with a regex;
    `parse()` yields rows built from `base_row()`, which fills host, user,
@@ -316,7 +320,7 @@ and say in the module docstring if the shape has drifted since.
    ``see [`research/<agent>.md`](../research/<agent>.md)``; remove the agent
    from the "detected but not yet parsed" list there, also update the
    parsed-agent list in `analyzer/README.md` and the top-level README,
-   bump `VERSION` in `agent_analyzer/__init__.py` and `pyproject.toml`,
+   bump `VERSION` in `doubleagent/__init__.py` (`pyproject.toml` reads it),
    and run `analyzer/tests/run.sh`.
 
 Each parser is self-contained and fully specified by its research document
@@ -346,7 +350,7 @@ find. The validation for every current entry is recorded in the index table in
    fallback that only appears on headless hosts.
 3. Add `agent|path` lines to `CATALOG` in both scripts for every platform
    path the tool uses, including the Windows `AppData` location so images are
-   covered. Regenerate `analyzer/agent_analyzer/catalog.txt` from `--list`,
+   covered. Regenerate `analyzer/doubleagent/catalog.txt` from `--list`,
    run `collectors/tests/catalog-sync.sh`, and add an `Added` line under
    `Unreleased` in `analyzer/CHANGELOG.md`, because the analyzer's detection
    changes with the catalog copy.
@@ -386,7 +390,7 @@ installing it on the workstation (Linux layout only); `collectors/research/<agen
 for each agent and the index table in `collectors/research/README.md` summarises the level. Real-install checks
 exist for Claude Code, Antigravity CLI, Codex CLI, Copilot CLI and Ollama.
 Agents whose project paths live only in SQLite (Zed, Goose, OpenCode, Kilo
-Code, Kiro CLI) are not covered by `discover_projects`; that is v2 work.
+Code, Kiro CLI) are not covered by `discover_projects`; the analyzer reads them.
 
 ## Validating catalog entries from source
 
@@ -434,7 +438,7 @@ about a thousand words:
 5. Project-local files written or read inside repositories. Call out any
    per-project database, since those are easy to miss.
 6. Where the project or workspace path is recorded, with file and JSON key or
-   table and column, so `discover_projects` or the v2 parser can use it.
+   table and column, so `discover_projects` or the analyzer can use it.
 7. Proposed lines in the collector's own formats: `agent|glob` for
    `CATALOG`, globs for `EXCLUDES` and `SECRET_GLOBS`, `project|glob` for
    `PROJECT_CATALOG`.
@@ -474,7 +478,7 @@ directory has a README index that lists every document, sorted
 alphabetically by agent name, and holds the cross-agent observations.
 Grouped reports are never committed. Then: rewrite the five tables in both
 scripts and regenerate
-`analyzer/agent_analyzer/catalog.txt` from `--list`, extend
+`analyzer/doubleagent/catalog.txt` from `--list`, extend
 `discover_projects` in the sh collector and `Find-Projects` in the
 PowerShell collector with every new grep-able source, add a fixture and
 checks to `collectors/tests/smoke.sh` and `collectors/tests/smoke.ps1` for
@@ -484,7 +488,7 @@ matrix, run a live collection and read the `skipped_excluded` and
 
 **6. Close the loop on GitHub.** Close each tool's issue with a comment that
 names the evidence source and commit, the key findings, and the catalog
-changes. Comment on the v2 parser issue with any SQLite-only sources found.
+changes. Comment on the analyzer parser issue with any SQLite-only sources found.
 File new issues for anything out of scope that the research surfaced, such
 as sandboxed install paths or tokens stored inside chat databases.
 
@@ -684,9 +688,9 @@ list together. Run the commands from the repository root before pushing.
   above.
 - pyright must report 0 errors both with zstandard installed (as CI runs
   it) and without it. The nine `import zstandard` lines carry
-  `# pyright: ignore[reportMissingImports]` because the package is an
-  optional, lazily imported dependency; a per-line ignore keeps the check
-  for every other import.
+  `# pyright: ignore[reportMissingImports]` because the package is
+  imported lazily so a checkout run without it still works; a per-line
+  ignore keeps the check for every other import.
 - shellcheck, shfmt and checkbashisms are not on PyPI or npm: install the
   release binaries (CI downloads them and checks their sha256), and
   checkbashisms as the single `scripts/checkbashisms.pl` from the devscripts
@@ -755,8 +759,8 @@ list together. Run the commands from the repository root before pushing.
   Behaviour changes without a README update are incomplete. The top-level
   README is an overview only.
 - Bump `VERSION` in the script for any change to output format or options.
-  For the analyzer, bump `VERSION` in `agent_analyzer/__init__.py` and
-  `pyproject.toml` together.
+  For the analyzer, bump `VERSION` in `doubleagent/__init__.py`;
+  `pyproject.toml` reads the version from it.
 - Every `VERSION` bump comes with an entry in the matching changelog,
   `collectors/CHANGELOG.md` or `analyzer/CHANGELOG.md`, in Keep a Changelog
   form: a `## [x.y.z] - YYYY-MM-DD` heading with `Added`, `Changed`, `Fixed`

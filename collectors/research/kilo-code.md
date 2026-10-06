@@ -105,7 +105,7 @@ installs leave `tasks/`, `checkpoints/`, `cache/` there.
 `kilo.db` table `project`: `worktree` (absolute), `vcs`, `name`,
 `sandboxes[]`; table `project_directory`: `directory`, `type`
 (`main|root|git_worktree`) ([`packages/core/src/project/sql.ts:6-34`](https://github.com/Kilo-Org/kilocode/blob/76bcfd40be616a72f4697b3041565f322245b462/packages/core/src/project/sql.ts#L6-L34)).
-Legacy `storage/project/<id>.json` `worktree`. SQLite only; v2 work.
+Legacy `storage/project/<id>.json` `worktree`. SQLite only; left to the analyzer.
 
 ## 7. Confidence
 

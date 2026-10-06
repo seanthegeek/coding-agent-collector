@@ -9,7 +9,7 @@ first section (for Antigravity, the protobuf descriptors embedded in its
 binary). Each ends with a parser plan mapped to the timeline columns and
 synthetic sample records meant to become test fixtures. Treat them as the
 evidence behind each parser; the field names a parser actually depends on
-are repeated in its module docstring under `agent_analyzer/parsers/`.
+are repeated in its module docstring under `doubleagent/parsers/`.
 
 The research itself may be done in groups (forks of one codebase are best
 studied together, because the differences are what matter), but the
@@ -52,7 +52,7 @@ it.
 | `vscode` | [vscode.md](vscode.md) | VS Code chat sessions (Copilot Chat): JSONL mutation log, legacy JSON | yes |
 | `zed` | [zed.md](zed.md) | SQLite with zstd-compressed JSON thread blobs | yes, needs `zstandard` |
 
-The Parser column says whether `agent_analyzer/parsers/` has a parser for
+The Parser column says whether `doubleagent/parsers/` has a parser for
 the agent; the parser table in [`docs/parsers.md`](../docs/parsers.md) lists the files each one
 reads. `tools/check_research_links.py` at the repository root verifies the
 citation links in these documents; see the

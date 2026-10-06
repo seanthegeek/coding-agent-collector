@@ -6,7 +6,7 @@ append-only JSONL "rollout" per thread, each line an envelope around a
 tagged item, plus a global prompt history. Open Interpreter is a fork that
 keeps the format byte for byte under `~/.openinterpreter`; see
 [open-interpreter.md](open-interpreter.md), which records only what differs.
-The parser is `agent_analyzer/parsers/codex.py` (`CodexParser`, built on the
+The parser is `doubleagent/parsers/codex.py` (`CodexParser`, built on the
 shared `RolloutParser`).
 
 Paths and the rest of the per-user state are in

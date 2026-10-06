@@ -1,54 +1,53 @@
-# Analyzer
+# doubleagent
 
-The analyst-side half of doubleagent. It takes a collector archive,
-an extracted collection, or any loose directory tree, detects which AI coding
-agents left state in it, and parses the transcripts it knows how to read into
-one normalised JSONL timeline. It never runs on the host under investigation,
-so unlike the collectors it may carry dependencies.
+`doubleagent` is a forensic analyzer of AI agent use on a system. It takes
+an archive from the doubleagent collectors, an extracted collection, or any
+loose directory tree such as a copied home directory or a mounted disk image,
+detects which AI agents left state in it, and parses the transcripts it knows
+how to read into one normalised JSONL timeline. It runs on the analyst's
+workstation, never on the host under investigation, so unlike the collectors
+it may carry dependencies.
 
-It needs Python 3.10 or later and the packages in `requirements.txt`
-(`pip install -r requirements.txt`): `python-dateutil`, required, which reads
-the `--since` and `--until` times, and `zstandard`, optional, for Zed threads,
-Codex and Open Interpreter `.jsonl.zst` rollouts and OpenClaw's compressed
-transcript rows. Without `zstandard` each such thread, rollout or row is
-reported as an undecodable `system` row and everything else still runs.
-
-`pip install .` in this directory installs the package
-`coding-agent-analyzer`, which provides the same tool as the
-`analyze-agent-artifacts` command. `--version` prints
-`analyze-agent-artifacts <version>`. [CHANGELOG.md](CHANGELOG.md) lists what
-changed in each version, including changes to the `timeline.jsonl` and
-`sessions.jsonl` fields.
+It needs Python 3.10 or later. `pip install .` in this directory installs
+the `doubleagent` package and the `doubleagent` command with their two
+required dependencies: `python-dateutil`, which reads the `--since` and
+`--until` times, and `zstandard`, which decompresses Zed threads, Codex and
+Open Interpreter `.jsonl.zst` rollouts and OpenClaw's compressed transcript
+rows. To run from a checkout without installing, `pip install -r
+requirements.txt` and run `python3 -m doubleagent` from this directory; if
+`zstandard` is missing there, each compressed thread, rollout or row is
+reported as an undecodable `system` row and everything else still runs. `--version` prints
+`doubleagent <version>`. [CHANGELOG.md](CHANGELOG.md) lists what changed in
+each version, including changes to the `timeline.jsonl` and `sessions.jsonl`
+fields.
 
 ## Quick start
 
 ```sh
-cd analyzer
-
 # What is in this collection?
-python3 -m agent_analyzer detect /cases/host01/host01_20261003T165531Z_agent-artifacts.tar.gz
+doubleagent detect /cases/host01/host01_20261003T165531Z_agent-artifacts.tar.gz
 
 # Build the timeline
-python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/analysis
+doubleagent timeline /cases/host01/host01_*.tar.gz -o /cases/host01/analysis
 
 # Every Bash command Claude Code ran, from the timeline
 jq -r 'select(.agent == "claude-code" and .tool_name == "Bash") | .text' /cases/host01/analysis/timeline.jsonl
 
 # Only 1 October 2026 (UTC), or only the last three days
-python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/oct1 --since 2026-10-01 --until 2026-10-01
-python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/recent --since 3d
+doubleagent timeline /cases/host01/host01_*.tar.gz -o /cases/host01/oct1 --since 2026-10-01 --until 2026-10-01
+doubleagent timeline /cases/host01/host01_*.tar.gz -o /cases/host01/recent --since 3d
 
 # Only events whose text mentions curl or wget, with the paired tool calls and results
-python3 -m agent_analyzer timeline /cases/host01/host01_*.tar.gz -o /cases/host01/net --match 'curl|wget' -i
+doubleagent timeline /cases/host01/host01_*.tar.gz -o /cases/host01/net --match 'curl|wget' -i
 
 # A home directory copied off a host by other means, or a mounted image
-python3 -m agent_analyzer timeline /mnt/evidence -o /cases/host02/analysis --host host02
+doubleagent timeline /mnt/evidence -o /cases/host02/analysis --host host02
 
 # A single agent directory copied on its own, under its original name
-python3 -m agent_analyzer detect /cases/host03/alice/.claude --user alice
+doubleagent detect /cases/host03/alice/.claude --user alice
 
 # Fleet inventory: one saved collector --inventory stdout per host in a directory
-python3 -m agent_analyzer inventory /cases/fleet/inventory -o /cases/fleet/fleet-inventory.csv
+doubleagent inventory /cases/fleet/inventory -o /cases/fleet/fleet-inventory.csv
 ```
 
 ## Commands
@@ -63,13 +62,13 @@ python3 -m agent_analyzer inventory /cases/fleet/inventory -o /cases/fleet/fleet
 ## Options
 
 ```text
-analyze-agent-artifacts detect INPUT [--json] [--files] [common options]
-analyze-agent-artifacts timeline INPUT -o DIR [--include-thinking] [--agent NAME]...
+doubleagent detect INPUT [--json] [--files] [common options]
+doubleagent timeline INPUT -o DIR [--include-thinking] [--agent NAME]...
                          [--since WHEN] [--until WHEN] [--keep-undated] [--match REGEX]... [-i]
                          [common options]
-analyze-agent-artifacts inventory [-o FILE] INPUT...
-analyze-agent-artifacts catalog [--agents]
-analyze-agent-artifacts --version
+doubleagent inventory [-o FILE] INPUT...
+doubleagent catalog [--agents]
+doubleagent --version
 ```
 
 | Option | Meaning |

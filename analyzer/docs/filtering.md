@@ -62,4 +62,4 @@ fraction of a second, `now`, a relative time and an epoch number are
 instants, used as they are. Dates and times are parsed by
 `dateutil.parser.isoparse` and months and years counted by
 `dateutil.relativedelta`, both from `python-dateutil`; the forms
-themselves are defined in `agent_analyzer/filters.py`.
+themselves are defined in `doubleagent/filters.py`.

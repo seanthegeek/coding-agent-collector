@@ -1,8 +1,6 @@
 # The analyzer is standard library first (Python 3.10+). Third-party packages
 # are listed here only when a format or option needs them; keep pyproject.toml
 # in step.
-# zstandard is optional and imported lazily: without it the parsers report
-# the compressed records as system rows. python-dateutil is required.
 
 # Zed threads, .jsonl.zst rollouts and OpenClaw rows are zstd-compressed.
 zstandard

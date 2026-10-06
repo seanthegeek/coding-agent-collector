@@ -1,7 +1,7 @@
 # Collectors
 
 The on-host half of doubleagent: two single-file scripts that walk
-every user's home directory, copy the on-disk artifacts of AI coding agents
+every user's home directory, copy the on-disk artifacts of AI agents
 into a staging area, hash them, and produce one `tar.gz` with a JSONL manifest.
 Nothing is parsed on the host; that is the job of the analyst-side tool
 described in the [project README](../README.md).
