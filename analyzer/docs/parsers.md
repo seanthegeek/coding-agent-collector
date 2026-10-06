@@ -82,13 +82,8 @@ whose blobs may be encrypted. See
 [`windsurf.md`](../../collectors/research/windsurf.md) in the collector
 research.
 
-`shared` is detected but is not an agent. Its entries are configuration
-that several agents read, such as skills and instructions, not transcripts,
-so there is nothing to parse:
-
-- `~/.agents`
-- `~/.config/AGENTS.md`
-- `~/.config/agents`
+Files that are not transcripts, such as skills and configuration files,
+are detected but not parsed.
 
 ## Protobuf and SQLite
 
