@@ -56,8 +56,10 @@ checked against a real database here. Before `v0.34.2` the store's default
 path on any other OS was `.ollama/db.sqlite`, but the package does not
 build there. The saved REPL session lives in the models directory of the
 server process (for a systemd install,
-`/usr/share/ollama/.ollama/models`), which the collector excludes as model
-weights (`.ollama/models`); it is a manual follow-up, not a parser input.
+`/usr/share/ollama/.ollama/models`). The collector keeps its manifest
+under `models/manifests` but excludes the message layer with the weights
+(`.ollama/models/blobs`), so the saved messages are a manual follow-up,
+not a parser input.
 
 `v0.35.1` has no agent loop of its own: `ollama run` is the REPL above.
 Older releases had one. Up to `v0.31.1`, `ollama run --experimental` ran

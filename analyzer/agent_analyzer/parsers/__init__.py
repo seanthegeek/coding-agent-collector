@@ -21,6 +21,7 @@ from .letta import LettaParser
 from .little_coder import LittleCoderParser
 from .muse_code import MuseCodeParser
 from .nanobot import NanobotParser
+from .ollama import OllamaParser
 from .open_interpreter import OpenInterpreterParser
 from .openclaw import OpenClawParser
 from .opencode import OpenCodeParser
@@ -67,6 +68,7 @@ ALL: list[Parser] = [
     TwinnyParser(),
     PearAiParser(),
     MuseCodeParser(),
+    OllamaParser(),
 ]
 
 

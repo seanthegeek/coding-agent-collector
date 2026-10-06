@@ -104,11 +104,11 @@ Parsers exist for Claude Code, Codex CLI, Gemini CLI, Antigravity, Qwen
 Code, Amazon Q CLI (the `kiro` entry), VS Code chat (including Copilot
 Chat), Cline, Roo Code, Kilo Code, Continue, Aider, OpenCode, Crush, Goose,
 Zed, Tabby, OpenHands, ShellGPT, pi, little-coder, Letta, Hermes, Agent
-Zero, Open Interpreter, OpenClaw, nanobot, Sourcegraph Cody, Twinny, PearAI
-and Muse Code; [docs/parsers.md](docs/parsers.md) lists the files each one
-reads and the evidence it was validated against. Every other agent in the
-catalog (Claude Desktop, ChatGPT Desktop, Copilot CLI and the Copilot editor
-token store, Cursor, Windsurf, Amp, Factory Droid, Augment, Ollama, Local
+Zero, Open Interpreter, OpenClaw, nanobot, Sourcegraph Cody, Twinny, PearAI,
+Muse Code and Ollama; [docs/parsers.md](docs/parsers.md) lists the files
+each one reads and the evidence it was validated against. Every other agent
+in the catalog (Claude Desktop, ChatGPT Desktop, Copilot CLI and the Copilot
+editor token store, Cursor, Windsurf, Amp, Factory Droid, Augment, Local
 Deep Research) is detected and reported but not yet parsed. Thinking and
 reasoning blocks are left out unless `--include-thinking` is passed.
 

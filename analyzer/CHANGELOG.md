@@ -9,19 +9,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Removed
+## [0.9.0] - 2026-10-06
 
-- The bundled catalog copy drops the collectors' unused credential pattern
-  `.claude-*/.device-keys.json`; detection is unchanged (#41).
+### Added
+
+- An `ollama` parser for the Ollama desktop app's chat database
+  (`Library/Application Support/Ollama/db.sqlite` on macOS,
+  `AppData/Local/Ollama/db.sqlite` on Windows, schema versions 16 to 19)
+  and the `ollama run` prompt history `.ollama/history`. Tool calls and
+  results are paired by position, with `tool_use_id` set to
+  `<chat id>:<tool_calls.id>`; attachments appear as their name and size
+  only, and the account and settings tables are not read. History rows
+  have no timestamp or session, so they sort last and are dropped by
+  `--since` and `--until` unless `--keep-undated` is given (#43).
+
+### Changed
+
+- The bundled catalog copy follows the collector: the Ollama exclusion is
+  now `.ollama/models/blobs`, so `.ollama/models/manifests` and
+  `models/metadata` files appear in collections (#44).
 
 ### Fixed
 
+- Timestamps with a fraction of one, two, four or five digits, such as
+  go-sqlite3's `2026-03-01 09:00:00.5-08:00`, are converted on Python 3.10
+  as well; before, they gave an empty `timestamp_utc` there (#45).
 - `tests/run.sh` runs only the named tests when given a module, class or
   method name (`tests/run.sh test_catalog`,
   `tests/run.sh test_parsers.ClaudeCodeTests.test_rows`); before, it passed
   the name to `unittest discover`, which ignored it and ran the whole suite.
   With no names it still runs discover with the options given, and with
   names it refuses the discover-only options `-p`, `-s` and `-t` (#34).
+
+### Removed
+
+- The bundled catalog copy drops the collectors' unused credential pattern
+  `.claude-*/.device-keys.json`; detection is unchanged (#41).
 
 ## [0.8.1] - 2026-10-05
 
@@ -328,7 +351,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--summary-length` (default 400), `--include-thinking` and `--agent`;
   `detect --json` and `--files`; `catalog --agents`.
 
-[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.8.1...HEAD
+[Unreleased]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.9.0...HEAD
+[0.9.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.8.1...analyzer-v0.9.0
 [0.8.1]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.8.0...analyzer-v0.8.1
 [0.8.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.7.0...analyzer-v0.8.0
 [0.7.0]: https://github.com/seanthegeek/coding-agent-collector/compare/analyzer-v0.6.0...analyzer-v0.7.0

@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 
 OUT_FMT = "%Y-%m-%dT%H:%M:%S.%f"
-_FRACTION_RX = re.compile(r"(\.\d{7,})")
+_FRACTION_RX = re.compile(r"\.(\d+)")
 
 
 def to_utc(value: object) -> str:
@@ -31,11 +31,13 @@ def to_utc(value: object) -> str:
             return _from_epoch(float(s))
         if s.endswith("Z") or s.endswith("z"):
             s = s[:-1] + "+00:00"
-        # SQLite CURRENT_TIMESTAMP text and nanosecond fractions (Go) are not
-        # accepted by fromisoformat before Python 3.11.
+        # SQLite CURRENT_TIMESTAMP text, nanosecond fractions (Go) and
+        # fractions with trailing zeros trimmed (go-sqlite3's `.5-08:00`) are
+        # not accepted by fromisoformat before Python 3.11, which wants
+        # exactly three or six digits.
         if len(s) > 10 and s[10] == " ":
             s = s[:10] + "T" + s[11:]
-        s = _FRACTION_RX.sub(lambda m: m.group(1)[:7], s)
+        s = _FRACTION_RX.sub(lambda m: "." + m.group(1)[:6].ljust(6, "0"), s, count=1)
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)

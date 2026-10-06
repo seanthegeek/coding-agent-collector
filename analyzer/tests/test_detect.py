@@ -65,6 +65,7 @@ class LooseDetectTests(unittest.TestCase):
             "twinny",
             "pearai",
             "muse-code",
+            "ollama",
         }
         self.assertLessEqual(expected_alice, by_user["alice"])
         self.assertEqual(by_user["carol"], {"codex-cli"})

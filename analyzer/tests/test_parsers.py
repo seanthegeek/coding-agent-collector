@@ -51,6 +51,10 @@ class TimeTests(unittest.TestCase):
         self.assertEqual(to_utc(1790848800000), "2026-10-01T10:00:00.000Z")  # ms
         self.assertEqual(to_utc(1790848800), "2026-10-01T10:00:00.000Z")  # s
         self.assertEqual(to_utc("1790848800"), "2026-10-01T10:00:00.000Z")
+        # go-sqlite3 trims trailing fraction zeros; Go keeps nanoseconds.
+        self.assertEqual(to_utc("2026-03-01 09:00:00.5-08:00"), "2026-03-01T17:00:00.500Z")
+        self.assertEqual(to_utc("2026-03-01 09:00:01.25-08:00"), "2026-03-01T17:00:01.250Z")
+        self.assertEqual(to_utc("2026-03-01T09:00:00.123456789Z"), "2026-03-01T09:00:00.123Z")
         self.assertEqual(to_utc(None), "")
         self.assertEqual(to_utc("garbage"), "")
 
@@ -542,6 +546,7 @@ class TimelineTests(ParserBase):
             "twinny",
             "pearai",
             "muse-code",
+            "ollama",
         }
         self.assertLessEqual(expected_agents, {r["agent"] for r in rows})
         self.assertEqual({r["host"] for r in rows}, {"h1"})
@@ -588,6 +593,7 @@ class TimelineTests(ParserBase):
             "1791036000000",
             "01a0f000-0000-7000-8000-000000000001",  # muse-code
             "0f3c2b1a-5d6e-4f70-8a9b-0c1d2e3f4a5b",  # muse-code subagent
+            "0190a000-0000-7000-8000-00000000c001",  # ollama desktop chat
         }
         self.assertLessEqual(expected_sessions, set(sessions))
         c = sessions[CLAUDE_SESSION]
@@ -4670,3 +4676,233 @@ class MuseCodeTests(ParserBase):
         self.assertEqual(rows[-1].turn_type, "system")
         self.assertIn("parser:", rows[-1].text)
         self.assertEqual((rows[-1].source_line, rows[-1].session_id), (23, MUSE_SESSION))
+
+
+from agent_analyzer.parsers.ollama import OllamaParser, call_text
+from fixtures import (
+    OLLAMA_ATTACHMENT,
+    OLLAMA_CHAT,
+    OLLAMA_DB_REL,
+    OLLAMA_MANIFEST_REL,
+    OLLAMA_USER_EMAIL,
+    OLLAMA_USER_NAME,
+    OLLAMA_WIN_DB_REL,
+)
+
+
+class OllamaTests(ParserBase):
+    HISTORY_REL = ".ollama/history"
+    CALL_ID = OLLAMA_CHAT + ":1"
+
+    def run_timeline(self, name, *extra):
+        import contextlib
+
+        out = self.tmp / name
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = cli.main(
+                ["timeline", str(self.tmp / "home"), "-o", str(out), "--agent", "ollama", *extra]
+            )
+        self.assertEqual(rc, 0)
+        return out
+
+    def test_rows(self):
+        rows = self.rows_for(OllamaParser(), OLLAMA_DB_REL)
+        self.assertEqual(
+            [r.turn_type for r in rows], ["user", "tool_use", "tool_result", "assistant"]
+        )
+        for r in rows:
+            self.assertEqual(
+                (r.host, r.user, r.agent, r.session_id), ("h1", "alice", "ollama", OLLAMA_CHAT)
+            )
+            self.assertEqual((r.project_path, r.git_branch), ("", ""))
+        user, use, result, asst = rows
+        self.assertEqual(
+            (user.text, user.timestamp_utc, user.model, user.source_line),
+            (
+                "summarise https://example.invalid/notes\n[attachment: notes.txt, 5 bytes]",
+                "2026-03-01T17:00:00.500Z",
+                "",
+                1,
+            ),
+        )
+        self.assertEqual(
+            (use.tool_name, use.tool_use_id, use.text, use.model, use.timestamp_utc),
+            (
+                "web_fetch",
+                self.CALL_ID,
+                "https://example.invalid/notes",
+                "gemma4:e4b",
+                "2026-03-01T17:00:01.250Z",
+            ),
+        )
+        self.assertEqual(use.source_line, 1)  # tool_calls.id
+        self.assertEqual(
+            (result.tool_name, result.tool_use_id, result.text, result.timestamp_utc),
+            ("web_fetch", self.CALL_ID, "Release 2.0 adds X.", "2026-03-01T17:00:03.000Z"),
+        )
+        self.assertEqual(
+            (asst.text, asst.model, asst.timestamp_utc, asst.source_line),
+            ("Release 2.0 adds X.", "gemma4:e4b", "2026-03-01T17:00:04.125Z", 4),
+        )
+
+    def test_thinking_opt_in(self):
+        rows = self.rows_for(OllamaParser(), OLLAMA_DB_REL, include_thinking=True)
+        self.assertEqual(
+            [r.turn_type for r in rows],
+            ["user", "thinking", "tool_use", "tool_result", "assistant"],
+        )
+        t = rows[1]
+        self.assertEqual(
+            (t.text, t.model, t.timestamp_utc, t.source_line),
+            ("need to fetch the page", "gemma4:e4b", "2026-03-01T17:00:01.250Z", 2),
+        )
+
+    def test_schema_version_16_gives_the_same_rows(self):
+        def strip(rows):
+            return [{k: v for k, v in r.as_dict().items() if k != "source_file"} for r in rows]
+
+        for thinking in (False, True):
+            mac = self.rows_for(OllamaParser(), OLLAMA_DB_REL, include_thinking=thinking)
+            win = self.rows_for(OllamaParser(), OLLAMA_WIN_DB_REL, include_thinking=thinking)
+            self.assertTrue(mac)
+            self.assertEqual(strip(win), strip(mac))
+            self.assertTrue(all(r.source_file.endswith(OLLAMA_WIN_DB_REL) for r in win))
+
+    def test_account_and_attachment_bytes_never_emitted(self):
+        out = self.run_timeline("out", "--include-thinking")
+        self.assertTrue(read_jsonl(out / "timeline.jsonl"))
+        forbidden = (
+            OLLAMA_USER_NAME,
+            OLLAMA_USER_EMAIL,
+            '"free"',
+            "0190a000-0000-7000-8000-00000000d001",  # settings.device_id
+            OLLAMA_ATTACHMENT.decode(),
+            OLLAMA_ATTACHMENT.hex(),
+        )
+        for name in ("timeline.jsonl", "sessions.jsonl"):
+            text = (out / name).read_text(encoding="utf-8")
+            for f in forbidden:
+                self.assertNotIn(f, text, (name, f))
+
+    def test_history_and_slash_commands(self):
+        rows = self.rows_for(OllamaParser(), self.HISTORY_REL)
+        self.assertEqual(
+            [(r.turn_type, r.text, r.source_line) for r in rows],
+            [
+                ("user", "why is the sky blue", 1),
+                ("system", "slash command: /set nohistory", 2),
+                ("system", "slash command: /bye", 3),
+            ],
+        )
+        for r in rows:
+            self.assertEqual(
+                (r.timestamp_utc, r.session_id, r.model, r.agent), ("", "", "", "ollama")
+            )
+
+    def test_undated_history_in_timeline_and_sessions(self):
+        # cli.collect_rows sorts on (timestamp_utc == "", ...), so undated
+        # rows come last; filters.RowFilter.in_window drops them under
+        # --since unless --keep-undated; model.summarise skips rows with no
+        # session_id, so the history adds no session.
+        out = self.run_timeline("all")
+        rows = read_jsonl(out / "timeline.jsonl")
+        sessions = read_jsonl(out / "sessions.jsonl")
+        hist = [r for r in rows if r["source_file"].endswith("/.ollama/history")]
+        self.assertEqual(len(hist), 3)
+        self.assertEqual(rows[-3:], hist)
+        self.assertTrue(all(r["timestamp_utc"] for r in rows[:-3]))
+        self.assertEqual({s["session_id"] for s in sessions}, {OLLAMA_CHAT})
+        for s in sessions:
+            self.assertEqual(
+                (s["first_timestamp_utc"], s["last_timestamp_utc"], s["models"]),
+                ("2026-03-01T17:00:00.500Z", "2026-03-01T17:00:04.125Z", ["gemma4:e4b"]),
+            )
+        rows = read_jsonl(self.run_timeline("since", "--since", "2026-03-01") / "timeline.jsonl")
+        self.assertTrue(rows)
+        self.assertFalse([r for r in rows if not r["timestamp_utc"]])
+        out = self.run_timeline("undated", "--since", "2026-03-01", "--keep-undated")
+        rows = read_jsonl(out / "timeline.jsonl")
+        self.assertEqual(len([r for r in rows if not r["timestamp_utc"]]), 3)
+
+    def test_tool_pairing_and_placeholder(self):
+        import sqlite3
+
+        c = OLLAMA_CHAT
+        con = sqlite3.connect(str(self.home / OLLAMA_DB_REL))
+        con.executescript(
+            "INSERT INTO messages (id, chat_id, role, content, model_name, created_at) VALUES"
+            " (5, '%(c)s', 'user', 'search twice', NULL, '2026-03-01 09:01:00-08:00'),"
+            " (6, '%(c)s', 'assistant', 'Searching.', 'gemma4:e4b', '2026-03-01 09:01:01-08:00'),"
+            " (7, '%(c)s', 'tool', '', NULL, '2026-03-01 09:01:02-08:00'),"
+            " (8, '%(c)s', 'tool', 'second', NULL, '2026-03-01 09:01:03-08:00'),"
+            " (9, '%(c)s', 'tool', 'extra', NULL, '2026-03-01 09:01:04-08:00'),"
+            " (10, '%(c)s', 'assistant', '', 'gemma4:e4b', '2026-03-01 09:01:05-08:00');"
+            "UPDATE messages SET tool_result = '{\"results\":[1]}' WHERE id = 7;"
+            "INSERT INTO tool_calls VALUES (2, 6, 'function', 'web_search',"
+            ' \'{"query":"ollama","max_results":3}\', NULL),'
+            " (3, 6, 'function', 'browser.find', '{\"pattern\":\"x\"}', NULL);" % {"c": c}
+        )
+        con.commit()
+        con.close()
+        rows = self.rows_for(OllamaParser(), OLLAMA_DB_REL)[4:]
+        self.assertEqual(
+            [(r.turn_type, r.tool_name, r.tool_use_id, r.text, r.source_line) for r in rows],
+            [
+                ("user", "", "", "search twice", 5),
+                ("assistant", "", "", "Searching.", 6),
+                ("tool_use", "web_search", c + ":2", "ollama", 2),
+                ("tool_use", "browser.find", c + ":3", '{"pattern":"x"}', 3),
+                ("tool_result", "web_search", c + ":2", '{"results":[1]}', 7),
+                ("tool_result", "browser.find", c + ":3", "second", 8),
+                ("tool_result", "browser.find", "", "extra", 9),
+            ],
+        )
+        self.assertEqual(call_text("not json"), "not json")
+        self.assertEqual(call_text('{"url":""}'), '{"url":""}')
+
+    def test_other_files_not_wanted(self):
+        p = OllamaParser()
+        wanted = {OLLAMA_DB_REL, OLLAMA_WIN_DB_REL, self.HISTORY_REL}
+        rels = {a.rel for a in self.col.artifacts if a.agent == "ollama"}
+        for rel in (
+            OLLAMA_MANIFEST_REL,
+            OLLAMA_DB_REL + "-wal",
+            OLLAMA_WIN_DB_REL + "-shm",
+            ".ollama/config.json",
+            ".ollama/backup/config.json.1772355600",
+            ".ollama/onboarding-v1.completed",
+            ".ollama/id_ed25519",
+            ".ollama/logs/server.log",
+        ):
+            self.assertIn(rel, rels)
+        for a in self.col.artifacts:
+            if a.agent == "ollama":
+                self.assertEqual(p.wants(a), a.rel in wanted, a.rel)
+        self.assertEqual(wanted, {a.rel for a in self.col.artifacts if p.wants(a)})
+
+    def test_not_a_database_is_one_system_row(self):
+        db = self.home / OLLAMA_DB_REL
+        for suffix in ("-wal", "-shm"):
+            Path(str(db) + suffix).unlink()
+        db.write_text("not a database\n", encoding="utf-8")
+        rows = self.rows_for(OllamaParser(), OLLAMA_DB_REL)
+        self.assertEqual(
+            [(r.turn_type, r.text) for r in rows], [("system", "parser: not a SQLite database")]
+        )
+
+    def test_truncated_database_is_reported_not_fatal(self):
+        db = self.home / OLLAMA_DB_REL
+        for suffix in ("-wal", "-shm"):
+            Path(str(db) + suffix).unlink()
+        db.write_bytes(db.read_bytes()[:200])
+        rows = self.rows_for(OllamaParser(), OLLAMA_DB_REL)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].turn_type, "system")
+        self.assertIn("parser: SQLite error", rows[0].text)
+
+    def test_truncated_history_line_still_yields_earlier_lines(self):
+        with open(self.home / self.HISTORY_REL, "ab") as fh:
+            fh.write(b"half a pro\xe2")
+        rows = self.rows_for(OllamaParser(), self.HISTORY_REL)
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(rows[-1].text, "half a pro�")
