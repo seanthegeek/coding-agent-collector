@@ -9,6 +9,8 @@ import os
 import sqlite3
 from pathlib import Path
 
+import zstandard
+
 from doubleagent.parsers.antigravity import SCHEMA as AGY
 from doubleagent.protobuf import encode
 
@@ -2511,13 +2513,8 @@ def zed_thread_record(cwd="/srv/proj"):
 
 
 def zed_blob(record):
-    """(data_type, data): zstd when the zstandard package is installed, as Zed
-    writes it, otherwise the `json` form Zed also accepts."""
+    """(data_type, data): zstd-compressed JSON, as Zed writes it."""
     raw = json.dumps(record).encode("utf-8")
-    try:
-        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
-    except ImportError:
-        return "json", raw
     return "zstd", zstandard.ZstdCompressor(level=3).compress(raw)
 
 
@@ -5130,12 +5127,8 @@ def openclaw_legacy_records(session_id=OPENCLAW_LEGACY):
     ]
 
 
-def _openclaw_zstd(raw: bytes):
-    """zstd-compressed bytes when zstandard is installed, else None."""
-    try:
-        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
-    except ImportError:
-        return None
+def _openclaw_zstd(raw: bytes) -> bytes:
+    """zstd-compressed bytes, as OpenClaw writes them."""
     return zstandard.ZstdCompressor(level=1, write_checksum=True).compress(raw)
 
 
@@ -5202,7 +5195,7 @@ def build_openclaw(home: Path) -> None:
         )
         cold.append({"kind": "identity", "row": {"event_id": rec["id"], "seq": seq}})
     cold_raw = _openclaw_jsonl(cold)
-    cold_blob = _openclaw_zstd(cold_raw) or cold_raw
+    cold_blob = _openclaw_zstd(cold_raw)
     inserts.append(
         "INSERT INTO session_transcript_cold_archives VALUES ('%s','g0','%s.jsonl.zst','%s',2,%d,%d,1,"
         "1790850000000,'sqlite',X'%s')"
@@ -5224,11 +5217,7 @@ def build_openclaw(home: Path) -> None:
     )
     deleted = _openclaw_jsonl(openclaw_records(OPENCLAW_DELETED)[:2])
     name = OPENCLAW_DELETED + ".jsonl.deleted.2026-10-02T08-00-00.000Z"
-    z = _openclaw_zstd(deleted)
-    if z is not None:
-        (sessions / (name + ".zst")).write_bytes(z)
-    else:
-        (sessions / name).write_bytes(deleted)
+    (sessions / (name + ".zst")).write_bytes(_openclaw_zstd(deleted))
     # Duplicates and noise the parser must skip.
     _jsonl(sessions / (OPENCLAW_LEGACY + ".trajectory.jsonl"), [{"type": "trace"}])
     _jsonl(

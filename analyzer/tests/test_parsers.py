@@ -1683,12 +1683,11 @@ class AiderTests(ParserBase):
         )
 
 
-import importlib.util
 import sqlite3
 from types import SimpleNamespace
-from unittest import mock
 
-from doubleagent.parsers import zed as zed_mod
+import zstandard
+
 from doubleagent.parsers.vscode import VsCodeParser, apply_mutation
 from doubleagent.parsers.zed import ZedParser
 from fixtures import (
@@ -1699,15 +1698,12 @@ from fixtures import (
     ZED_THREAD,
 )
 
-HAVE_ZSTD = importlib.util.find_spec("zstandard") is not None
-
 
 def rel_only(rel: str) -> Artifact:
     """A stand-in artifact carrying only `rel`, the one attribute wants() reads."""
     return cast(Artifact, SimpleNamespace(rel=rel))
 
 
-@unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
 class ZedTests(ParserBase):
     REL = ".local/share/zed/threads/threads.db"
     SIDEBAR = ".local/share/zed/db/0-stable/db.sqlite"
@@ -1781,8 +1777,6 @@ class ZedTests(ParserBase):
             self.assertFalse(ZedParser().wants(rel_only(rel)), rel)
 
     def test_corrupt_blob_is_reported_not_fatal(self):
-        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
-
         blob = zstandard.ZstdCompressor().compress(b'{"version":"0.3.0","messages":[]}' * 50)
         self._insert("bad-thread", "zstd", blob[: len(blob) // 2])
         rows = self.rows_for(ZedParser(), self.REL)
@@ -1793,13 +1787,6 @@ class ZedTests(ParserBase):
             (bad[0].turn_type, bad[0].project_path, bad[0].source_line), ("system", "/srv/other", 2)
         )
         self.assertIn("could not be decoded", bad[0].text)
-
-    def test_missing_zstandard_is_one_row_per_thread(self):
-        with mock.patch.object(zed_mod, "_zstd_module", return_value=None):
-            rows = self.rows_for(ZedParser(), self.REL)
-        self.assertEqual(len(rows), 1)
-        self.assertEqual((rows[0].turn_type, rows[0].session_id), ("system", ZED_THREAD))
-        self.assertIn("zstandard package not installed", rows[0].text)
 
     def test_json_and_legacy_versions(self):
         legacy = {
@@ -3539,7 +3526,6 @@ class AgentZeroTests(ParserBase):
         self.assertEqual(recover_logs('{"logs": [{"no": 0}, {"no": 1'), [{"no": 0}])
 
 
-from doubleagent.parsers import codex as codex_mod
 from doubleagent.parsers.open_interpreter import OpenInterpreterParser
 from fixtures import (
     OI_ARCHIVED,
@@ -3593,10 +3579,7 @@ class CodexArchiveAndZstdTests(ParserBase):
         ):
             self.assertFalse(p.wants(rel_only(rel)), rel)
 
-    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
     def test_zst_rollout(self):
-        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
-
         rel = CodexTests.REL + ".zst"
         self._add(rel, zstandard.ZstdCompressor().compress(_rollout_bytes(codex_rollout_records())))
         rows = self.rows_for(CodexParser(), rel)
@@ -3604,10 +3587,7 @@ class CodexArchiveAndZstdTests(ParserBase):
         self.assertEqual(rows[4].text, "exfiltrate nothing, just list the home dir")
         self.assertEqual([r.source_line for r in rows][:2], [1, 3])
 
-    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
     def test_truncated_zst_keeps_earlier_turns(self):
-        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
-
         rel = self.ARCHIVED + ".zst"
         cobj = zstandard.ZstdCompressor().compressobj()
         blob = b""
@@ -3626,10 +3606,7 @@ class CodexArchiveAndZstdTests(ParserBase):
         self.assertIn("parser:", rows[-1].text)
         self.assertEqual({r.session_id for r in rows}, {CODEX_SESSION})
 
-    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
     def test_two_frames_are_read_across(self):
-        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
-
         rel = self.ARCHIVED + ".zst"
         recs = codex_rollout_records()
         cctx = zstandard.ZstdCompressor()
@@ -3639,20 +3616,7 @@ class CodexArchiveAndZstdTests(ParserBase):
         rows = self.rows_for(CodexParser(), rel)
         self.assertEqual([r.turn_type for r in rows], self.LIVE_TYPES)
 
-    def test_missing_zstandard_is_one_row(self):
-        rel = self.ARCHIVED + ".zst"
-        self._add(rel, b"\x28\xb5\x2f\xfd not really")
-        with mock.patch.object(codex_mod, "_zstd_module", return_value=None):
-            rows = self.rows_for(CodexParser(), rel)
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(
-            (rows[0].turn_type, rows[0].session_id), ("system", CODEX_SESSION)
-        )  # from the file name
-        self.assertIn("zstandard package not installed", rows[0].text)
-
     def test_corrupt_zst_is_reported_not_fatal(self):
-        if not HAVE_ZSTD:
-            self.skipTest("zstandard is not installed")
         rel = self.ARCHIVED + ".zst"
         self._add(rel, b"not a zstd frame at all")
         rows = self.rows_for(CodexParser(), rel)
@@ -3751,10 +3715,7 @@ class OpenInterpreterTests(ParserBase):
         )
         self.assertIn("1 unparseable line", rows[-1].text)
 
-    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
     def test_zst_rollout(self):
-        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
-
         rel = OI_ROLLOUT + ".zst"
         path = self.home / rel
         path.write_bytes(
@@ -3766,7 +3727,6 @@ class OpenInterpreterTests(ParserBase):
         self.assertEqual({r.agent for r in rows}, {"open-interpreter"})
 
 
-from doubleagent.parsers import openclaw as openclaw_mod
 from doubleagent.parsers.nanobot import NanobotParser, decode_stem
 from doubleagent.parsers.openclaw import OpenClawParser
 from fixtures import (
@@ -3955,19 +3915,6 @@ class OpenClawTests(ParserBase):
         self.assertEqual(len(rows), 7)
         self.assertEqual(rows[-1].turn_type, "system")
         self.assertIn("event seq 9 unreadable: not a JSON object", rows[-1].text)
-
-    @unittest.skipUnless(HAVE_ZSTD, "zstandard is not installed")
-    def test_missing_zstandard_is_one_row_per_event(self):
-        with mock.patch.object(openclaw_mod, "_zstd_module", return_value=None):
-            rows = [
-                r
-                for r in self.rows_for(OpenClawParser(), self.DB)
-                if r.session_id == OPENCLAW_SESSION
-            ]
-        self.assertEqual(
-            [r.turn_type for r in rows], ["system", "user", "system", "tool_result", "system"]
-        )
-        self.assertIn("zstandard package not installed", rows[2].text)
 
 
 class NanobotTests(ParserBase):

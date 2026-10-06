@@ -18,6 +18,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   doubleagent` runs it from a checkout. `--version` prints
   `doubleagent <version>`. The output files and their fields are
   unchanged (#47).
+- `zstandard` is a required dependency, imported at start-up like
+  `python-dateutil`. The `system` row that said "zstandard package not
+  installed" for each compressed Zed thread, Codex or Open Interpreter
+  rollout and OpenClaw row is gone (#47).
 - `pyproject.toml` reads the version from `doubleagent.VERSION`, so it is
   set in one place (#47).
 

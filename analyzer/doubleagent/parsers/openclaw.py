@@ -9,9 +9,9 @@ was checked. The state directory is `.openclaw`, a profile's
   `sqlite_util`), the live store since mid-2026:
   - `transcript_events(session_id, seq, event_json, event_zstd,
     created_at)`: one entry per row. Rows of 1 KiB to 4 MiB may hold the
-    entry as one zstd frame in `event_zstd` with `event_json` NULL; that
-    needs the `zstandard` package, imported lazily, and without it each such
-    row becomes one `system` row. `created_at` is epoch ms.
+    entry as one zstd frame in `event_zstd` with `event_json` NULL, decoded
+    with the `zstandard` package; a frame that does not decode becomes one
+    `system` row. `created_at` is epoch ms.
   - `session_windows(session_id, session_key, previous_session_id, reason,
     channel, account_id, chat_type, model_provider, model, started_at,
     parent_session_key, spawned_by, display_name)`: one row per transcript
@@ -82,7 +82,7 @@ from ..model import Row, compact
 from ..sqlite_util import is_sqlite, open_copy, table_names
 from ..timeutil import to_utc
 from .base import Options, Parser, compact_json, text_of
-from .zed import _zstd_module, decompress
+from .zed import decompress
 
 STATE = r"(?:\.openclaw(?:-[^/]+)?|\.clawdbot|\.moltbot)"
 DB_RX = re.compile(r"^" + STATE + r"/agents/[^/]+/agent/openclaw-agent\.sqlite$")
@@ -116,12 +116,9 @@ def _maybe_zstd(blob: bytes) -> tuple[bytes | None, str]:
     blob = bytes(blob)
     if not blob.startswith(ZSTD_MAGIC):
         return blob, ""
-    zstd = _zstd_module()
-    if zstd is None:
-        return None, "zstandard package not installed"
     try:
-        return decompress(blob, zstd), ""
-    except Exception as e:  # noqa: BLE001 - zstd.ZstdError; the module is imported lazily
+        return decompress(blob), ""
+    except Exception as e:  # noqa: BLE001 - zstandard.ZstdError or a stream read error
         return None, "%s: %s" % (type(e).__name__, e)
 
 

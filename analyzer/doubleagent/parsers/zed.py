@@ -11,8 +11,8 @@ checked. Files, relative to the Zed data directory (`.local/share/zed`,
   folder_paths, folder_paths_order, created_at)`. `id` is the session id,
   `folder_paths` the project paths joined by newlines, `updated_at` and
   `created_at` RFC 3339. `data` is zstd-compressed JSON when `data_type` is
-  `zstd` (needs the `zstandard` package, imported lazily; without it each
-  thread becomes one `system` row) and raw UTF-8 JSON when `json`.
+  `zstd` (decoded with the `zstandard` package) and raw UTF-8 JSON when
+  `json`.
   The thread JSON, `version` `0.3.0`: `title`, `updated_at`,
   `initial_project_snapshot.timestamp`,
   `initial_project_snapshot.worktree_snapshots[].worktree_path` and
@@ -50,6 +50,8 @@ import json
 import re
 from collections.abc import Iterator
 
+import zstandard
+
 from ..inputs import Artifact
 from ..model import Row, compact
 from ..sqlite_util import is_sqlite, open_copy, table_names
@@ -61,20 +63,11 @@ THREADS_RX = re.compile(r"^" + DATA_DIR + r"/threads/threads\.db$")
 SIDEBAR_RX = re.compile(r"^" + DATA_DIR + r"/db/0-[^/]+/db\.sqlite$")
 
 
-def _zstd_module():
-    """The `zstandard` module, or None when it is not installed."""
-    try:
-        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
-    except ImportError:
-        return None
-    return zstandard
-
-
-def decompress(blob: bytes, zstd) -> bytes:
-    dctx = zstd.ZstdDecompressor()
+def decompress(blob: bytes) -> bytes:
+    dctx = zstandard.ZstdDecompressor()
     try:
         return dctx.decompress(blob)
-    except zstd.ZstdError:
+    except zstandard.ZstdError:
         # No content size in the frame header: stream it instead.
         out = io.BytesIO()
         with dctx.stream_reader(io.BytesIO(blob)) as reader:
@@ -275,14 +268,11 @@ class ZedParser(Parser):
         dtype = str(r.get("data_type") or "").lower()
         try:
             if dtype == "zstd":
-                zstd = _zstd_module()
-                if zstd is None:
-                    return None, "zstandard package not installed"
-                raw = decompress(bytes(data), zstd)
+                raw = decompress(bytes(data))
             else:
                 raw = data if isinstance(data, (bytes, bytearray)) else str(data).encode("utf-8")
             thread = json.loads(bytes(raw).decode("utf-8", errors="replace"))
-        except Exception as e:  # noqa: BLE001 - zstd.ZstdError (lazy import), ValueError, ...
+        except Exception as e:  # noqa: BLE001 - zstandard.ZstdError, ValueError, ...
             return None, "%s: %s" % (type(e).__name__, e)
         if not isinstance(thread, dict):
             return None, "not a JSON object"

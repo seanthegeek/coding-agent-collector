@@ -113,7 +113,7 @@ jobs:
         run: ruff check .
       - name: ruff format --check
         run: ruff format --check .
-      - name: pyright (Python 3.10, zstandard installed)
+      - name: pyright (Python 3.10)
         run: pyright
       - name: markdownlint
         run: npx -y "markdownlint-cli2@$MARKDOWNLINT_CLI2_VERSION" "**/*.md"

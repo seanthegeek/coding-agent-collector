@@ -14,10 +14,8 @@ required dependencies: `python-dateutil`, which reads the `--since` and
 `--until` times, and `zstandard`, which decompresses Zed threads, Codex and
 Open Interpreter `.jsonl.zst` rollouts and OpenClaw's compressed transcript
 rows. To run from a checkout without installing, `pip install -r
-requirements.txt` and run `python3 -m doubleagent` from this directory; if
-`zstandard` is missing there, each compressed thread, rollout or row is
-reported as an undecodable `system` row and everything else still runs. `--version` prints
-`doubleagent <version>`. [CHANGELOG.md](CHANGELOG.md) lists what changed in
+requirements.txt` and run `python3 -m doubleagent` from this directory.
+`--version` prints `doubleagent <version>`. [CHANGELOG.md](CHANGELOG.md) lists what changed in
 each version, including changes to the `timeline.jsonl` and `sessions.jsonl`
 fields.
 

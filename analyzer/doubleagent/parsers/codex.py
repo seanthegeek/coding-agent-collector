@@ -9,10 +9,9 @@ at 3e23877 (see `research/codex-cli.md`). Files, under `~/.codex` for Codex
   threads in the same layout (codex `rollout/src/lib.rs:87` at 3e23877).
   A reverted thread is `rollout-<timestamp>-<thread id>_<rollout id>.jsonl`
   (`rollout/src/rollout_file_name.rs:40-47`). Cold rollouts may be
-  zstd-compressed to `.jsonl.zst` (`rollout/src/compression.rs:29`); those
-  need the `zstandard` package, imported lazily, and without it each becomes
-  one `system` row. A truncated zstd frame yields the lines decoded before
-  the cut. Each line is `{timestamp, ordinal, type, payload}` with
+  zstd-compressed to `.jsonl.zst` (`rollout/src/compression.rs:29`),
+  decoded with the `zstandard` package. A truncated zstd frame yields the
+  lines decoded before the cut. Each line is `{timestamp, ordinal, type, payload}` with
   `timestamp` ISO 8601 Z, and a `response_item` line may carry a sibling
   `metadata` object. Types:
   - `session_meta`: payload `id` (thread id), `session_id` (root thread),
@@ -118,6 +117,8 @@ import re
 from collections.abc import Iterator
 from typing import cast
 
+import zstandard
+
 from ..inputs import Artifact, error_reason
 from ..model import Row, compact
 from ..timeutil import to_utc
@@ -164,15 +165,6 @@ def call_name(payload: dict) -> str:
     return str(payload.get("name") or ptype or "")
 
 
-def _zstd_module():
-    """The `zstandard` module, or None when it is not installed."""
-    try:
-        import zstandard  # pyright: ignore[reportMissingImports] - optional dependency
-    except ImportError:
-        return None
-    return zstandard
-
-
 def _decode_line(n: int, raw: bytes, errors: list) -> dict | None:
     raw = raw.strip()
     if not raw:
@@ -189,11 +181,11 @@ class TruncatedFrame(Exception):
     pass
 
 
-def iter_zst_chunks(fh, zstd) -> Iterator[bytes]:
+def iter_zst_chunks(fh) -> Iterator[bytes]:
     """Decompressed bytes of every zstd frame in `fh`, streamed. Raises
-    `zstd.ZstdError` on corrupt input and `TruncatedFrame` when the file ends
+    `zstandard.ZstdError` on corrupt input and `TruncatedFrame` when the file ends
     inside a frame (the stream reader would end silently instead)."""
-    dctx = zstd.ZstdDecompressor()
+    dctx = zstandard.ZstdDecompressor()
     dobj = dctx.decompressobj()
     open_frame = False
     while True:
@@ -215,7 +207,7 @@ def iter_zst_chunks(fh, zstd) -> Iterator[bytes]:
         raise TruncatedFrame("file ends inside a zstd frame")
 
 
-def iter_zst_jsonl(path, errors: list, zstd) -> Iterator[tuple[int, dict]]:
+def iter_zst_jsonl(path, errors: list) -> Iterator[tuple[int, dict]]:
     """`iter_jsonl` over a zstd-compressed file, streamed. A corrupt or
     truncated frame becomes one entry in `errors`; the lines decoded before
     it are still yielded, and a line cut by the damage is a bad line."""
@@ -223,7 +215,7 @@ def iter_zst_jsonl(path, errors: list, zstd) -> Iterator[tuple[int, dict]]:
     buf = b""
     with open(path, "rb") as fh:
         try:
-            for chunk in iter_zst_chunks(fh, zstd):
+            for chunk in iter_zst_chunks(fh):
                 buf += chunk
                 lines = buf.split(b"\n")
                 buf = lines.pop()
@@ -232,7 +224,7 @@ def iter_zst_jsonl(path, errors: list, zstd) -> Iterator[tuple[int, dict]]:
                     rec = _decode_line(n, raw, errors)
                     if rec is not None:
                         yield n, rec
-        except (zstd.ZstdError, TruncatedFrame) as e:
+        except (zstandard.ZstdError, TruncatedFrame) as e:
             errors.append((n + 1, "zstd: %s" % e))
     if buf.strip():
         n += 1
@@ -564,15 +556,7 @@ class RolloutParser(Parser):
         m = UUID_TAIL_RX.search(artifact.rel)
         session_id = m.group(1) if m else ""  # until session_meta says otherwise
         if artifact.rel.endswith(".zst"):
-            zstd = _zstd_module()
-            if zstd is None:
-                yield self._system(
-                    artifact,
-                    "parser: compressed rollout not read: zstandard package not installed",
-                    session_id,
-                )
-                return
-            records = list(iter_zst_jsonl(artifact.disk_path, errors, zstd))
+            records = list(iter_zst_jsonl(artifact.disk_path, errors))
         else:
             records = list(iter_jsonl(artifact.disk_path, errors))
         carried, exit_codes = _prescan(records)

@@ -686,11 +686,9 @@ list together. Run the commands from the repository root before pushing.
   hook script, `lab/lab.sh` and `analyzer/tests/run.sh` are checked too.
   `posh` (apt package `posh`) runs the smoke test in CI and in the block
   above.
-- pyright must report 0 errors both with zstandard installed (as CI runs
-  it) and without it. The nine `import zstandard` lines carry
-  `# pyright: ignore[reportMissingImports]` because the package is
-  imported lazily so a checkout run without it still works; a per-line
-  ignore keeps the check for every other import.
+- pyright runs with both analyzer dependencies installed, as CI runs it;
+  `zstandard` and `python-dateutil` are ordinary top-level imports, never
+  lazy imports with a fallback.
 - shellcheck, shfmt and checkbashisms are not on PyPI or npm: install the
   release binaries (CI downloads them and checks their sha256), and
   checkbashisms as the single `scripts/checkbashisms.pl` from the devscripts
