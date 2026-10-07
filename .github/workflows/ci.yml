@@ -39,31 +39,57 @@ jobs:
             exit 1
           fi
 
+  # One job per shell so the smoke runs, several minutes each, run in
+  # parallel. `shell` is the argument to smoke.sh; `wrapper` is the body of
+  # a wrapper script for shells that need flags or a multi-call binary.
   sh-collector:
-    name: sh collector (shellcheck, smoke under sh, dash, bash, busybox, zsh)
+    name: sh collector (smoke under ${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: sh
+            shell: sh
+          - name: dash
+            shell: dash
+            package: dash
+          - name: bash
+            shell: bash
+          - name: busybox ash
+            shell: /tmp/ash
+            package: busybox-static
+            wrapper: exec busybox ash "$@"
+          - name: zsh --emulate sh
+            shell: /tmp/zsh-sh
+            package: zsh
+            wrapper: exec zsh --emulate sh "$@"
+          - name: posh
+            shell: posh
+            package: posh
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the shell
+        if: matrix.package
+        run: sudo apt-get update -q && sudo apt-get install -y -q ${{ matrix.package }}
+      - name: Write the wrapper
+        if: matrix.wrapper
+        env:
+          WRAPPER: ${{ matrix.wrapper }}
+          TARGET: ${{ matrix.shell }}
+        run: printf '#!/bin/sh\n%s\n' "$WRAPPER" > "$TARGET" && chmod +x "$TARGET"
+      - name: smoke
+        run: collectors/tests/smoke.sh ${{ matrix.shell }}
+
+  sh-shellcheck:
+    name: sh collector (shellcheck)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Install shells
-        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck dash busybox-static zsh posh
+      - name: Install shellcheck
+        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck
       - name: shellcheck
         run: shellcheck -s sh -S warning collectors/collect-agent-artifacts.sh
-      - name: smoke (sh)
-        run: collectors/tests/smoke.sh sh
-      - name: smoke (dash)
-        run: collectors/tests/smoke.sh dash
-      - name: smoke (bash)
-        run: collectors/tests/smoke.sh bash
-      - name: smoke (busybox ash)
-        run: |
-          printf '#!/bin/sh\nexec busybox ash "$@"\n' > /tmp/ash && chmod +x /tmp/ash
-          collectors/tests/smoke.sh /tmp/ash
-      - name: smoke (zsh --emulate sh)
-        run: |
-          printf '#!/bin/sh\nexec zsh --emulate sh "$@"\n' > /tmp/zsh-sh && chmod +x /tmp/zsh-sh
-          collectors/tests/smoke.sh /tmp/zsh-sh
-      - name: smoke (posh)
-        run: collectors/tests/smoke.sh posh
 
   powershell-7:
     name: PowerShell collector (smoke under PowerShell 7 on Linux)
