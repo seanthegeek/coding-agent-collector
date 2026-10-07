@@ -10,6 +10,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.10.3] - 2026-10-07
+
+### Added
+
+- The PowerShell collector has its own tar writer, used when `tar.exe` is
+  missing or fails: it writes the same `.tar.gz` layout with pax headers
+  for non-ASCII and long names, and keeps the staged symlinks.
+  `collection.json` `capabilities.archiver` has a new value,
+  `PowerShell tar writer`, for an archive it wrote (#72).
+- `CAC_ARCHIVER`, a test hook for the PowerShell collector, sets the
+  archivers to try (`tar`, `writer`, `zip`) (#72).
+
+### Fixed
+
+- On Windows, a collection with a file name outside the ANSI code page
+  (CJK, Cyrillic) no longer falls back to a zip without saying why:
+  `tar.exe` crashes on such names, and the collector now logs its exit
+  code (`tar.exe failed: exit code 0xC0000005`), adds a `notes` entry to
+  `collection.json` for each fallback, and writes the `.tar.gz` with its
+  own tar writer (#72).
+- The PowerShell collector's zip, now the last resort, stores entry names
+  with `/` instead of `\` under Windows PowerShell 5.1, so it extracts
+  into the `fs/<original path>` layout on Linux and macOS (#72).
+
 ## [1.10.2] - 2026-10-07
 
 ### Changed
@@ -448,7 +472,8 @@ stdout `errors:` line now reads `errors:     N (X error_copy, Y error_read)`.
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.2...HEAD
+[Unreleased]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.3...HEAD
+[1.10.3]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.2...collector-v1.10.3
 [1.10.2]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.1...collector-v1.10.2
 [1.10.1]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.0...collector-v1.10.1
 [1.10.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.9.0...collector-v1.10.0

@@ -125,7 +125,7 @@ one document per agent under [research/](research/README.md).
 | [docs/docker.md](docs/docker.md) | Docker and Podman named volumes, Docker Desktop |
 | [docs/privileges.md](docs/privileges.md) | What a run without root or Administrator still collects and records |
 | [docs/inventory.md](docs/inventory.md) | Inventory mode and its JSON Lines fields |
-| [docs/windows.md](docs/windows.md) | Windows specifics: `tar.exe` and zip, symlinks and reparse points, locked files, long paths |
+| [docs/windows.md](docs/windows.md) | Windows specifics: `tar.exe`, the PowerShell tar writer and zip, symlinks and reparse points, locked files, long paths |
 | [docs/deployment.md](docs/deployment.md) | Running through an EDR remote shell, fleet inventory, access times |
 | [docs/testing.md](docs/testing.md) | The smoke tests, the catalog drift check and CI |
 

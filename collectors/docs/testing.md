@@ -41,9 +41,26 @@ than the one beside it, which is how the test runs under Windows PowerShell
 on failure in the same way, and skips the symlink checks, saying so, where
 creating symlinks is not permitted. Its symlink-in-archive checks use a
 separate small image with a relative, a dangling and a directory symlink
-(and, on Windows, a junction) and run it three times: with `tar`, with no
-`tar` on the `PATH` (zip from the start), and, off Windows, with a `tar`
-that fails (the late fall back to zip).
+(and, on Windows, a junction) and run it four times: with `tar`, with the
+PowerShell tar writer, with the zip from the start, and, off Windows, with a
+`tar` that fails and the zip after it (the late fall back to zip).
+
+`CAC_ARCHIVER` is a test hook for the PowerShell collector that sets the
+archivers to try, in order, as a comma-separated list of `tar`, `writer`
+(the PowerShell tar writer) and `zip`; the default is `tar,writer,zip`. An
+unknown name exits `2`, `tar` is dropped when no `tar` is on the `PATH`,
+and the archive is a `.zip` only when `zip` comes first, in which case no
+symlinks are staged. The smoke test uses `writer` and `zip` to run each
+archiver on every platform, and `tar,zip` with a failing `tar` for the late
+zip fallback. It also collects an image with Latin-1, Cyrillic and CJK file
+names and a symlink with a Cyrillic name: on Windows `tar.exe` fails on it,
+and the test checks the PowerShell tar writer's archive, `archiver`, the
+note and the log line, and reads the archive with its own .NET tar reader
+(header checksums, pax records, member names, link targets and hashes),
+since `tar.exe` cannot list those names. With the writer forced, it checks
+that the platform `tar` lists the same members as the default run and
+extracts bytes that match the manifest, and with the zip forced that the
+entry names use `/`.
 
 Each smoke test builds a fake disk image with two users, a service account,
 awkward filenames, a symlink, credential files, excluded directories, an

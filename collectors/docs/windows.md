@@ -4,16 +4,51 @@ How the PowerShell collector writes its archive, recreates symlinks and
 reparse points, and copies locked or long paths. Back to the
 [collectors README](../README.md).
 
-## Archiver: `tar.exe` or `ZipFile`
+## Archiver: `tar.exe`, the PowerShell tar writer or `ZipFile`
 
-On Windows 10 1803 and later, Windows 11, and Server 2019 and later the
-script writes a `tar.gz` through the built-in `tar.exe`, so the archive is
-identical in form to the sh collector's. When `tar.exe` is not on the `PATH`
-(older hosts) or fails, the script falls back to `System.IO.Compression` and
-produces a `.zip`. The summary's `capabilities.archiver` and `archive` name
-the archiver and the archive actually written: the summary is rewritten and
-restaged before the zip fallback, so both the copy inside the archive and the
-one beside it say `ZipFile` and `.zip` after a `tar.exe` failure.
+The script tries up to three archivers in order, and the first that writes
+an archive wins:
+
+| Archiver | `capabilities.archiver` | Archive | Used when |
+| --- | --- | --- | --- |
+| `tar.exe -czf <archive> -C <stage> .` | `tar.exe` | `.tar.gz` | first, when `tar.exe` is on the `PATH` (Windows 10 1803 and later, Windows 11, Server 2019 and later) |
+| the PowerShell tar writer in the script | `PowerShell tar writer` | `.tar.gz` | `tar.exe` is not on the `PATH`, exits non-zero or leaves no archive |
+| `System.IO.Compression.ZipArchive` | `ZipFile` | `.zip` | the PowerShell tar writer failed too |
+
+The built-in `tar.exe` (bsdtar 3.8.8, `tar.exe` 10.0.26100) exits `0xC0000005`,
+an access violation, when the staging tree holds a name outside the ANSI
+code page, such as a CJK or Cyrillic one; no option or format makes it
+store such names. When `tar.exe` fails, the log has a line
+`tar.exe failed: exit code 0xC0000005` (hex for a negative exit code,
+decimal otherwise), its partial archive is removed, and `collection.json`
+`notes` gets `tar.exe failed (exit code 0xC0000005); fell back to PowerShell
+tar writer`. A failure of the PowerShell tar writer is logged with the
+exception's message (`PowerShell tar writer failed: <message>`) and noted in
+the same way before the zip is written.
+
+The PowerShell tar writer uses only .NET Framework APIs (`GZipStream` over a
+`FileStream`). It writes POSIX ustar headers with the member names
+`tar -czf <archive> -C <stage> .` gives (`./`, `./fs/...`,
+`./manifest.jsonl`, `./collection.json`, `./collector.log`, directories
+ending in `/`), so the archive layout is the same as with `tar.exe` and the
+sh collector. A path that is not ASCII, or does not fit the ustar name and
+prefix fields, goes in a pax extended header (typeflag `x`) as a UTF-8
+`path` record, as does a symlink target (`linkpath`) and a size above 8 GiB
+(`size`). It stores directories (mode 0755), regular files (0644) and
+symlinks (0777) with uid and gid 0 and each staged item's last write time.
+It reads the staged files with shared access in 1 MiB chunks, lists the
+staging tree without following reparse points, and stores a symlink's target
+string exactly as the link was staged, so unlike `tar.exe` it keeps a
+relative target's backslashes and does not add `\\?\` to an absolute one.
+
+The zip is written entry by entry with `/` separators and no `./` prefix
+(the .NET Framework `ZipFile.CreateFromDirectory` used up to 1.10.2 wrote
+`\`), with an entry for each empty directory.
+
+The summary's `capabilities.archiver` and `archive` name the archiver and
+the archive actually written: the summary and the log are rewritten and
+restaged before each fallback, so both the copy inside the archive and the
+one beside it name the archiver that wrote it.
 
 ## Symlinks and reparse points
 
@@ -60,11 +95,14 @@ A `.zip` cannot hold symlinks and `ZipFile` would copy the target's bytes in
 their place, possibly from outside the collection, so the zip archive never
 contains them:
 
-- When `tar.exe` is missing from the start, no link is created, every
-  `symlink` row has an empty `archive_path` and the `error`
-  `not recreated in the archive: zip cannot store symlinks`, and a note
-  says how many symlinks are in the manifest only.
-- When `tar.exe` fails after the links were staged, they are deleted from
+- When the zip is the archiver from the start, which happens only when the
+  `CAC_ARCHIVER` test hook says so (see [testing.md](testing.md)), no link
+  is created, every `symlink` row has an empty `archive_path` and the
+  `error` `not recreated in the archive: zip cannot store symlinks`, and a
+  note says how many symlinks are in the manifest only. Without `tar.exe`
+  the PowerShell tar writer comes first and stores the links.
+- When `tar.exe` and the PowerShell tar writer both fail after the links
+  were staged, they are deleted from
   the staging directory before zipping, the manifest is rewritten so those
   rows have an empty `archive_path` and the `error`
   `not in the archive: tar failed and zip cannot store symlinks`, a note
@@ -74,8 +112,9 @@ contains them:
 ### PowerShell 7 on Linux or macOS
 
 Under PowerShell 7 on Linux or macOS the links are made with .NET's
-`CreateSymbolicLink`, the archiver is the system `tar`, and the same rules
-apply.
+`CreateSymbolicLink`, the first archiver is the system `tar` (still named
+`tar.exe` in `capabilities.archiver`), which stores UTF-8 names, and the
+same fallbacks and rules apply when it fails or is missing.
 
 ### Staged link cleanup
 

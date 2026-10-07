@@ -76,7 +76,7 @@ param(
 
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
-$ToolVersion = '1.10.2'
+$ToolVersion = '1.10.3'
 $TOOL = 'collect-agent-artifacts'
 
 # ---------------------------------------------------------------------------
@@ -1756,9 +1756,11 @@ function Get-LinkTarget($item) {
 # verbatim, accepts one that does not exist, and works unprivileged in
 # Developer Mode from Windows 10 1703. New-Item -ItemType SymbolicLink is not
 # used: on 5.1 it resolves a relative target against the current directory
-# and refuses a target that does not exist. ZipFile follows links, so the zip
-# path never has them: none are made when zip is the archiver from the start,
-# and they are removed before a fall back to zip.
+# and refuses a target that does not exist. A zip cannot store links, so the
+# zip path never has them: none are made when zip is the archiver from the
+# start (CAC_ARCHIVER=zip), and they are removed before a fall back to zip.
+# Each staged link keeps its target string, which the PowerShell tar writer
+# stores as it was given to the link API.
 # ---------------------------------------------------------------------------
 $script:LinkApi = $null
 $script:LinkApiError = ''
@@ -1830,13 +1832,13 @@ function Invoke-CreateSymlink([string]$dest, [string]$target, [bool]$isDir) {
     $e = $_.Exception; while ($null -ne $e.InnerException) { $e = $e.InnerException }
     return $e.Message
   }
-  [void]$script:StagedLinks.Add(@($dest, $isDir))
+  [void]$script:StagedLinks.Add(@($dest, $isDir, $target))
   return ''
 }
 
 # Recreates the reparse point $item at $dest; returns '' or the row's error.
 function Add-StagedLink($item, [string]$dest) {
-  if (-not $TarExe) { $script:LinkCounts.zip++; return 'not recreated in the archive: zip cannot store symlinks' }
+  if (-not $script:LinksInArchive) { $script:LinkCounts.zip++; return 'not recreated in the archive: zip cannot store symlinks' }
   $vals = @()
   try { $p = $item.PSObject.Properties['Target']; if ($p -and $p.Value) { $vals = @([string[]]$p.Value) } } catch { }
   if ($vals.Count -ne 1 -or $vals[0] -eq '') { $script:LinkCounts.failed++; return 'not recreated in the archive: reparse point has no single link target' }
@@ -1883,6 +1885,223 @@ function Clear-LinkArchivePaths([string]$reason) {
       $w.WriteLine($ln)
     }
   } finally { $w.Close() }
+}
+
+# ---------------------------------------------------------------------------
+# Archivers. tar.exe (the system tar under PowerShell 7 off Windows) is tried
+# first; Windows tar.exe exits 0xC0000005 on any name outside the ANSI code
+# page (#72), so the PowerShell tar writer below follows it, and a zip is the
+# last resort. CAC_ARCHIVER, a test hook, sets the chain: a comma-separated
+# list of tar, writer and zip, default tar,writer,zip.
+# ---------------------------------------------------------------------------
+$ArchiverLabels = @{ tar = 'tar.exe'; writer = 'PowerShell tar writer'; zip = 'ZipFile' }
+
+# Lists the staging tree without following links, as Add-Tree walks the
+# source: a reparse point (a staged link) is an entry of its own and never
+# descended. Each entry is @(name, FileSystemInfo, kind) with kind d, f or l;
+# names are relative to the stage with / separators, and a directory's name
+# ends in /. A directory comes before its contents.
+function Get-StageEntries([string]$root) {
+  $out = New-Object System.Collections.ArrayList
+  $stack = New-Object System.Collections.Stack
+  $stack.Push(@('', (New-Object System.IO.DirectoryInfo($root))))
+  $rp = [System.IO.FileAttributes]::ReparsePoint; $dirAttr = [System.IO.FileAttributes]::Directory
+  while ($stack.Count -gt 0) {
+    $top = $stack.Pop(); $prefix = $top[0]
+    foreach ($c in $top[1].GetFileSystemInfos()) {
+      $a = $c.Attributes
+      if (($a -band $rp) -ne 0) { [void]$out.Add(@(($prefix + $c.Name), $c, 'l')) }
+      elseif (($a -band $dirAttr) -ne 0) { $n = $prefix + $c.Name + '/'; [void]$out.Add(@($n, $c, 'd')); $stack.Push(@($n, $c)) }
+      else { [void]$out.Add(@(($prefix + $c.Name), $c, 'f')) }
+    }
+  }
+  return , $out
+}
+
+# Seconds since the epoch of an item's own last write time; 0 before 1970.
+function Get-UnixTime($info) {
+  $t = 0
+  try { $t = [int64][Math]::Floor(($info.LastWriteTimeUtc.Ticks - 621355968000000000) / 10000000) } catch { }
+  if ($t -lt 0) { $t = 0 }
+  return $t
+}
+
+$script:TarAscii = [System.Text.Encoding]::ASCII
+$script:TarUtf8 = New-Object System.Text.UTF8Encoding $false
+$script:TarZero = New-Object byte[] 1024
+$script:TarNonAscii = New-Object System.Text.RegularExpressions.Regex('[^\x00-\x7f]')
+# A ustar header: mode, uid and gid 0, empty uname and gname. $name and
+# $prefix are ASCII and fit their fields; the caller decides that. The
+# fixed fields come from a template, and the checksum (the byte sum with its
+# own field read as eight spaces) is the template's sum plus the bytes of
+# the fields written here, which is faster under 5.1 than summing all 512.
+$script:TarTemplate = New-Object byte[] 512
+[void]$script:TarAscii.GetBytes('0000000', 0, 7, $script:TarTemplate, 108)
+[void]$script:TarAscii.GetBytes('0000000', 0, 7, $script:TarTemplate, 116)
+[void]$script:TarAscii.GetBytes('ustar', 0, 5, $script:TarTemplate, 257)
+$script:TarTemplate[263] = 48; $script:TarTemplate[264] = 48
+for ($ti = 148; $ti -lt 156; $ti++) { $script:TarTemplate[$ti] = 32 }
+$script:TarTemplateSum = 0
+foreach ($tb in $script:TarTemplate) { $script:TarTemplateSum += $tb }
+function Get-TarHeader([string]$name, [string]$prefix, [char]$type, [string]$mode, [int64]$size, [int64]$mtime, [string]$link) {
+  $h = [byte[]]$script:TarTemplate.Clone()
+  $enc = $script:TarAscii
+  $sz = [Convert]::ToString($size, 8).PadLeft(11, '0')
+  $mt = [Convert]::ToString($mtime, 8).PadLeft(11, '0')
+  [void]$enc.GetBytes($name, 0, $name.Length, $h, 0)
+  [void]$enc.GetBytes($mode, 0, 7, $h, 100)
+  [void]$enc.GetBytes($sz, 0, 11, $h, 124)
+  [void]$enc.GetBytes($mt, 0, 11, $h, 136)
+  $h[156] = [byte]$type
+  if ($link) { [void]$enc.GetBytes($link, 0, $link.Length, $h, 157) }
+  if ($prefix) { [void]$enc.GetBytes($prefix, 0, $prefix.Length, $h, 345) }
+  $sum = $script:TarTemplateSum + [int]$h[156] + [System.Linq.Enumerable]::Sum([int[]]$enc.GetBytes($name + $mode + $sz + $mt + $link + $prefix))
+  $s = [Convert]::ToString($sum, 8).PadLeft(6, '0'); [void]$enc.GetBytes($s, 0, 6, $h, 148)
+  $h[154] = 0
+  return , $h
+}
+
+# One pax record, "<len> key=value\n", where len counts the whole record.
+function Get-PaxRecord([string]$key, [string]$value) {
+  $body = ' ' + $key + '=' + $value + "`n"
+  $n = $script:TarUtf8.GetByteCount($body)
+  $len = $n + ([string]$n).Length
+  if (([string]$len).Length -ne ([string]$n).Length) { $len = $n + ([string]$len).Length }
+  return ([string]$len) + $body
+}
+
+# An ASCII stand-in for a name that goes in a pax record, for readers that
+# ignore pax headers: other characters become _, and only the end is kept.
+function Get-TarAsciiName([string]$name, [int]$max) {
+  $a = $script:TarNonAscii.Replace($name, '_')
+  if ($a.Length -gt $max) { $a = $a.Substring($a.Length - $max) }
+  return $a
+}
+
+# Writes one member's header, preceded by a pax extended header (typeflag x)
+# when the path or the link target is not ASCII or does not fit the ustar
+# fields, or the size does not fit eleven octal digits.
+function Write-TarMember($out, [string]$path, [char]$type, [string]$mode, [int64]$size, [int64]$mtime, [string]$link) {
+  $name = $path; $prefix = ''; $pax = ''
+  if ($script:TarNonAscii.IsMatch($path)) { $pax += Get-PaxRecord 'path' $path; $name = Get-TarAsciiName $path 100 }
+  elseif ($path.Length -gt 100) {
+    # ustar splits a long name at a / into a prefix of up to 155 bytes and a
+    # name of up to 100: the last / at or before byte 155 that leaves a
+    # non-empty name.
+    $cut = -1
+    if ($path.Length -le 256) { $cut = $path.LastIndexOf([char]'/', [Math]::Min(155, $path.Length - 2)) }
+    if ($cut -gt 0 -and $cut -ge ($path.Length - 101)) { $prefix = $path.Substring(0, $cut); $name = $path.Substring($cut + 1) }
+    else { $pax += Get-PaxRecord 'path' $path; $name = Get-TarAsciiName $path 100 }
+  }
+  if ($link -and ($link.Length -gt 100 -or $script:TarNonAscii.IsMatch($link))) { $pax += Get-PaxRecord 'linkpath' $link; $link = Get-TarAsciiName $link 100 }
+  if ($size -gt 8589934591) { $pax += Get-PaxRecord 'size' ([string]$size); $hsize = 0 } else { $hsize = $size }
+  if ($pax) {
+    $pb = $script:TarUtf8.GetBytes($pax)
+    $ph = Get-TarHeader ('./PaxHeaders/' + (Get-TarAsciiName ($path.TrimEnd('/') -replace '^.*/', '') 87)) '' 'x' '0000644' $pb.Length $mtime ''
+    $out.Write($ph, 0, 512); $out.Write($pb, 0, $pb.Length)
+    $pad = (512 - $pb.Length % 512) % 512; if ($pad) { $out.Write($script:TarZero, 0, $pad) }
+  }
+  $h = Get-TarHeader $name $prefix $type $mode $hsize $mtime $link
+  $out.Write($h, 0, 512)
+}
+
+# Writes $archive as a gzip-compressed POSIX tar of $stage with the member
+# names tar -czf $archive -C $stage . gives (./, ./fs/, ./manifest.jsonl):
+# directories (mode 0755), regular files (0644) and symlinks (0777, with the
+# target string the link was staged with), uid and gid 0. Staged files are
+# read with shared access in chunks and links are never followed. Throws on
+# failure; the caller removes the partial archive.
+function Write-TarGz([string]$stage, [string]$archive) {
+  $entries = Get-StageEntries $stage
+  $cmp = [StringComparer]::Ordinal; if ($IsWindowsHost) { $cmp = [StringComparer]::OrdinalIgnoreCase }
+  $targets = New-Object 'System.Collections.Generic.Dictionary[string,string]' ($cmp)
+  foreach ($l in @($script:StagedLinks)) {
+    if ($l[0].Length -gt $stage.Length + 1) { $targets[$l[0].Substring($stage.Length + 1).Replace($Sep, '/')] = $l[2] }
+  }
+  $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+  $buf = New-Object byte[] 1048576
+  $fs = $null; $out = $null
+  try {
+    $fs = New-Object System.IO.FileStream($archive, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 65536)
+    $gz = New-Object System.IO.Compression.GZipStream($fs, [System.IO.Compression.CompressionLevel]::Optimal)
+    # Headers are 512-byte writes; the buffer hands the compressor larger blocks.
+    $out = New-Object System.IO.BufferedStream($gz, 1048576)
+    Write-TarMember $out './' '5' '0000755' 0 (Get-UnixTime (New-Object System.IO.DirectoryInfo($stage))) ''
+    $fileMode = [System.IO.FileMode]::Open; $readAccess = [System.IO.FileAccess]::Read
+    $nonAscii = $script:TarNonAscii
+    foreach ($e in $entries) {
+      $info = $e[1]; $kind = $e[2]; $path = './' + $e[0]
+      $link = ''; $size = 0; $src = $null
+      if ($kind -eq 'd') { $type = '5'; $mode = '0000755' }
+      elseif ($kind -eq 'l') {
+        $type = '2'; $mode = '0000777'
+        if ($targets.ContainsKey($e[0])) { $link = $targets[$e[0]] }
+        if (-not $link) {
+          # Not a link this run staged; read its own target, never through it.
+          $p = $info.PSObject.Properties['LinkTarget']
+          if ($p -and $p.Value) { $link = [string]$p.Value }
+          else { try { $v = @((Get-Item -LiteralPath $info.FullName -Force -ErrorAction Stop).Target); if ($v.Count -eq 1) { $link = [string]$v[0] } } catch { } }
+        }
+        if (-not $link) { throw "staged link has no target: $($info.FullName)" }
+      } else {
+        $type = '0'; $mode = '0000644'
+        $src = [System.IO.File]::Open($info.FullName, $fileMode, $readAccess, $share)
+      }
+      try {
+        if ($src) { $size = $src.Length }
+        # Inline rather than Get-UnixTime: a function call per member is
+        # measurable under 5.1.
+        $mt = [int64][Math]::Floor(($info.LastWriteTimeUtc.Ticks - 621355968000000000) / 10000000)
+        if ($mt -lt 0) { $mt = 0 }
+        # Most members are short ASCII names; Write-TarMember handles the rest.
+        if ($path.Length -le 100 -and $link.Length -le 100 -and -not $nonAscii.IsMatch($path) -and -not ($link -and $nonAscii.IsMatch($link)) -and $size -le 8589934591) {
+          $h = Get-TarHeader $path '' $type $mode $size $mt $link
+          $out.Write($h, 0, 512)
+        } else { Write-TarMember $out $path $type $mode $size $mt $link }
+        if ($src) {
+          $left = $size
+          while ($left -gt 0) {
+            $want = $buf.Length; if ($left -lt $want) { $want = [int]$left }
+            $n = $src.Read($buf, 0, $want)
+            if ($n -le 0) { throw "staged file shrank while archiving: $($info.FullName)" }
+            $out.Write($buf, 0, $n); $left -= $n
+          }
+          $pad = (512 - $size % 512) % 512; if ($pad) { $out.Write($script:TarZero, 0, $pad) }
+        }
+      } finally { if ($src) { $src.Dispose() } }
+    }
+    $out.Write($script:TarZero, 0, 1024)
+  } finally {
+    if ($null -ne $out) { $out.Dispose() } elseif ($null -ne $fs) { $fs.Dispose() }
+  }
+}
+
+# Writes $archive as a zip of $stage, entry by entry with / separators (the
+# .NET Framework ZipFile.CreateFromDirectory writes \), names without a ./
+# prefix, and an entry for each empty directory. Called only after the staged
+# links are removed; a reparse point found anyway is logged and left out.
+function Write-StageZip([string]$stage, [string]$archive) {
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $entries = Get-StageEntries $stage
+  $hasChild = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+  foreach ($e in $entries) { $t = $e[0].TrimEnd('/'); $i = $t.LastIndexOf('/'); if ($i -ge 0) { [void]$hasChild.Add($t.Substring(0, $i + 1)) } }
+  $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+  $level = [System.IO.Compression.CompressionLevel]::Optimal
+  $zip = $null
+  try {
+    $zip = [System.IO.Compression.ZipFile]::Open($archive, 'Create')
+    foreach ($e in $entries) {
+      $info = $e[1]; $kind = $e[2]
+      if ($kind -eq 'l') { [System.IO.File]::AppendAllText($LogPath, "zip: staged link left out: $($info.FullName)`n", $Utf8NoBom); continue }
+      if ($kind -eq 'd' -and $hasChild.Contains($e[0])) { continue }
+      $ze = $zip.CreateEntry($e[0], $level)
+      # A zip time holds 1980 to 2107 only; outside that the entry keeps the default.
+      try { $ze.LastWriteTime = [DateTimeOffset]$info.LastWriteTime } catch { }
+      if ($kind -eq 'd') { continue }
+      $src = [System.IO.File]::Open($info.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+      try { $dst = $ze.Open(); try { $src.CopyTo($dst, 1048576) } finally { $dst.Dispose() } } finally { $src.Dispose() }
+    }
+  } finally { if ($null -ne $zip) { $zip.Dispose() } }
 }
 
 # ---------------------------------------------------------------------------
@@ -1936,7 +2155,24 @@ $IsWindowsHost = ($env:OS -eq 'Windows_NT')
 if ($Inventory) { }
 elseif ($IsWindowsHost) { $tarCmd = Get-Command tar.exe -ErrorAction SilentlyContinue } else { $tarCmd = Get-Command tar -ErrorAction SilentlyContinue }
 if ($tarCmd) { $TarExe = $tarCmd.Source }
-if ($TarExe) { $Archive = Join-PathSafe $OutputDir "$Name.tar.gz" } else { $Archive = Join-PathSafe $OutputDir "$Name.zip" }
+# The archivers to try in order; see "Archivers" above. A tar that is not on
+# the PATH is left out. Links are staged unless the zip comes first.
+$Archivers = @()
+$ArchiverWhy = ''
+if (-not $Inventory) {
+  $spec = 'tar,writer,zip'
+  if ($env:CAC_ARCHIVER) { $spec = $env:CAC_ARCHIVER; $ArchiverWhy = "CAC_ARCHIVER=$spec" }
+  foreach ($a in @($spec -split ',')) {
+    $a = $a.Trim()
+    if (-not $ArchiverLabels.ContainsKey($a)) { Write-Error "CAC_ARCHIVER: unknown archiver '$a' (use tar, writer or zip, comma-separated)"; exit 2 }
+    if ($a -eq 'tar' -and -not $TarExe) { if (-not $ArchiverWhy) { $ArchiverWhy = 'tar.exe not found' }; continue }
+    if (-not ($Archivers -contains $a)) { $Archivers += $a }
+  }
+  if ($Archivers.Count -eq 0) { Write-Error "CAC_ARCHIVER: no archiver left to try ($spec, $ArchiverWhy)"; exit 2 }
+  if (-not ($Archivers -contains 'tar')) { $TarExe = $null }
+}
+$script:LinksInArchive = ($Archivers.Count -gt 0 -and $Archivers[0] -ne 'zip')
+if ($Archivers.Count -gt 0 -and $Archivers[0] -eq 'zip') { $Archive = Join-PathSafe $OutputDir "$Name.zip" } else { $Archive = Join-PathSafe $OutputDir "$Name.tar.gz" }
 
 $script:LogWriter = $null
 $script:ManifestWriter = $null
@@ -2258,7 +2494,9 @@ $script:InaccessibleHomes = @()
 $UserList = @(Get-UserHomes)
 
 Write-CollectorLog "$TOOL $ToolVersion starting on $HostName ($([Environment]::OSVersion.VersionString), PowerShell $($PSVersionTable.PSVersion)) mode=$Mode root=$(if ($Root) { $Root } else { '\' })"
-Write-CollectorLog "archive=$(if ($TarExe) { 'tar.gz via ' + $TarExe } else { 'zip (tar.exe not found)' }) max_file_size=${MaxFileSizeMB}MB full=$($Full.IsPresent) no_secrets=$($NoSecrets.IsPresent) no_docker=$($NoDocker.IsPresent)"
+$archiveVia = 'none'; if ($Archivers.Count -eq 0) { } elseif ($Archivers[0] -eq 'zip') { $archiveVia = 'zip' } elseif ($Archivers[0] -eq 'tar') { $archiveVia = 'tar.gz via ' + $TarExe } elseif ($Archivers[0] -eq 'writer') { $archiveVia = 'tar.gz via PowerShell tar writer' }
+if ($ArchiverWhy -and $Archivers.Count -gt 0 -and $Archivers[0] -ne 'tar') { $archiveVia += " ($ArchiverWhy)" }
+Write-CollectorLog "archive=$archiveVia max_file_size=${MaxFileSizeMB}MB full=$($Full.IsPresent) no_secrets=$($NoSecrets.IsPresent) no_docker=$($NoDocker.IsPresent)"
 $IsAdmin = $false
 try { $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) } catch { }
 if ($Inventory -and $PSBoundParameters.ContainsKey('OutputDir')) { Write-CollectorLog "NOTE: -Inventory writes nothing; -OutputDir $OutputDir ignored" }
@@ -2663,7 +2901,7 @@ $summary = [ordered]@{
   run_as_admin = $IsAdmin
   started = $StartTs; finished = $EndTs
   options = [ordered]@{ full = $Full.IsPresent; no_secrets = $NoSecrets.IsPresent; max_file_size_bytes = $MaxSize; users_filter = $Users; no_docker = $NoDocker.IsPresent; no_projects = $NoProjects.IsPresent; projects = @($Project) }
-  capabilities = [ordered]@{ hash_tool = 'System.Security.Cryptography.SHA256'; archiver = $(if ($TarExe) { 'tar.exe' } else { 'ZipFile' }) }
+  capabilities = [ordered]@{ hash_tool = 'System.Security.Cryptography.SHA256'; archiver = $ArchiverLabels[$Archivers[0]] }
   users = @($UserList | ForEach-Object { $_.user })
   homes = @($UserList | ForEach-Object { $_.home })
   users_with_artifacts = @($ActiveUsers | ForEach-Object { $_.user })
@@ -2673,8 +2911,8 @@ $summary = [ordered]@{
   notes = @($script:Notes)
   archive = (Split-Path -Leaf $Archive)
 }
-# Write collection.json and stage a copy. Called again before the zip
-# fallback, so the archived and the on-disk summary name the archive and the
+# Write collection.json and stage a copy. Called again before each fallback
+# archiver, so the archived and the on-disk summary name the archive and the
 # archiver actually used.
 function Write-Summary {
   [System.IO.File]::WriteAllText($SummaryPath, ($summary | ConvertTo-Json -Depth 4), $Utf8NoBom)
@@ -2688,37 +2926,71 @@ $script:LogWriter.Close()
 Copy-Item -LiteralPath $ManifestPath -Destination (Join-PathSafe $Stage 'manifest.jsonl') -Force
 Copy-Item -LiteralPath $LogPath -Destination (Join-PathSafe $Stage 'collector.log') -Force
 
-if (Test-PathQuiet $Archive 'Any') { Remove-Item -LiteralPath $Archive -Force }
-$archiveOk = $false
-if ($TarExe) {
-  & $TarExe -czf $Archive -C $Stage . 2>>$LogPath
-  if ($LASTEXITCODE -eq 0 -and (Test-PathQuiet $Archive 'Any')) { $archiveOk = $true }
+# Each archiver in $Archivers is tried in turn. A failure is logged with its
+# reason, its partial archive removed, and a note added; the summary, log and
+# manifest are then restaged so the next archive holds what is written beside it.
+function Format-ExitCode($code) {
+  if ($null -eq $code) { return 'unknown' }
+  if ([int]$code -lt 0) { return '0x' + ([int]$code).ToString('X8') }
+  return [string]$code
 }
-if (-not $archiveOk) {
+function Clear-PartialArchive {
+  try { if (Test-PathQuiet $Archive 'Any') { [System.IO.File]::Delete($Archive) } }
+  catch { [System.IO.File]::AppendAllText($LogPath, "could not remove partial archive ${Archive}: $($_.Exception.Message)`n", $Utf8NoBom) }
+}
+Clear-PartialArchive
+$archiveOk = $false
+$failedWhy = ''
+for ($ai = 0; $ai -lt $Archivers.Count -and -not $archiveOk; $ai++) {
+  $kind = $Archivers[$ai]
   try {
-    if (Test-PathQuiet $Archive 'Any') { Remove-Item -LiteralPath $Archive -Force }
-    # ZipFile would follow the staged links, so they go first, and the
-    # manifest and summary are rewritten to say they are not in the archive.
-    if ($script:StagedLinks.Count -gt 0) {
-      $nl = $script:StagedLinks.Count
-      if ((Clear-StagedLinks) -gt 0) { throw 'staged symlinks could not be removed; not zipping through them' }
-      Clear-LinkArchivePaths 'not in the archive: tar failed and zip cannot store symlinks'
-      $script:Notes += "tar failed; $nl symlinks were removed from the staging tree before zipping, because zip cannot store symlinks"
-      [System.IO.File]::AppendAllText($LogPath, "NOTE: tar failed; $nl staged symlinks removed before zipping`n", $Utf8NoBom)
+    if ($ai -gt 0) {
+      if ($kind -eq 'zip' -and $script:StagedLinks.Count -gt 0) {
+        # A zip cannot store the staged links, so they go first, and the
+        # manifest is rewritten to say they are not in the archive.
+        $nl = $script:StagedLinks.Count
+        if ((Clear-StagedLinks) -gt 0) { throw 'staged symlinks could not be removed; not zipping through them' }
+        Clear-LinkArchivePaths 'not in the archive: tar failed and zip cannot store symlinks'
+        $script:Notes += "tar failed; $nl symlinks were removed from the staging tree before zipping, because zip cannot store symlinks"
+        [System.IO.File]::AppendAllText($LogPath, "NOTE: tar failed; $nl staged symlinks removed before zipping`n", $Utf8NoBom)
+        Copy-Item -LiteralPath $ManifestPath -Destination (Join-PathSafe $Stage 'manifest.jsonl') -Force
+      }
+      $script:Notes += "$failedWhy; fell back to $($ArchiverLabels[$kind])"
+      [System.IO.File]::AppendAllText($LogPath, "NOTE: falling back to $($ArchiverLabels[$kind])`n", $Utf8NoBom)
+      if ($kind -eq 'zip') { $Archive = Join-PathSafe $OutputDir "$Name.zip"; Clear-PartialArchive }
+      # Write-Summary writes and restages collection.json with the notes,
+      # the archive's name and the archiver.
       $summary.notes = @($script:Notes)
-      Copy-Item -LiteralPath $ManifestPath -Destination (Join-PathSafe $Stage 'manifest.jsonl') -Force
+      $summary.archive = (Split-Path -Leaf $Archive)
+      $summary.capabilities.archiver = $ArchiverLabels[$kind]
+      Write-Summary
       Copy-Item -LiteralPath $LogPath -Destination (Join-PathSafe $Stage 'collector.log') -Force
     }
-    # Write-Summary writes and restages collection.json with the notes above
-    # and the zip's name and archiver.
-    $Archive = Join-PathSafe $OutputDir "$Name.zip"
-    $summary.archive = (Split-Path -Leaf $Archive)
-    $summary.capabilities.archiver = 'ZipFile'
-    Write-Summary
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($Stage, $Archive, [System.IO.Compression.CompressionLevel]::Optimal, $false)
-    $archiveOk = (Test-PathQuiet $Archive 'Any')
-  } catch { [System.IO.File]::AppendAllText($LogPath, "FATAL: archive failed: $($_.Exception.Message)`n", $Utf8NoBom) }
+  } catch {
+    [System.IO.File]::AppendAllText($LogPath, "FATAL: archive failed: $($_.Exception.Message)`n", $Utf8NoBom)
+    break
+  }
+  if ($kind -eq 'tar') {
+    $tarName = Split-Path -Leaf $TarExe
+    $global:LASTEXITCODE = 0
+    & $TarExe -czf $Archive -C $Stage . 2>>$LogPath
+    $rcTar = $LASTEXITCODE
+    if ($rcTar -eq 0 -and (Test-PathQuiet $Archive 'Any')) { $archiveOk = $true; break }
+    if ($rcTar -eq 0) { $failedWhy = "$tarName failed (exit code 0 but no archive was written)" }
+    else { $failedWhy = "$tarName failed (exit code $(Format-ExitCode $rcTar))" }
+    [System.IO.File]::AppendAllText($LogPath, "${tarName} failed: exit code $(Format-ExitCode $rcTar)`n", $Utf8NoBom)
+  } else {
+    try {
+      if ($kind -eq 'writer') { Write-TarGz $Stage $Archive } else { Write-StageZip $Stage $Archive }
+      if (Test-PathQuiet $Archive 'Leaf') { $archiveOk = $true; break }
+      $failedWhy = "$($ArchiverLabels[$kind]) failed (no archive was written)"
+    } catch {
+      $e = $_.Exception; while ($null -ne $e.InnerException) { $e = $e.InnerException }
+      $failedWhy = "$($ArchiverLabels[$kind]) failed ($($e.Message))"
+      [System.IO.File]::AppendAllText($LogPath, "$($ArchiverLabels[$kind]) failed: $($e.Message)`n", $Utf8NoBom)
+    }
+  }
+  Clear-PartialArchive
 }
 if (-not $archiveOk) { Write-Error 'FATAL: archive not written'; exit 2 }
 

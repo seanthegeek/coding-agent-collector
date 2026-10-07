@@ -725,8 +725,83 @@ function ArchiveEntries {
   try { return @($z.Entries | ForEach-Object { $_.FullName }) } finally { $z.Dispose() }
 }
 
+# 2026-10-07 (#72): reads a .tar.gz with .NET, so names outside the ANSI code
+# page can be checked on Windows too, where tar.exe cannot list them. Returns
+# the members (name, type, size, link and, for files, sha256) with pax path,
+# linkpath and size records applied, how many headers had a wrong checksum,
+# and whether the archive ends with two zero blocks.
+function Read-TarGz([string]$file) {
+  $fsIn = [System.IO.File]::OpenRead($file)
+  $gz = New-Object System.IO.Compression.GZipStream($fsIn, [System.IO.Compression.CompressionMode]::Decompress)
+  $ms = New-Object System.IO.MemoryStream
+  try { $gz.CopyTo($ms) } finally { $gz.Dispose() }
+  $b = $ms.ToArray()
+  $utf8 = New-Object System.Text.UTF8Encoding $false
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  $members = @(); $badSum = 0; $zeros = 0; $pos = 0; $pax = @{}
+  $str = { param($o, $l) $e = $o; while ($e -lt $o + $l -and $b[$e] -ne 0) { $e++ }; $utf8.GetString($b, $o, $e - $o) }
+  while ($pos + 512 -le $b.Length) {
+    $hdr = New-Object byte[] 512; [Array]::Copy($b, $pos, $hdr, 0, 512)
+    if ([System.Linq.Enumerable]::Sum([int[]]$hdr) -eq 0) { $zeros++; $pos += 512; if ($zeros -eq 2) { break }; continue }
+    $zeros = 0
+    $want = [Convert]::ToInt64((& $str ($pos + 148) 8).Trim(), 8)
+    for ($i = 148; $i -lt 156; $i++) { $hdr[$i] = 32 }
+    if ([System.Linq.Enumerable]::Sum([int[]]$hdr) -ne $want) { $badSum++ }
+    $type = [string][char]$b[$pos + 156]
+    $size = [Convert]::ToInt64((& $str ($pos + 124) 12).Trim(), 8)
+    if ($pax.ContainsKey('size')) { $size = [int64]$pax['size'] }
+    $data = $pos + 512
+    if ($type -eq 'x') {
+      # Records are "<len> key=value\n", len in bytes and counting itself.
+      $p = $data
+      while ($p -lt $data + $size) {
+        $sp = $p; while ($b[$sp] -ne 32) { $sp++ }
+        $len = [int]$utf8.GetString($b, $p, $sp - $p)
+        $kv = $utf8.GetString($b, $sp + 1, $p + $len - $sp - 2); $eq = $kv.IndexOf('=')
+        $pax[$kv.Substring(0, $eq)] = $kv.Substring($eq + 1)
+        $p += $len
+      }
+    } else {
+      $name = & $str $pos 100; $prefix = & $str ($pos + 345) 155
+      if ($prefix) { $name = $prefix + '/' + $name }
+      $link = & $str ($pos + 157) 100
+      if ($pax.ContainsKey('path')) { $name = $pax['path'] }
+      if ($pax.ContainsKey('linkpath')) { $link = $pax['linkpath'] }
+      $h = ''
+      if ($type -eq '0') { $h = ([BitConverter]::ToString($sha.ComputeHash($b, $data, [int]$size)) -replace '-', '').ToLower() }
+      $members += [pscustomobject]@{ name = $name; type = $type; size = $size; link = $link; sha256 = $h }
+      $pax = @{}
+    }
+    $pos = $data + [int]([Math]::Ceiling($size / 512) * 512)
+  }
+  return @{ members = $members; badsum = $badSum; end = ($zeros -eq 2) }
+}
+# A list as one string, sorted ordinally, so names that differ only by case
+# compare in a fixed order.
+function Join-Sorted($list) {
+  $a = [string[]]@($list); [Array]::Sort($a, [StringComparer]::Ordinal)
+  return ($a -join "`n")
+}
+# Every collected row's archived bytes, read from the extracted archive in
+# $dir, match its sha256 and size; returns the number of files checked, or -1
+# when one does not match.
+function Test-ArchivedHashes([string]$dir) {
+  $n = 0; $bad = 0
+  foreach ($row in ($script:Rows | Where-Object { $_.status -eq 'collected' -and $_.archive_path })) {
+    $f = Join-Path $dir ($row.archive_path.Replace('/', $Sep))
+    if (-not (Test-Path -LiteralPath $f)) { $bad++; continue }
+    if ((Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLower() -ne $row.sha256) { $bad++ }
+    if ((Get-Item -LiteralPath $f -Force).Length -ne $row.size) { $bad++ }
+    $n++
+  }
+  if ($bad -gt 0) { return -1 }
+  return $n
+}
+
 # ---- default run ----------------------------------------------------------
 Run 'default' @{}
+$DefaultEntries = @(ArchiveEntries)
+$dsum0 = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
 Check 'exit code 0' { $script:rc -eq 0 }
 Check 'archive exists' { $null -ne $script:A -and $script:A.Length -gt 0 }
 Check 'sha256 sidecar matches' { (Get-Content -LiteralPath "$($script:A.FullName).sha256").Split(' ')[0] -eq (Get-FileHash -LiteralPath $script:A.FullName -Algorithm SHA256).Hash.ToLower() }
@@ -957,15 +1032,8 @@ Check 'legacy open-interpreter space-named dir collected once' { (CountOf 'Open 
 # cross-check archived bytes against manifest hashes
 $x = Join-Path $Work 'x'; New-Item -ItemType Directory -Path $x -Force | Out-Null
 if ($script:A.Name -like '*.tar.gz') { & tar -xzf $script:A.FullName -C $x 2>$null } else { [System.IO.Compression.ZipFile]::ExtractToDirectory($script:A.FullName, $x) }
-$n = 0; $bad = 0
-foreach ($row in ($script:Rows | Where-Object { $_.status -eq 'collected' -and $_.archive_path })) {
-  $f = Join-Path $x ($row.archive_path.Replace('/', $Sep))
-  if (-not (Test-Path -LiteralPath $f)) { $bad++; continue }
-  if ((Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLower() -ne $row.sha256) { $bad++ }
-  if ((Get-Item -LiteralPath $f -Force).Length -ne $row.size) { $bad++ }
-  $n++
-}
-Check "archived file bytes match manifest hashes ($n files)" { $bad -eq 0 -and $n -gt 10 }
+$n = Test-ArchivedHashes $x
+Check "archived file bytes match manifest hashes ($n files)" { $n -gt 10 }
 
 # 2026-10-07 (#71): every line parses when read as UTF-8, and each name that
 # needs escaping comes back unchanged in path. The hash cross-check above
@@ -984,14 +1052,20 @@ foreach ($n71 in $Names71) {
 }
 # Non-ASCII names, and on Windows a lone surrogate, which the UTF-8 writer
 # turns into U+FFFD as ConvertTo-Json's output did. They are collected from an
-# image of their own: Windows tar.exe exits on a non-ASCII name and the
-# collector falls back to zip, which the default run's archive checks do not
-# expect. The sha256 is checked against the source, whose bytes are known.
+# image of their own, whose archive Windows tar.exe cannot write (#72 below
+# checks the fallback). The sha256 is checked against the source, whose bytes
+# are known.
 $Root71 = Join-Path $Work 'root71'
 $UDir71 = [System.IO.Path]::Combine($Root71, 'Users', 'alice', '.claude', 'projects', '-C-u71')
 [void][System.IO.Directory]::CreateDirectory($UDir71)
-$UNames71 = @(('u' + [char]0x00FC + 'ml' + [char]0x00E9 + '.jsonl'), ([string][char]0x65E5 + [char]0x672C + ' ' + [char]0x8A9E + '.jsonl'))
+$UNames71 = @(('u' + [char]0x00FC + 'ml' + [char]0x00E9 + '.jsonl'), ([string][char]0x65E5 + [char]0x672C + ' ' + [char]0x8A9E + '.jsonl'), ([string][char]0x0416 + [char]0x0443 + [char]0x0440 + [char]0x043D + [char]0x0430 + [char]0x043B + '.jsonl'))
 foreach ($n71 in $UNames71) { [System.IO.File]::WriteAllText([System.IO.Path]::Combine($UDir71, $n71), '{"type":"user"}', (New-Object System.Text.UTF8Encoding $false)) }
+# 2026-10-07 (#72): a symlink with a Cyrillic name and an absolute target
+# with a CJK name, which goes in a pax linkpath record.
+$Link72 = [string][char]0x0441 + [char]0x0441 + [char]0x044B + [char]0x043B + [char]0x043A + [char]0x0430 + '.jsonl'
+$Link72Target = [System.IO.Path]::Combine($UDir71, $UNames71[1])
+try { New-Item -ItemType SymbolicLink -Path ([System.IO.Path]::Combine($UDir71, $Link72)) -Target $Link72Target -ErrorAction Stop | Out-Null }
+catch { $Link72 = ''; Write-Output 'note: symlink creation not permitted here, #72 non-ASCII symlink check skipped' }
 $Lone71 = ''
 if ($Sep -ne '/') {
   $Lone71 = 'lone' + [char]0xD800 + '.jsonl'
@@ -1014,6 +1088,98 @@ foreach ($n71 in $UNames71) {
 if ($Lone71) {
   $w71 = [System.IO.Path]::Combine($UDir71, $Lone71.Replace([string][char]0xD800, [string][char]0xFFFD))
   Check '#71 lone surrogate in a name is written as U+FFFD' { @($um71.rows | Where-Object { $_.path -ceq $w71 -and $_.status -eq 'collected' -and $_.sha256 -eq $sha71 }).Count -eq 1 }
+}
+
+# 2026-10-07 (#72): Windows tar.exe exits 0xC0000005 on a name outside the
+# ANSI code page. The collector logs the exit code, notes the fallback, and
+# writes the .tar.gz with its own tar writer, which keeps every name and the
+# staged links. Elsewhere the system tar writes it. Read with .NET, since
+# tar.exe cannot list these names either.
+$a71 = Get-ChildItem -LiteralPath $o71 | Where-Object { $_.Name -match '\.(tar\.gz|zip)$' } | Select-Object -First 1
+$s71 = Get-Content -LiteralPath (Get-ChildItem -LiteralPath $o71 -Filter '*.collection.json' | Select-Object -First 1).FullName -Raw | ConvertFrom-Json
+$l71 = [System.IO.File]::ReadAllText((Get-ChildItem -LiteralPath $o71 -Filter '*.log' | Select-Object -First 1).FullName)
+Check '#72 non-ASCII image archived as a .tar.gz named in collection.json' { $a71 -and $a71.Name -like '*.tar.gz' -and $s71.archive -eq $a71.Name }
+if ($env:OS -eq 'Windows_NT' -and (Get-Command tar.exe -ErrorAction SilentlyContinue)) {
+  Check '#72 Windows: the PowerShell tar writer wrote it after tar.exe failed' { $s71.capabilities.archiver -eq 'PowerShell tar writer' }
+  Check '#72 Windows: notes give the tar.exe exit code and the fallback' { @($s71.notes | Where-Object { $_ -match '^tar\.exe failed \(exit code 0x[0-9A-F]{8}\); fell back to PowerShell tar writer$' }).Count -eq 1 }
+  Check '#72 Windows: the log gives the tar.exe exit code' { $l71 -match '(?m)^tar\.exe failed: exit code 0x[0-9A-F]{8}\r?$' }
+}
+# Checked for the default run and for one with the writer forced, so the pax
+# records are tested on every platform; the forced one is also extracted with
+# the platform tar where its tar can store these names (not Windows tar.exe).
+$o72 = Join-Path $Out 'u72w'
+New-Item -ItemType Directory -Path $o72 -Force | Out-Null
+$env:CAC_ARCHIVER = 'writer'
+$global:LASTEXITCODE = 0
+try { & $Collector -Root $Root71 -OutputDir $o72 -Quiet -NoDocker *> $null } finally { Remove-Item Env:CAC_ARCHIVER }
+$rc72 = $LASTEXITCODE
+$a72 = Get-ChildItem -LiteralPath $o72 | Where-Object { $_.Name -match '\.tar\.gz$' } | Select-Object -First 1
+$um72 = Read-Manifest71 (Get-ChildItem -LiteralPath $o72 -Filter '*.manifest.jsonl' | Select-Object -First 1).FullName
+Check '#72 non-ASCII image, writer forced: exit 0 and a .tar.gz' { $rc72 -eq 0 -and $a72 }
+$want71 = @($UNames71); if ($Lone71) { $want71 += $Lone71.Replace([string][char]0xD800, [string][char]0xFFFD) }
+foreach ($pair in @(@('', $a71, $um71), @(' [writer]', $a72, $um72))) {
+  $tag = $pair[0]; $t71 = Read-TarGz $pair[1].FullName; $rows72 = $pair[2].rows
+  Check ('#72 non-ASCII archive: header checksums valid, two zero blocks at the end' + $tag) { $t71.badsum -eq 0 -and $t71.end -and $t71.members.Count -gt 3 }
+  foreach ($n71 in $want71) {
+    $row71 = @($rows72 | Where-Object { $_.path -ceq ([System.IO.Path]::Combine($UDir71, $n71)) }) | Select-Object -First 1
+    Check ("#72 non-ASCII name round-trips through the archive with its sha256: $($n71 -replace '[^\x20-\x7e]', '?')" + $tag) { $row71 -and @($t71.members | Where-Object { $_.name -ceq ('./' + $row71.archive_path) -and $_.type -eq '0' -and $_.sha256 -eq $row71.sha256 -and $_.sha256 -eq $sha71 }).Count -eq 1 }
+  }
+  if ($Link72) {
+    $row72 = @($rows72 | Where-Object { $_.path -ceq ([System.IO.Path]::Combine($UDir71, $Link72)) }) | Select-Object -First 1
+    Check ('#72 non-ASCII symlink kept in the archive with its target' + $tag) { $row72 -and $row72.status -eq 'symlink' -and $row72.archive_path -and @($t71.members | Where-Object { $_.name -ceq ('./' + $row72.archive_path) -and $_.type -eq '2' -and $_.link -ceq $Link72Target }).Count -eq 1 }
+  }
+}
+if ($Sep -eq '/') {
+  $x72u = Join-Path $Work 'x72u'; New-Item -ItemType Directory -Path $x72u -Force | Out-Null
+  & tar -xzf $a72.FullName -C $x72u 2>$null
+  $rcx = $LASTEXITCODE
+  $rx = @($um72.rows | Where-Object { $_.status -eq 'collected' -and $_.archive_path })
+  Check '#72 non-ASCII archive from the writer extracts with the platform tar' { $rcx -eq 0 -and $rx.Count -ge $want71.Count -and @($rx | Where-Object { -not (Test-Path -LiteralPath ([System.IO.Path]::Combine($x72u, $_.archive_path))) }).Count -eq 0 }
+}
+
+# The writer forced with CAC_ARCHIVER on the main image, on every platform:
+# the platform tar lists and extracts it, the members are the default run's,
+# and the archived bytes match the manifest.
+$env:CAC_ARCHIVER = 'writer'
+try { Run 'writer72' @{} } finally { Remove-Item Env:CAC_ARCHIVER }
+$w72 = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
+Check '#72 forced writer: exit 0, .tar.gz, archiver PowerShell tar writer' { $script:rc -eq 0 -and $script:A.Name -like '*.tar.gz' -and $w72.archive -eq $script:A.Name -and $w72.capabilities.archiver -eq 'PowerShell tar writer' -and @($w72.notes).Count -eq @($dsum0.notes).Count }
+$WriterEntries = @(ArchiveEntries)
+Check '#72 forced writer: platform tar lists the same members as the default run' { $WriterEntries.Count -gt 10 -and ((Join-Sorted $WriterEntries) -ceq (Join-Sorted $DefaultEntries)) }
+$x72 = Join-Path $Work 'x72'; New-Item -ItemType Directory -Path $x72 -Force | Out-Null
+& tar -xzf $script:A.FullName -C $x72 2>$null
+$rcx72 = $LASTEXITCODE
+$n72 = Test-ArchivedHashes $x72
+Check "#72 forced writer: platform tar extracts it and the bytes match the manifest ($n72 files)" { $rcx72 -eq 0 -and $n72 -gt 10 }
+$tw72 = Read-TarGz $script:A.FullName
+Check '#72 forced writer: header checksums valid, two zero blocks at the end' { $tw72.badsum -eq 0 -and $tw72.end }
+if ($linkOk) { Check '#72 forced writer: the main image symlink is stored as a link' { @($tw72.members | Where-Object { $_.type -eq '2' -and $_.name -like '*antigravity-cli/cli.log' }).Count -eq 1 } }
+
+# The zip forced with CAC_ARCHIVER: entry names use /, are the writer's file
+# members without ./, and hold the manifest's bytes.
+$env:CAC_ARCHIVER = 'zip'
+try { Run 'zip72' @{} } finally { Remove-Item Env:CAC_ARCHIVER }
+$z72 = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
+Check '#72 forced zip: exit 0, .zip, archiver ZipFile' { $script:rc -eq 0 -and $script:A.Name -like '*.zip' -and $z72.archive -eq $script:A.Name -and $z72.capabilities.archiver -eq 'ZipFile' }
+$ZipEntries = @(ArchiveEntries)
+$wantZip = @($tw72.members | Where-Object { $_.type -eq '0' } | ForEach-Object { $_.name.Substring(2) })
+$gotZip = @($ZipEntries | Where-Object { -not $_.EndsWith('/') })
+Check '#72 forced zip: entry names use / and match the tar members' { @($ZipEntries | Where-Object { $_ -like 'fs/*/*' }).Count -gt 10 -and ((Join-Sorted $gotZip) -ceq (Join-Sorted $wantZip)) }
+if ($Sep -eq '\') { Check '#72 forced zip: no entry name has a backslash' { @($ZipEntries | Where-Object { $_.Contains('\') }).Count -eq 0 } }
+Check '#72 forced zip: archived bytes match the manifest' {
+  $z = [System.IO.Compression.ZipFile]::OpenRead($script:A.FullName)
+  $nz = 0; $badz = 0
+  try {
+    foreach ($row in ($script:Rows | Where-Object { $_.status -eq 'collected' -and $_.archive_path })) {
+      $e = $z.GetEntry($row.archive_path)
+      if ($null -eq $e) { $badz++; continue }
+      $st = $e.Open()
+      try { $hz = ([BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash($st)) -replace '-', '').ToLower() } finally { $st.Dispose() }
+      if ($hz -ne $row.sha256) { $badz++ }
+      $nz++
+    }
+  } finally { $z.Dispose() }
+  $badz -eq 0 -and $nz -gt 10
 }
 
 # ---- -NoSecrets -----------------------------------------------------------
@@ -1191,13 +1357,14 @@ Check '-List prints docker volume table' { @(& $Collector -List | Where-Object {
 
 # 2026-10-04 bug round: #31
 # collection.json names the archive and archiver actually used, and records
-# the project options. A tar that fails, first on PATH, forces the zip
-# fallback: a shell script on POSIX, a copy of where.exe named tar.exe on
-# Windows (it rejects -czf with exit 2).
+# the project options. A tar that fails, first on PATH, forces a fallback: a
+# shell script on POSIX, a copy of where.exe named tar.exe on Windows (it
+# rejects -czf with exit 2). With CAC_ARCHIVER=tar,zip the fallback is the
+# zip; by default it is the PowerShell tar writer (#72).
 $ds = Get-Content -LiteralPath (Get-ChildItem -LiteralPath (Join-Path $Out 'default') -Filter '*.collection.json' | Select-Object -First 1).FullName -Raw
 $dj = $ds | ConvertFrom-Json
 $defArchive = (Get-ChildItem -LiteralPath (Join-Path $Out 'default') | Where-Object { $_.Name -match '\.(tar\.gz|zip)$' } | Select-Object -First 1).Name
-Check '#31 default summary names the archive written' { $dj.archive -eq $defArchive -and (($defArchive -like '*.tar.gz' -and $dj.capabilities.archiver -eq 'tar.exe') -or ($defArchive -like '*.zip' -and $dj.capabilities.archiver -eq 'ZipFile')) }
+Check '#31 default summary names the archive written' { $dj.archive -eq $defArchive -and (($defArchive -like '*.tar.gz' -and @('tar.exe', 'PowerShell tar writer') -contains $dj.capabilities.archiver) -or ($defArchive -like '*.zip' -and $dj.capabilities.archiver -eq 'ZipFile')) }
 Check '#31 default summary: no_projects false, projects empty' { $dj.options.no_projects -eq $false -and $ds -match '"no_projects":\s*false,\s*"projects":\s*\[\s*\]' }
 $shim = Join-Path $Work 'shim31'
 New-Item -ItemType Directory -Path $shim -Force | Out-Null
@@ -1213,7 +1380,8 @@ if ($shimOk) {
   $oldPath = $env:PATH
   $env:PATH = $shim + [System.IO.Path]::PathSeparator + $env:PATH
   $p1 = P 'srv/p31-one'; $p2 = P 'srv/p31 two'
-  Run 'zip31' @{ Project = @($p1, $p2) }
+  $env:CAC_ARCHIVER = 'tar,zip'
+  try { Run 'zip31' @{ Project = @($p1, $p2) } } finally { Remove-Item Env:CAC_ARCHIVER }
   $env:PATH = $oldPath
   Check '#31 zip fallback exit 0, zip written' { $script:rc -eq 0 -and $script:A -and $script:A.Name -like '*.zip' -and @(Get-ChildItem -LiteralPath (Join-Path $Out 'zip31') -Filter '*.tar.gz').Count -eq 0 }
   $zj = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
@@ -1230,6 +1398,19 @@ if ($shimOk) {
   }
   Check '#31 zip fallback: sidecar names the zip' { (Get-Content -LiteralPath "$($script:A.FullName).sha256").EndsWith('  ' + $script:A.Name) }
   Check '#31 -Project values recorded in options.projects' { $zj.options.no_projects -eq $false -and @($zj.options.projects).Count -eq 2 -and $zj.options.projects[0] -eq $p1 -and $zj.options.projects[1] -eq $p2 }
+  Check '#72 zip fallback: notes give the tar exit code' { @($zj.notes | Where-Object { $_ -match '^tar(\.exe)? failed \(exit code 2\); fell back to ZipFile$' }).Count -eq 1 }
+  # 2026-10-07 (#72): the same failing tar with the default chain falls back
+  # to the PowerShell tar writer, and the summary inside the archive says so.
+  $env:PATH = $shim + [System.IO.Path]::PathSeparator + $env:PATH
+  try { Run 'writer31' @{ NoDocker = $true } } finally { $env:PATH = $oldPath }
+  $wj = Get-Content -LiteralPath $script:S.FullName -Raw | ConvertFrom-Json
+  $wl = [System.IO.File]::ReadAllText((Get-ChildItem -LiteralPath (Join-Path $Out 'writer31') -Filter '*.log' | Select-Object -First 1).FullName)
+  Check '#72 tar fails: the PowerShell tar writer writes the .tar.gz' { $script:rc -eq 0 -and $script:A.Name -like '*.tar.gz' -and $wj.archive -eq $script:A.Name -and $wj.capabilities.archiver -eq 'PowerShell tar writer' }
+  Check '#72 tar fails: notes and log give the exit code' { @($wj.notes | Where-Object { $_ -match '^tar(\.exe)? failed \(exit code 2\); fell back to PowerShell tar writer$' }).Count -eq 1 -and $wl -match '(?m)^tar(\.exe)? failed: exit code 2\r?$' }
+  Check '#72 tar fails: the archived summary matches the one on disk' {
+    $tw = Read-TarGz $script:A.FullName
+    @($tw.members | Where-Object { $_.name -eq './collection.json' -and $_.sha256 -eq (Get-FileHash -LiteralPath $script:S.FullName -Algorithm SHA256).Hash.ToLower() }).Count -eq 1
+  }
 } else { Write-Output 'note: no where.exe to stand in for tar.exe, zip fallback checks skipped' }
 Run 'noproj31' @{ NoProjects = $true }
 $ns = Get-Content -LiteralPath $script:S.FullName -Raw
@@ -1307,50 +1488,60 @@ function LinkRowsConsistent {
 }
 
 if ($fileLinkOk -or $junctionOk) {
-  LRun 'links-tar'
-  Check '#30 tar run exit 0' { $script:rc -eq 0 }
-  Check '#30 every symlink row has archive_path or error, not both' { LinkRowsConsistent }
-  $tv = @()
-  if ($script:A.Name -like '*.tar.gz') { $tv = @(& tar -tvzf $script:A.FullName 2>$null) }
-  if ($fileLinkOk) {
-    $r = Row 'antigravity-cli/cli.log'
-    Check '#30 symlink row has archive_path and no error' { $r -and $r.status -eq 'symlink' -and $r.archive_path -match '^fs/.*antigravity-cli/cli\.log$' -and $r.error -eq '' }
-    Check '#30 archive stores the link with its relative target verbatim' { @($tv | Where-Object { $_ -match '^l' -and $_ -match 'antigravity-cli/cli\.log -> log/real\.log$' }).Count -eq 1 }
-    Check '#30 dangling symlink stored as a link' { @($tv | Where-Object { $_ -match '^l' -and $_ -match 'antigravity-cli/dangling\.log -> log/missing\.log$' }).Count -eq 1 }
-    Check '#30 directory symlink stored as a link, not descended' { @($tv | Where-Object { $_ -match '^l' -and $_ -match 'antigravity-cli/out -> \.\./\.\./\.\./\.\./outside$' }).Count -eq 1 -and -not ($tv | Where-Object { $_ -match 'antigravity-cli/out/' }) }
-    Check '#30 link target bytes outside the collection not archived' { (ArchiveText) -notmatch 'OUTSIDE-BYTES' }
-    Check '#30 staging removed and link targets intact' { -not (Get-ChildItem -LiteralPath (Join-Path $Out 'links-tar') -Filter '.stage-*' -Force) -and (Test-Path -LiteralPath (LinkP 'outside/secret.txt')) -and (Test-Path -LiteralPath (LinkP 'home/eve/.gemini/antigravity-cli/log/real.log')) }
-  }
-  if ($junctionOk) {
-    $r = Row 'antigravity-cli/jn'
-    Check '#30 junction row has archive_path or a reason' { $r -and $r.status -eq 'symlink' -and (($r.archive_path -ne '' -and $r.error -eq '') -or ($r.archive_path -eq '' -and $r.error -like 'not recreated in the archive:*')) }
-    Check '#30 junction failure noted in collection.json' { $r.archive_path -ne '' -or @($script:LSum.notes | Where-Object { $_ -like '*could not be recreated in the archive*' }).Count -eq 1 }
-    Check '#30 junction target bytes not archived' { (ArchiveText) -notmatch 'OUTSIDE-BYTES' }
-    Check '#30 junction target intact after staging cleanup' { Test-Path -LiteralPath (LinkP 'outside/secret.txt') }
-    if ($isDesktop) {
-      Check '#30 5.1: a failed mklink reports its message and exit code' { $r.archive_path -ne '' -or $r.error -match '\(mklink exit \d+\)$' }
-      $r = Row 'antigravity-cli/jn%TEMP%x'
-      Check '#30 5.1: a % in the link path is refused before cmd.exe' { $r -and $r.archive_path -eq '' -and $r.error -like '*contains % or "*' }
+  # The same checks for tar and, forced with CAC_ARCHIVER, for the
+  # PowerShell tar writer (#72), which stores the target as staged.
+  foreach ($lrun in @('links-tar', 'links-writer')) {
+    $tag = ''
+    if ($lrun -eq 'links-writer') { $tag = ' [writer]'; $env:CAC_ARCHIVER = 'writer' }
+    try { LRun $lrun } finally { if ($lrun -eq 'links-writer') { Remove-Item Env:CAC_ARCHIVER } }
+    Check ('#30 tar run exit 0' + $tag) { $script:rc -eq 0 }
+    Check ('#30 every symlink row has archive_path or error, not both' + $tag) { LinkRowsConsistent }
+    $tv = @()
+    if ($script:A.Name -like '*.tar.gz') { $tv = @(& tar -tvzf $script:A.FullName 2>$null) }
+    if ($fileLinkOk) {
+      $r = Row 'antigravity-cli/cli.log'
+      Check ('#30 symlink row has archive_path and no error' + $tag) { $r -and $r.status -eq 'symlink' -and $r.archive_path -match '^fs/.*antigravity-cli/cli\.log$' -and $r.error -eq '' }
+      Check ('#30 archive stores the link with its relative target verbatim' + $tag) { @($tv | Where-Object { $_ -match '^l' -and $_ -match 'antigravity-cli/cli\.log -> log/real\.log$' }).Count -eq 1 }
+      Check ('#30 dangling symlink stored as a link' + $tag) { @($tv | Where-Object { $_ -match '^l' -and $_ -match 'antigravity-cli/dangling\.log -> log/missing\.log$' }).Count -eq 1 }
+      Check ('#30 directory symlink stored as a link, not descended' + $tag) { @($tv | Where-Object { $_ -match '^l' -and $_ -match 'antigravity-cli/out -> \.\./\.\./\.\./\.\./outside$' }).Count -eq 1 -and -not ($tv | Where-Object { $_ -match 'antigravity-cli/out/' }) }
+      Check ('#30 link target bytes outside the collection not archived' + $tag) { (ArchiveText) -notmatch 'OUTSIDE-BYTES' }
+      Check ('#30 staging removed and link targets intact' + $tag) { -not (Get-ChildItem -LiteralPath (Join-Path $Out $lrun) -Filter '.stage-*' -Force) -and (Test-Path -LiteralPath (LinkP 'outside/secret.txt')) -and (Test-Path -LiteralPath (LinkP 'home/eve/.gemini/antigravity-cli/log/real.log')) }
     }
+    if ($junctionOk) {
+      $r = Row 'antigravity-cli/jn'
+      Check ('#30 junction row has archive_path or a reason' + $tag) { $r -and $r.status -eq 'symlink' -and (($r.archive_path -ne '' -and $r.error -eq '') -or ($r.archive_path -eq '' -and $r.error -like 'not recreated in the archive:*')) }
+      Check ('#30 junction failure noted in collection.json' + $tag) { $r.archive_path -ne '' -or @($script:LSum.notes | Where-Object { $_ -like '*could not be recreated in the archive*' }).Count -eq 1 }
+      Check ('#30 junction target bytes not archived' + $tag) { (ArchiveText) -notmatch 'OUTSIDE-BYTES' }
+      Check ('#30 junction target intact after staging cleanup' + $tag) { Test-Path -LiteralPath (LinkP 'outside/secret.txt') }
+      if ($isDesktop) {
+        Check ('#30 5.1: a failed mklink reports its message and exit code' + $tag) { $r.archive_path -ne '' -or $r.error -match '\(mklink exit \d+\)$' }
+        $r = Row 'antigravity-cli/jn%TEMP%x'
+        Check ('#30 5.1: a % in the link path is refused before cmd.exe' + $tag) { $r -and $r.archive_path -eq '' -and $r.error -like '*contains % or "*' }
+      }
+    }
+    if ($lrun -eq 'links-writer') { Check '#72 links-writer: archiver PowerShell tar writer' { $script:LSum.capabilities.archiver -eq 'PowerShell tar writer' -and $script:A.Name -like '*.tar.gz' } }
   }
 
-  # zip from the start: no tar on PATH
+  # zip from the start, forced with CAC_ARCHIVER (with no tar on the PATH the
+  # PowerShell tar writer is used, #72)
   $savedPath = $env:PATH
-  $env:PATH = ''
-  try { LRun 'links-zip' } finally { $env:PATH = $savedPath }
+  $env:CAC_ARCHIVER = 'zip'
+  try { LRun 'links-zip' } finally { Remove-Item Env:CAC_ARCHIVER }
   Check '#30 zip run exit 0 and wrote a zip' { $script:rc -eq 0 -and $script:A.Name -like '*.zip' }
   Check '#30 zip: symlink rows have no archive_path and say zip' { $l = @($script:Rows | Where-Object { $_.status -eq 'symlink' }); $l.Count -ge 1 -and @($l | Where-Object { $_.archive_path -ne '' -or $_.error -notlike '*zip cannot store symlinks*' }).Count -eq 0 }
   Check '#30 zip: collection.json notes say symlinks are manifest-only' { @($script:LSum.notes | Where-Object { $_ -like '*in the manifest only: the zip archive cannot store symlinks*' }).Count -eq 1 }
   Check '#30 zip: no link target content in the zip' { $t = ArchiveText; $t -notmatch 'OUTSIDE-BYTES' -and ([regex]::Matches($t, 'LINK-TARGET-BYTES')).Count -eq 1 }
 
-  # tar fails late: a tar on PATH that exits 1, then the zip fall back
+  # tar fails late: a tar on PATH that exits 1, then the zip fall back,
+  # with the PowerShell tar writer left out of the chain by CAC_ARCHIVER
   if (-not $isWin) {
     $shim = Join-Path $Work 'badtar'
     New-Item -ItemType Directory -Path $shim -Force | Out-Null
     [System.IO.File]::WriteAllText((Join-Path $shim 'tar'), "#!/bin/sh`nexit 1`n")
     & chmod +x (Join-Path $shim 'tar')
     $env:PATH = $shim
-    try { LRun 'links-late' } finally { $env:PATH = $savedPath }
+    $env:CAC_ARCHIVER = 'tar,zip'
+    try { LRun 'links-late' } finally { $env:PATH = $savedPath; Remove-Item Env:CAC_ARCHIVER }
     Check '#30 late fallback exit 0 and wrote a zip' { $script:rc -eq 0 -and $script:A.Name -like '*.zip' }
     Check '#30 late fallback: symlink rows rewritten without archive_path' { $l = @($script:Rows | Where-Object { $_.status -eq 'symlink' }); $l.Count -ge 1 -and @($l | Where-Object { $_.archive_path -ne '' -or $_.error -notlike '*tar failed and zip cannot store symlinks*' }).Count -eq 0 }
     Check '#30 late fallback: manifest in the zip matches the one on disk' {
