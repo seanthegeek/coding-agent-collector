@@ -116,7 +116,17 @@ Each manifest row is one JSON object:
 Timestamps come from `lstat` on the original file (sh), or from the item's
 times before the copy (PowerShell). The copy of each file is hashed after
 staging, so the hash matches the bytes in the archive even if a running
-agent appended to the source afterwards.
+agent appended to the source afterwards. The PowerShell collector reads the
+staged copy back through the handle that wrote it, before closing it, and
+then sets the copy's timestamps.
+
+The PowerShell collector writes each row itself, with the fields in the
+order above. Strings escape `"` and `\`, control characters below U+0020
+(`\b`, `\t`, `\n`, `\f` and `\r`, the rest as `\u00xx`) and U+0085, U+2028
+and U+2029; everything else is written as UTF-8, and a lone surrogate in a
+Windows file name becomes U+FFFD. Up to 1.10.1 it used `ConvertTo-Json`,
+which under Windows PowerShell 5.1 also wrote `<`, `>`, `&` and `'` as `\u`
+escapes; the parsed values are the same.
 
 ### Statuses
 
@@ -153,7 +163,7 @@ whatever its size.
 | `run_as`, `run_as_admin` | PowerShell only: the account the collector ran as, and whether it was elevated. |
 | `started`, `finished` | UTC to the second, `2026-10-03T16:55:31Z`. `finished` is taken before archiving. |
 | `options` | `full`, `no_secrets`, `max_file_size_bytes` (`0` means no limit), `users_filter` (the `-u` string), `no_docker`, `no_projects` (boolean, `--no-projects` or `-NoProjects`) and `projects` (array of the `-p`/`--project` or `-Project` values in the order given, resolved against the current directory to absolute paths and de-duplicated, by both collectors, `[]` when none). A value that is not a directory is still listed here. They are recorded even with `no_projects`, which ignores them. |
-| `capabilities` | sh: `hash_tool` (`sha256sum`, `shasum`, `sha256`, `openssl` or `none`), `stat_mode` (`gnu`, `gnu0` for GNU `stat` without birth time, `bsd` or `none`), `worker_shell` and `archiver` (`tar -z` for `tar -czf`, `tar \| gzip` for the pipe, `tar` for the uncompressed `.tar`). PowerShell: `hash_tool` (`Get-FileHash`) and `archiver` (`tar.exe` or `ZipFile`). `archiver` names the one that wrote the archive. |
+| `capabilities` | sh: `hash_tool` (`sha256sum`, `shasum`, `sha256`, `openssl` or `none`), `stat_mode` (`gnu`, `gnu0` for GNU `stat` without birth time, `bsd` or `none`), `worker_shell` and `archiver` (`tar -z` for `tar -czf`, `tar \| gzip` for the pipe, `tar` for the uncompressed `.tar`). PowerShell: `hash_tool` (`System.Security.Cryptography.SHA256`; `Get-FileHash` up to 1.10.1) and `archiver` (`tar.exe` or `ZipFile`). `archiver` names the one that wrote the archive. |
 | `users`, `homes` | Parallel lists of every user and home scanned, including homes with no agent state. |
 | `users_with_artifacts` | The users whose home produced at least one manifest row, in the order of `users`. Rows from discovered projects and Docker volumes do not count. The stdout `users:` line is its length. |
 | `projects` | The project directories collected from, discovered or given with `-p`. A `-p` value that is not a directory is left out and has an `error_read` row instead. |

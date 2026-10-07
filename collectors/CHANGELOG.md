@@ -10,6 +10,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-10-07
+
+### Changed
+
+- The PowerShell collector's per-file work is faster: the exclusion and
+  credential tables are each tested with one regular expression instead of
+  a loop over every glob, the staged copy is hashed through the handle that
+  wrote it with one SHA-256 object for the run (reopening a file just
+  written waited for the antivirus scan on Windows), the owner lookup reads
+  only the owner and translates each SID once, staging directories are
+  remembered, and the source is no longer read a second time for its
+  timestamps. A 5,000-file collection takes about a third of the time under
+  Windows PowerShell 5.1 and about half under PowerShell 7 (#71).
+- The PowerShell collector writes manifest rows itself instead of through
+  `ConvertTo-Json`. The rows parse to the same values with the same keys,
+  order and types, byte for byte as PowerShell 7 wrote them; under Windows
+  PowerShell 5.1, `<`, `>`, `&` and `'` are now written as themselves rather
+  than as `\u` escapes (#71).
+- `collection.json` from the PowerShell collector reports
+  `capabilities.hash_tool` as `System.Security.Cryptography.SHA256` instead
+  of `Get-FileHash` (#71).
+
 ## [1.10.1] - 2026-10-07
 
 ### Changed
@@ -426,7 +448,8 @@ stdout `errors:` line now reads `errors:     N (X error_copy, Y error_read)`.
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.1...HEAD
+[Unreleased]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.2...HEAD
+[1.10.2]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.1...collector-v1.10.2
 [1.10.1]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.0...collector-v1.10.1
 [1.10.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.9.0...collector-v1.10.0
 [1.9.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.8.1...collector-v1.9.0

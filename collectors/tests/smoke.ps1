@@ -686,6 +686,18 @@ try {
   $linkOk = $true
 } catch { Write-Output "note: symlink creation not permitted here, symlink checks skipped" }
 
+# 2026-10-07 (#71): manifest rows are written by hand, not by ConvertTo-Json.
+# Names whose JSON needs escaping or that ConvertTo-Json treated specially: a
+# quote, a backslash and a tab on POSIX (none is allowed in a Windows name), and
+# an apostrophe and an ampersand (Windows PowerShell 5.1's ConvertTo-Json wrote
+# them as \u0027 and \u0026). Built with .NET so the backslash stays part of
+# the name. Non-ASCII names get their own image after the default run checks.
+$Dir71 = [System.IO.Path]::Combine($Root, 'Users', 'alice', '.claude', 'projects', '-C-proj71')
+[void][System.IO.Directory]::CreateDirectory($Dir71)
+$Names71 = @("amp&apos's.jsonl")
+if ($Sep -eq '/') { $Names71 += @('q"uote.jsonl', 'back\slash.jsonl', "tab`there.jsonl") }
+foreach ($n71 in $Names71) { [System.IO.File]::WriteAllText([System.IO.Path]::Combine($Dir71, $n71), '{"type":"user"}', (New-Object System.Text.UTF8Encoding $false)) }
+
 # ---- runner ---------------------------------------------------------------
 function Run([string]$name, [hashtable]$extra) {
   $o = Join-Path $Out $name
@@ -954,6 +966,55 @@ foreach ($row in ($script:Rows | Where-Object { $_.status -eq 'collected' -and $
   $n++
 }
 Check "archived file bytes match manifest hashes ($n files)" { $bad -eq 0 -and $n -gt 10 }
+
+# 2026-10-07 (#71): every line parses when read as UTF-8, and each name that
+# needs escaping comes back unchanged in path. The hash cross-check above
+# covers these files too: their archived bytes match the manifest sha256.
+function Read-Manifest71([string]$file) {
+  $raw = @([System.IO.File]::ReadAllLines($file, (New-Object System.Text.UTF8Encoding $false)))
+  $rows = @(); $errs = 0
+  foreach ($l in $raw) { try { $rows += ($l | ConvertFrom-Json) } catch { $errs++ } }
+  return @{ count = $raw.Count; rows = $rows; errors = $errs }
+}
+$m71 = Read-Manifest71 $script:M.FullName
+Check '#71 every manifest line parses as JSON' { $m71.errors -eq 0 -and $m71.rows.Count -eq $m71.count -and $m71.count -gt 10 }
+foreach ($n71 in $Names71) {
+  $w71 = [System.IO.Path]::Combine($Dir71, $n71)
+  Check "#71 path round-trips through the manifest: $($n71 -replace '[^\x20-\x7e]', '?')" { @($m71.rows | Where-Object { $_.path -ceq $w71 -and $_.status -eq 'collected' -and $_.archive_path }).Count -eq 1 }
+}
+# Non-ASCII names, and on Windows a lone surrogate, which the UTF-8 writer
+# turns into U+FFFD as ConvertTo-Json's output did. They are collected from an
+# image of their own: Windows tar.exe exits on a non-ASCII name and the
+# collector falls back to zip, which the default run's archive checks do not
+# expect. The sha256 is checked against the source, whose bytes are known.
+$Root71 = Join-Path $Work 'root71'
+$UDir71 = [System.IO.Path]::Combine($Root71, 'Users', 'alice', '.claude', 'projects', '-C-u71')
+[void][System.IO.Directory]::CreateDirectory($UDir71)
+$UNames71 = @(('u' + [char]0x00FC + 'ml' + [char]0x00E9 + '.jsonl'), ([string][char]0x65E5 + [char]0x672C + ' ' + [char]0x8A9E + '.jsonl'))
+foreach ($n71 in $UNames71) { [System.IO.File]::WriteAllText([System.IO.Path]::Combine($UDir71, $n71), '{"type":"user"}', (New-Object System.Text.UTF8Encoding $false)) }
+$Lone71 = ''
+if ($Sep -ne '/') {
+  $Lone71 = 'lone' + [char]0xD800 + '.jsonl'
+  try { [System.IO.File]::WriteAllText([System.IO.Path]::Combine($UDir71, $Lone71), '{"type":"user"}', (New-Object System.Text.UTF8Encoding $false)) }
+  catch { $Lone71 = ''; Write-Output 'note: #71 lone-surrogate name not allowed here, check skipped' }
+}
+$o71 = Join-Path $Out 'u71'
+New-Item -ItemType Directory -Path $o71 -Force | Out-Null
+$c71 = @{ Root = $Root71; OutputDir = $o71; Quiet = $true; NoDocker = $true }
+$global:LASTEXITCODE = 0
+& $Collector @c71 *> $null
+$rc71 = $LASTEXITCODE
+$um71 = Read-Manifest71 (Get-ChildItem -LiteralPath $o71 -Filter '*.manifest.jsonl' | Select-Object -First 1).FullName
+$sha71 = (Get-FileHash -LiteralPath ([System.IO.Path]::Combine($UDir71, $UNames71[0])) -Algorithm SHA256).Hash.ToLower()
+Check '#71 non-ASCII image: exit 0 and every manifest line parses' { $rc71 -eq 0 -and $um71.errors -eq 0 -and $um71.rows.Count -eq $um71.count -and $um71.count -ge $UNames71.Count }
+foreach ($n71 in $UNames71) {
+  $w71 = [System.IO.Path]::Combine($UDir71, $n71)
+  Check "#71 non-ASCII path round-trips with its sha256: $($n71 -replace '[^\x20-\x7e]', '?')" { @($um71.rows | Where-Object { $_.path -ceq $w71 -and $_.status -eq 'collected' -and $_.sha256 -eq $sha71 }).Count -eq 1 }
+}
+if ($Lone71) {
+  $w71 = [System.IO.Path]::Combine($UDir71, $Lone71.Replace([string][char]0xD800, [string][char]0xFFFD))
+  Check '#71 lone surrogate in a name is written as U+FFFD' { @($um71.rows | Where-Object { $_.path -ceq $w71 -and $_.status -eq 'collected' -and $_.sha256 -eq $sha71 }).Count -eq 1 }
+}
 
 # ---- -NoSecrets -----------------------------------------------------------
 Run 'nosecrets' @{ NoSecrets = $true }

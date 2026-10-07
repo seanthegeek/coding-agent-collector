@@ -76,7 +76,7 @@ param(
 
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
-$ToolVersion = '1.10.1'
+$ToolVersion = '1.10.2'
 $TOOL = 'collect-agent-artifacts'
 
 # ---------------------------------------------------------------------------
@@ -1581,16 +1581,21 @@ function Convert-GlobToRegex([string]$glob, [bool]$starCrossesSeparator) {
   $sb.ToString()
 }
 
-$script:ExcludeRegexes = @()
-$script:SecretRegexes = @()
-foreach ($e in (Get-TableLines $EXCLUDES)) { $script:ExcludeRegexes += (Convert-GlobToRegex $e $true) }
-foreach ($e in ($SECRET_GLOBS -split "`r?`n" | Where-Object { $_ -ne '' })) { $script:SecretRegexes += (Convert-GlobToRegex $e $true) }
-if ($Full) { $script:ExcludeRegexes = @() }
-
-function Test-AnyMatch([string]$rel, [string[]]$regexes) {
-  foreach ($rx in $regexes) { if ($rel -match $rx) { return $true } }
-  return $false
+# Each table is one alternation of its per-glob regexes, tested with one
+# IsMatch per path instead of a PowerShell loop of -match. Every per-glob
+# regex is ^body$, so the anchors are hoisted out (^(?:b1|b2|...)$) and the
+# engine tries only the start of the path. The options give -match's
+# semantics: IgnoreCase with the current culture (no CultureInvariant).
+# RegexOptions.Compiled is left off: it is slower here on Windows
+# PowerShell 5.1. An empty table (-Full for exclusions) matches nothing.
+function ConvertTo-TableRegex([string[]]$globs) {
+  $bodies = @(foreach ($g in $globs) { $r = Convert-GlobToRegex $g $true; $r.Substring(1, $r.Length - 2) })
+  $pattern = '(?!)'; if ($bodies.Count -gt 0) { $pattern = '^(?:' + ($bodies -join '|') + ')$' }
+  return (New-Object System.Text.RegularExpressions.Regex($pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase))
 }
+$excludeGlobs = @(Get-TableLines $EXCLUDES); if ($Full) { $excludeGlobs = @() }
+$script:ExcludeRegex = ConvertTo-TableRegex $excludeGlobs
+$script:SecretRegex = ConvertTo-TableRegex @($SECRET_GLOBS -split "`r?`n" | Where-Object { $_ -ne '' })
 
 # Test-Path throws a real UnauthorizedAccessException on protected profiles
 # even with -ErrorAction, so probe through .NET which never throws.
@@ -1667,37 +1672,65 @@ function Get-Epoch($dt) {
   try { return [int64]([DateTimeOffset]::new([DateTime]$dt).ToUnixTimeSeconds()) } catch { return [int64]0 }
 }
 
+# The owner as an account name, or its SID when the name cannot be resolved,
+# or '' when the security descriptor cannot be read (always under PowerShell
+# 7, whose File class has no GetAccessControl). Only the owner section is
+# read, and each SID is translated once per run.
+$script:OwnerNames = @{}
 function Get-OwnerName([string]$path) {
   try {
-    $acl = [System.IO.File]::GetAccessControl($path)
-    return $acl.GetOwner([System.Security.Principal.NTAccount]).Value
-  } catch {
-    try { return [System.IO.File]::GetAccessControl($path).GetOwner([System.Security.Principal.SecurityIdentifier]).Value } catch { return '' }
+    $sid = [System.IO.File]::GetAccessControl($path, [System.Security.AccessControl.AccessControlSections]::Owner).GetOwner([System.Security.Principal.SecurityIdentifier])
+    $key = $sid.Value
+  } catch { return '' }
+  if (-not $script:OwnerNames.ContainsKey($key)) {
+    $name = $key
+    try { $name = $sid.Translate([System.Security.Principal.NTAccount]).Value } catch { }
+    $script:OwnerNames[$key] = $name
   }
+  return $script:OwnerNames[$key]
 }
 
+# One SHA256 object for the run instead of a Get-FileHash call per file.
+# Lowercase hex, or '' when the file cannot be read. Used for the archive;
+# Copy-FileShared hashes each staged copy itself.
+$script:Sha256 = [System.Security.Cryptography.SHA256]::Create()
 function Get-FileSha256([string]$path) {
-  try { return (Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash.ToLower() } catch { return '' }
+  $fs = $null
+  try {
+    $fs = New-Object System.IO.FileStream($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+    return [System.BitConverter]::ToString($script:Sha256.ComputeHash($fs)).Replace('-', '').ToLowerInvariant()
+  } catch { return '' }
+  finally { if ($fs) { $fs.Dispose() } }
 }
 
 # Copy with FileShare.ReadWrite|Delete so files held open by a running editor
-# (SQLite state stores, LevelDB) can still be read.
-function Copy-FileShared([string]$src, [string]$dst) {
-  $in = $null; $out = $null
+# (SQLite state stores, LevelDB) can still be read, and return the SHA-256 of
+# the staged copy ('' when it cannot be read back). The hash reads the staged
+# file back through the handle that wrote it, before it is closed: reopening
+# a file just written waits for the antivirus scan of it on Windows, which
+# made the hash the slowest step. $item is the source's pre-copy Get-Item
+# from Add-File; the copy gets its timestamps after the hash has read it.
+function Copy-FileShared([string]$src, [string]$dst, $item) {
+  $in = $null; $out = $null; $sha = ''
   try {
     $in = New-Object System.IO.FileStream($src, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
-    $out = New-Object System.IO.FileStream($dst, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    $out = New-Object System.IO.FileStream($dst, [System.IO.FileMode]::Create, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     $in.CopyTo($out)
+    $in.Dispose(); $in = $null
+    try {
+      $out.Flush(); $out.Position = 0
+      $sha = [System.BitConverter]::ToString($script:Sha256.ComputeHash($out)).Replace('-', '').ToLowerInvariant()
+    } catch { $sha = '' }
   } finally {
     if ($out) { $out.Dispose() }
     if ($in) { $in.Dispose() }
   }
   try {
-    $si = Get-Item -LiteralPath $src -Force
-    [System.IO.File]::SetCreationTimeUtc($dst, $si.CreationTimeUtc)
-    [System.IO.File]::SetLastWriteTimeUtc($dst, $si.LastWriteTimeUtc)
-    [System.IO.File]::SetLastAccessTimeUtc($dst, $si.LastAccessTimeUtc)
+    [System.IO.File]::SetCreationTimeUtc($dst, $item.CreationTimeUtc)
+    [System.IO.File]::SetLastWriteTimeUtc($dst, $item.LastWriteTimeUtc)
+    [System.IO.File]::SetLastAccessTimeUtc($dst, $item.LastAccessTimeUtc)
   } catch { }
+  return $sha
 }
 
 function Get-DirSize([string]$dir) {
@@ -1934,15 +1967,53 @@ function Write-CollectorLog([string]$msg) {
   if (-not $Quiet) { [Console]::Error.WriteLine($msg) }
 }
 
+# Manifest rows are written by hand rather than through ConvertTo-Json: the
+# same keys in the same order with the same JSON types, and PowerShell 7's
+# ConvertTo-Json bytes. Strings escape " and \, every control character
+# below 0x20 (\b \t \n \f \r short, the rest \u00xx) and U+0085, U+2028 and
+# U+2029, as ConvertTo-Json does; everything else, non-ASCII included, is
+# written as is and encoded as UTF-8 by the writer, which turns a lone
+# surrogate into U+FFFD as ConvertTo-Json's output does. Windows PowerShell
+# 5.1's ConvertTo-Json also escaped < > ' & as < and so on; the parsed
+# rows are the same.
+$script:JsonRareRx = New-Object System.Text.RegularExpressions.Regex('[\x00-\x1f\u0085\u2028\u2029]')
+$script:JsonInv = [System.Globalization.CultureInfo]::InvariantCulture
+function ConvertTo-JsonBody([string]$s) {
+  $sb = New-Object System.Text.StringBuilder ($s.Length + 16)
+  foreach ($c in $s.ToCharArray()) {
+    $n = [int]$c
+    if ($c -eq '"') { [void]$sb.Append('\"') }
+    elseif ($c -eq '\') { [void]$sb.Append('\\') }
+    elseif ($n -eq 8) { [void]$sb.Append('\b') }
+    elseif ($n -eq 9) { [void]$sb.Append('\t') }
+    elseif ($n -eq 10) { [void]$sb.Append('\n') }
+    elseif ($n -eq 12) { [void]$sb.Append('\f') }
+    elseif ($n -eq 13) { [void]$sb.Append('\r') }
+    elseif ($n -lt 0x20 -or $n -eq 0x85 -or $n -eq 0x2028 -or $n -eq 0x2029) { [void]$sb.Append('\u').Append($n.ToString('x4', $script:JsonInv)) }
+    else { [void]$sb.Append($c) }
+  }
+  return $sb.ToString()
+}
+
 function Write-Row([string]$user, [string]$homeDir, [string]$agent, [string]$path, [string]$archivePath, [string]$type,
                    [int64]$size, [int64]$mtime, [int64]$atime, [int64]$ctime, [int64]$btime, [string]$owner, [string]$attributes,
                    [string]$sha, [bool]$secret, [string]$status, [string]$target, [string]$err) {
-  $row = [ordered]@{
-    user = $user; home = $homeDir; agent = $agent; path = $path; archive_path = $archivePath; type = $type
-    size = $size; mtime = $mtime; atime = $atime; ctime = $ctime; btime = $btime; uid = 0; gid = 0; mode = ''
-    owner = $owner; attributes = $attributes; sha256 = $sha; secret = $secret; status = $status; target = $target; error = $err
+  $f = [string[]]@($user, $homeDir, $agent, $path, $archivePath, $type, $owner, $attributes, $sha, $status, $target, $err)
+  if ($script:JsonRareRx.IsMatch([string]::Concat($f))) {
+    for ($i = 0; $i -lt $f.Length; $i++) { $f[$i] = ConvertTo-JsonBody $f[$i] }
+  } else {
+    # No field holds a control character, so U+0000 can separate them while
+    # " and \ are escaped in one pass.
+    $f = [string]::Join([string][char]0, $f).Replace('\', '\\').Replace('"', '\"').Split([char]0)
   }
-  $script:ManifestWriter.WriteLine(($row | ConvertTo-Json -Compress -Depth 2))
+  $sec = 'false'; if ($secret) { $sec = 'true' }
+  $inv = $script:JsonInv
+  $script:ManifestWriter.WriteLine([string]::Concat([string[]]@(
+    '{"user":"', $f[0], '","home":"', $f[1], '","agent":"', $f[2], '","path":"', $f[3], '","archive_path":"', $f[4],
+    '","type":"', $f[5], '","size":', $size.ToString($inv), ',"mtime":', $mtime.ToString($inv), ',"atime":', $atime.ToString($inv),
+    ',"ctime":', $ctime.ToString($inv), ',"btime":', $btime.ToString($inv), ',"uid":0,"gid":0,"mode":"","owner":"', $f[6],
+    '","attributes":"', $f[7], '","sha256":"', $f[8], '","secret":', $sec, ',"status":"', $f[9], '","target":"', $f[10],
+    '","error":"', $f[11], '"}')))
   if ($script:Counts.ContainsKey($status)) { $script:Counts[$status]++ }
   # The error_read row for an unreadable home itself does not make it a home with artifacts.
   if (-not ($status -eq 'error_read' -and $path -eq $homeDir)) { $script:RowHomes[$homeDir] = $true }
@@ -2000,6 +2071,9 @@ function Get-InvLines([string]$user, $acc, [int]$projects) {
 # ---------------------------------------------------------------------------
 # Collection
 # ---------------------------------------------------------------------------
+# Staging directories already created or found, so each file does not test its
+# parent again.
+$script:StagedDirs = New-Object 'System.Collections.Generic.HashSet[string]'
 function Add-File([string]$user, [string]$homeDir, [string]$agent, $item) {
   if ($Inventory) {
     # Regular files only: reparse points are neither followed nor counted.
@@ -2009,13 +2083,18 @@ function Add-File([string]$user, [string]$homeDir, [string]$agent, $item) {
   $full = $item.FullName
   $hrel = Get-RelPath $homeDir $full
   $arel = Get-ArchiveRel $full
-  $dest = Join-PathSafe $Stage $arel
+  # Join-PathSafe and Get-Epoch, inlined: this runs once per file.
+  $dest = $Stage + $Sep + $arel.Replace('\', $Sep).Replace('/', $Sep)
   $isLink = (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
   $size = [int64]0; if (-not $item.PSIsContainer) { try { $size = [int64]$item.Length } catch { } }
-  $mtime = Get-Epoch $item.LastWriteTimeUtc; $atime = Get-Epoch $item.LastAccessTimeUtc; $btime = Get-Epoch $item.CreationTimeUtc
+  try {
+    $mtime = [DateTimeOffset]::new($item.LastWriteTimeUtc).ToUnixTimeSeconds()
+    $atime = [DateTimeOffset]::new($item.LastAccessTimeUtc).ToUnixTimeSeconds()
+    $btime = [DateTimeOffset]::new($item.CreationTimeUtc).ToUnixTimeSeconds()
+  } catch { $mtime = Get-Epoch $item.LastWriteTimeUtc; $atime = Get-Epoch $item.LastAccessTimeUtc; $btime = Get-Epoch $item.CreationTimeUtc }
   $owner = Get-OwnerName $full
   $attrs = [string]$item.Attributes
-  $secret = Test-AnyMatch $hrel $script:SecretRegexes
+  $secret = $script:SecretRegex.IsMatch($hrel)
   $type = 'file'; $status = 'collected'; $sha = ''; $target = ''; $err = ''
   if ($isLink) {
     $type = 'symlink'; $status = 'symlink'; $target = Get-LinkTarget $item
@@ -2026,10 +2105,12 @@ function Add-File([string]$user, [string]$homeDir, [string]$agent, $item) {
     $status = 'skipped_size'
   } else {
     try {
-      $d = Split-Path -Path $dest -Parent
-      if (-not (Test-PathQuiet $d 'Any')) { New-Item -ItemType Directory -Path $d -Force -ErrorAction Stop | Out-Null }
-      Copy-FileShared $full $dest
-      $sha = Get-FileSha256 $dest
+      $d = [System.IO.Path]::GetDirectoryName($dest)
+      if (-not $script:StagedDirs.Contains($d)) {
+        if (-not (Test-PathQuiet $d 'Any')) { New-Item -ItemType Directory -Path $d -Force -ErrorAction Stop | Out-Null }
+        [void]$script:StagedDirs.Add($d)
+      }
+      $sha = Copy-FileShared $full $dest $item
     } catch {
       $status = 'error_copy'; $err = $_.Exception.Message
       Write-CollectorLog "copy failed: ${full}: $err"
@@ -2076,7 +2157,7 @@ function Add-Tree([string]$user, [string]$homeDir, [string]$agent, [string]$dir)
     # A path matched by another catalog entry is collected under that entry.
     if ($script:ClaimedPaths.ContainsKey($child.FullName)) { continue }
     $hrel = Get-RelPath $homeDir $child.FullName
-    if (Test-AnyMatch $hrel $script:ExcludeRegexes) { Add-Excluded $user $homeDir $agent $child; continue }
+    if ($script:ExcludeRegex.IsMatch($hrel)) { Add-Excluded $user $homeDir $agent $child; continue }
     $isLink = (($child.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
     if ($child.PSIsContainer -and -not $isLink) { Add-Tree $user $homeDir $agent $child.FullName }
     else { Add-File $user $homeDir $agent $child }
@@ -2087,7 +2168,7 @@ function Add-Path([string]$user, [string]$homeDir, [string]$agent, [string]$path
   $item = $null
   try { $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop } catch { $script:WalkErrors++; Write-CollectorLog "stat failed: ${path}: $($_.Exception.Message)"; return }
   $hrel = Get-RelPath $homeDir $path
-  if (Test-AnyMatch $hrel $script:ExcludeRegexes) { Add-Excluded $user $homeDir $agent $item; return }
+  if ($script:ExcludeRegex.IsMatch($hrel)) { Add-Excluded $user $homeDir $agent $item; return }
   $isLink = (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
   if ($item.PSIsContainer -and -not $isLink) { Add-Tree $user $homeDir $agent $path } else { Add-File $user $homeDir $agent $item }
 }
@@ -2364,7 +2445,7 @@ function ConvertTo-LocalPath([string]$v) {
 $script:DiscoveryHome = ''
 function Test-InventorySecret([string]$f) {
   if (-not $Inventory -or -not $script:DiscoveryHome) { return $false }
-  return (Test-AnyMatch (Get-RelPath $script:DiscoveryHome $f) $script:SecretRegexes)
+  return $script:SecretRegex.IsMatch((Get-RelPath $script:DiscoveryHome $f))
 }
 function Get-JsonValues([string]$key, [string[]]$files) {
   $rx = '"' + [regex]::Escape($key) + '"\s*:\s*"((?:[^"\\]|\\.)*)"'
@@ -2582,7 +2663,7 @@ $summary = [ordered]@{
   run_as_admin = $IsAdmin
   started = $StartTs; finished = $EndTs
   options = [ordered]@{ full = $Full.IsPresent; no_secrets = $NoSecrets.IsPresent; max_file_size_bytes = $MaxSize; users_filter = $Users; no_docker = $NoDocker.IsPresent; no_projects = $NoProjects.IsPresent; projects = @($Project) }
-  capabilities = [ordered]@{ hash_tool = 'Get-FileHash'; archiver = $(if ($TarExe) { 'tar.exe' } else { 'ZipFile' }) }
+  capabilities = [ordered]@{ hash_tool = 'System.Security.Cryptography.SHA256'; archiver = $(if ($TarExe) { 'tar.exe' } else { 'ZipFile' }) }
   users = @($UserList | ForEach-Object { $_.user })
   homes = @($UserList | ForEach-Object { $_.home })
   users_with_artifacts = @($ActiveUsers | ForEach-Object { $_.user })
