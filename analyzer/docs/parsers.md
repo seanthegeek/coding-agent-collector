@@ -72,7 +72,13 @@ so that file is offered to them too and the rows come out under `cody` or
 
 Agents detected but not yet parsed: `claude-desktop`, `chatgpt-desktop`,
 `copilot-cli`, `copilot`, `cursor`, `windsurf`, `amp`, `factory-droid`,
-`augment` and `local-deep-research`.
+`augment`, `local-deep-research`, `autogen-studio`, `camel-ai`, `crewai`,
+`dify`, `flowise`, `langflow`, `metagpt`, `n8n` and `pydantic-clai`.
+
+The `open-interpreter` parser reads only the current Codex-fork layout
+under `.openinterpreter`. The legacy Python tool's
+`conversations/*.json` files, which the catalog attributes to
+`open-interpreter` too, are detected but not parsed.
 
 The Cursor and Windsurf storage formats are not documented, so a parser
 needs format research first: Windsurf's Cascade history is protobuf

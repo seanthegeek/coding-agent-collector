@@ -8,11 +8,11 @@ Guidance for AI coding agents and humans working in this repository.
 for incident responders. It has two parts: collectors that gather the
 on-disk artifacts of AI agents that run on the host (Claude Code, Gemini
 CLI, Antigravity, Codex CLI, Copilot CLI, Cursor, VS Code chat extensions,
-Windsurf, Aider, Ollama, Hermes, Agent Zero, OpenClaw, and others), for
-every user on a host, into one archive with a hashed manifest; and an
-analyzer, the `doubleagent` Python command, that detects agent state in a
-collection or any loose directory tree and parses transcripts into a JSONL
-timeline. The criterion for the catalog is an agent that executes tools or
+Windsurf, Aider, Ollama, Hermes, Agent Zero, OpenClaw, n8n, Flowise,
+Langflow, and others), for every user on a host, into one archive with a
+hashed manifest; and an analyzer, the `doubleagent` Python command, that
+detects agent state in a collection or any loose directory tree and parses
+transcripts into a JSONL timeline. The criterion for the catalog is an agent that executes tools or
 shell commands on the host and leaves transcripts, configuration or
 credentials on disk; it need not be an editor or coding tool. When a new
 kind of agent is added, widen the wording in the top-level README in the
@@ -467,7 +467,11 @@ for that reason): path research (where state lives,
 credentials, exclusions, project files, discovery) goes to
 `collectors/research/<agent>.md`, record schema research (how transcripts
 are encoded and how a parser reads them) goes to
-`analyzer/research/<agent>.md`. A document covers one agent only; where
+`analyzer/research/<agent>.md`. A document covers one agent only, and
+every agent that earns a catalog line gets its own, even when it came out
+of a grouped sweep such as the framework sweep (issue 64): the sweep
+document (`collectors/research/frameworks.md`) keeps only the summary
+table and the evidence for what got no catalog line. Where
 agents share a lineage, each says so and links to the other rather than
 repeating it. When an agent has both documents, each links to the other
 with a Markdown link in a short paragraph before its first section, the

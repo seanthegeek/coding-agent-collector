@@ -92,6 +92,43 @@ class LooseDetectTests(unittest.TestCase):
         )
         self.assertEqual(by_rel[".config/Code/User/globalStorage/state.vscdb"], "vscode")
 
+    def test_framework_agents_detected(self):
+        # Collector 1.10.0 (#64): CrewAI's run database sits in a data
+        # directory named after the project folder (a mid-path `*` entry),
+        # its Windows directory is the class [Cc]rew[Aa][Ii], CAMEL shares
+        # ~/.camel with Apache Camel JBang, and the legacy Open Interpreter
+        # directories have spaces in their names.
+        home = self.tmp / "home" / "alice"
+        files = {
+            ".local/share/myproj/latest_kickoff_task_outputs.db": "crewai",
+            ".local/share/opencode/flow_states.db": "crewai",
+            ".local/share/opencode/opencode.db": "opencode",
+            "AppData/Local/CrewAI/myproj/latest_kickoff_task_outputs.db": "crewai",
+            "AppData/Local/crewai/credentials/tokens.enc": "crewai",
+            ".camel/gmail_token.json": "camel-ai",
+            ".config/Open Interpreter Terminal/conversations/a.json": "open-interpreter",
+            ".config/pydantic-clai2/sessions.db": "pydantic-clai",
+            ".n8n/database.sqlite": "n8n",
+            ".flowise/database.sqlite": "flowise",
+            ".autogenstudio/autogen04203.db": "autogen-studio",
+            ".metagpt/config2.yaml": "metagpt",
+            ".cache/langflow/secret_key": "langflow",
+            ".config/difyctl/config.yml": "dify",
+        }
+        for rel in [*files, ".camel/4242-status.json", ".local/share/myproj/notes.txt"]:
+            p = home / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("x")
+        col = open_input(self.tmp / "home", self.cat)
+        by_rel = {a.rel: a.agent for a in col.artifacts}
+        for rel, agent in files.items():
+            self.assertEqual(by_rel.get(rel), agent, rel)
+        self.assertNotIn(".camel/4242-status.json", by_rel)
+        self.assertNotIn(".local/share/myproj/notes.txt", by_rel)
+        self.assertEqual(
+            sum(1 for a in col.artifacts if a.rel == ".local/share/opencode/flow_states.db"), 1
+        )
+
     def test_project_dirs_inside_home_are_not_homes(self):
         root = build_image(self.tmp / "image")
         col = open_input(root, self.cat)

@@ -633,6 +633,100 @@ printf 'svc-ollama:x:998:998::/usr/share/ollama:/usr/sbin/nologin\n' >>"$ROOT/et
 printf 'hist\n' >"$ROOT/usr/share/ollama/.ollama/history"
 printf 'blob\n' >"$ROOT/usr/share/ollama/.ollama/models/blobs/sha256-def"
 
+# 2026-10-06 frameworks sweep (#64): agent frameworks, studios and self-hosted
+# platforms. Cases in the CASES14 form, relative to alice's home; the same list
+# is in smoke.ps1. CrewAI names its run directory after the project folder, so
+# its Linux and macOS lines are file-anchored below a mid-path wildcard
+# (.local/share/myproj); the Windows line is the class AppData/Local/[Cc]rew[Aa][Ii],
+# tested with CrewAI in alice's home and crewai in bob's. Apache Camel JBang
+# shares ~/.camel with CAMEL, so a JBang status file there must not be collected.
+CASES_FW='
+agent|autogen-studio|.autogenstudio/autogen04203.db
+secret||.autogenstudio/.env
+secret||.autogenstudio/temp_env_vars.env
+secret||.config/crewai/settings.json
+secret||.local/share/crewai/credentials/tokens.enc
+secret||.local/share/crewai/credentials/secret.key
+secret||Library/Application Support/crewai/credentials/tokens.enc
+secret||AppData/Local/CrewAI/credentials/secret.key
+agent|crewai|.crewai/model_catalog_cache.json
+agent|crewai|.local/share/myproj/latest_kickoff_task_outputs.db
+agent|crewai|.local/share/myproj/latest_kickoff_task_outputs.db-wal
+agent|crewai|.local/share/myproj/flow_states.db
+agent|crewai|.local/share/myproj/.crewai_user.json
+agent|crewai|Library/Application Support/myproj/latest_kickoff_task_outputs.db
+agent|crewai|AppData/Local/CrewAI/myproj/latest_kickoff_task_outputs.db
+secret||.camel/gmail_token.json
+agent|camel-ai|.camel/gmail_token.json
+agent|camel-ai|.camel/skills/s1/SKILL.md
+agent|camel-ai|.config/camel/skills/s2/SKILL.md
+secret||.config/difyctl/tokens.yml
+secret||AppData/Roaming/difyctl/tokens.yml
+secret||AppData/Local/difyctl/tokens.yml
+agent|dify|.config/difyctl/config.yml
+excl||.flowise/vectorstore
+secret||.flowise/encryption.key
+secret||.flowise/jwt_auth_token_secret.key
+agent|flowise|.flowise/database.sqlite
+excl||.langflow/knowledge_bases
+excl||AppData/Roaming/com.LangflowDesktop/knowledge_bases
+excl||Library/Application Support/com.LangflowDesktop/venv
+excl||Library/Application Support/com.LangflowDesktop/python_env
+excl||AppData/Local/com.LangflowDesktop/venv
+excl||AppData/Local/com.LangflowDesktop/python_env
+excl||AppData/Local/com.LangflowDesktop/cache
+excl||.cache/langflow/profile_pictures
+excl||Library/Caches/langflow/profile_pictures
+excl||AppData/Local/langflow/langflow/Cache/profile_pictures
+secret||.cache/langflow/secret_key
+secret||.cache/langflow/cache_secret_key
+secret||Library/Caches/langflow/secret_key
+secret||AppData/Local/langflow/langflow/Cache/secret_key
+secret||.langflow/data/.env
+secret||AppData/Roaming/com.LangflowDesktop/data/.env
+agent|langflow|.langflow/data/database.db
+agent|langflow|Library/Logs/com.LangflowDesktop/langflow.log
+secret||.metagpt/config2.yaml
+secret||.metagpt/config2.bak
+excl||.n8n/nodes/node_modules
+excl||.n8n/custom/node_modules
+excl||.n8n/node-definitions
+excl||.n8n/n8n-sdk-templates
+secret||.n8n/config
+secret||.n8n/ssh/key
+agent|n8n|.n8n/database.sqlite
+agent|n8n|.n8n-local-gateway/log
+agent|n8n|.n8n-gateway/settings.json
+secret||.config/pydantic-clai2/credentials-default.enc
+secret||.config/pydantic-clai2/logfire/logfire_credentials.json
+agent|pydantic-clai|.config/pydantic-clai2/sessions.db
+agent|pydantic-clai|.pydantic-ai/prompt-history.txt
+excl||.config/open-interpreter/models
+excl||Library/Application Support/open-interpreter/models
+excl||AppData/Local/open-interpreter/open-interpreter/models
+secret||.config/open-interpreter/profiles/default.yaml
+secret||Library/Application Support/open-interpreter/profiles/default.yaml
+secret||AppData/Local/open-interpreter/open-interpreter/profiles/default.yaml
+secret||.config/Open Interpreter/config.yaml
+secret||Library/Application Support/Open Interpreter Terminal/config.yaml
+secret||AppData/Local/Open Interpreter/Open Interpreter/config.yaml
+agent|open-interpreter|.config/open-interpreter/conversations/hello__October_06_2026_10-00-00.json
+agent|open-interpreter|.config/Open Interpreter Terminal/conversations/old.json
+agent|open-interpreter|.cache/open-interpreter/telemetry_user_id
+'
+printf '%s\n' "$CASES_FW" | while IFS='|' read -r _k _a _r; do
+  [ -n "$_r" ] || continue
+  case "$_k" in
+    excl) mkdir -p "$H/$_r"; printf 'x\n' >"$H/$_r/f" ;;
+    *) mkdir -p "$H/$(dirname "$_r")"; printf 'x\n' >"$H/$_r" ;;
+  esac
+done
+printf '{}\n' >"$H/.camel/4242-status.json"
+printf 'x\n' >"$H/.local/share/myproj/unrelated.txt"
+mkdir -p "$B/AppData/Local/crewai/myproj" "$B/AppData/Local/crewai/credentials"
+printf 'x\n' >"$B/AppData/Local/crewai/myproj/latest_kickoff_task_outputs.db"
+printf 'x\n' >"$B/AppData/Local/crewai/credentials/tokens.enc"
+
 run() { # run NAME ARGS...
   _n=$1; shift
   mkdir -p "$OUT/$_n"
@@ -856,6 +950,23 @@ check "ollama blob not collected" "! grep -q 'blobs/sha256-abc' \"\$M\""
 check "ollama /usr/share/ollama home from passwd collected" "row \"$ROOT/usr/share/ollama/.ollama/history\" | grep -q '\"user\":\"svc-ollama\",\"home\":\"$ROOT/usr/share/ollama\",\"agent\":\"ollama\".*\"status\":\"collected\"'"
 check "ollama /usr/share/ollama blobs excluded" "[ \"\$(status_of \"$ROOT/usr/share/ollama/.ollama/models/blobs\")\" = skipped_excluded ]"
 
+# 2026-10-06 frameworks sweep (#64)
+printf '%s\n' "$CASES_FW" >"$WORK/casesfw"
+while IFS='|' read -r _k _a _r; do
+  [ -n "$_r" ] || continue
+  _row=$(row "$H/$_r")
+  case "$_k" in
+    excl|exclf) case "$_row" in *'"status":"skipped_excluded"'*) ok "excluded: $_r" ;; *) bad "excluded: $_r" ;; esac ;;
+    secret) case "$_row" in *'"secret":true,"status":"collected"'*) ok "secret: $_r" ;; *) bad "secret: $_r" ;; esac ;;
+    agent) case "$_row" in *"\"agent\":\"$_a\""*'"status":"collected"'*) ok "$_a: $_r" ;; *) bad "$_a: $_r" ;; esac ;;
+  esac
+done <"$WORK/casesfw"
+check "crewai mid-path wildcard leaves other files in the project dir alone" "! grep -q '/.local/share/myproj/unrelated.txt\"' \"\$M\""
+check "crewai lowercase AppData/Local/crewai collected through the class" "row \"$B/AppData/Local/crewai/myproj/latest_kickoff_task_outputs.db\" | grep -q '\"agent\":\"crewai\".*\"status\":\"collected\"'"
+check "crewai lowercase credentials flagged secret through the class" "row \"$B/AppData/Local/crewai/credentials/tokens.enc\" | grep -q '\"secret\":true,\"status\":\"collected\"'"
+check "camel-ai narrow lines leave Apache Camel JBang files alone" "! grep -q '/.camel/4242-status.json\"' \"\$M\""
+check "legacy open-interpreter space-named dir collected once" "[ \"\$(grep -c '/.config/Open Interpreter Terminal/conversations/old.json\"' \"\$M\")\" = 1 ]"
+
 # ---- --no-secrets ---------------------------------------------------------
 run nosecrets --no-secrets; check "no-secrets exit 0" "[ $? -eq 0 ]"
 check "credentials skipped_secret" "[ \"\$(status_of \"$ROOT/home/alice/.claude/.credentials.json\")\" = skipped_secret ]"
@@ -900,6 +1011,41 @@ run desktop; check "docker desktop exit 0" "[ $? -eq 0 ]"
 check "docker desktop noted in stdout" "grep -q '^docker:     3 volumes found, 2 collected, 0 unreadable; Docker Desktop VM disk not collected\$' \"$OUT/desktop.stdout\""
 check "docker desktop noted in collection.json" "grep -q '\"docker: Docker Desktop data at .*com.docker.docker; volumes inside its virtual machine disk are not collected\"' \"\$S\" && grep -q '\"docker_desktop\": true' \"\$S\""
 rm -rf "$B/Library/Containers"
+
+# 2026-10-06 frameworks sweep (#64): Dify, Langflow and n8n named volumes, in
+# a run of their own so the volume counts above stay as they are. The n8n
+# volume holds ~/.n8n, so its config (encryptionKey) is flagged through the
+# volume-relative config glob.
+FV="$DV/n8n_data/_data"
+mkdir -p "$FV/nodes/node_modules/pkg" "$FV/node-definitions" "$FV/n8n-sdk-templates" "$FV/ssh" \
+  "$DV/n8n_n8n-data/_data" "$DV/langflow_langflow-data/_data/profile_pictures" \
+  "$DV/docker_dify_agent_local_sandbox_home/_data/.local/share/shellctl" "$DV/docker_dify_agent_local_sandbox_workspace/_data"
+printf '{"encryptionKey":"k"}\n' >"$FV/config"
+printf 'db\n' >"$FV/database.sqlite"
+printf 'x\n' >"$FV/nodes/node_modules/pkg/index.js"
+printf 'x\n' >"$FV/node-definitions/d.json"
+printf 'x\n' >"$FV/n8n-sdk-templates/t.json"
+printf 'key\n' >"$FV/ssh/key"
+printf 'db\n' >"$DV/n8n_n8n-data/_data/database.sqlite"
+printf 'k\n' >"$DV/langflow_langflow-data/_data/secret_key"
+printf 'k\n' >"$DV/langflow_langflow-data/_data/cache_secret_key"
+printf 'x\n' >"$DV/langflow_langflow-data/_data/profile_pictures/p.svg"
+printf 'db\n' >"$DV/docker_dify_agent_local_sandbox_home/_data/.local/share/shellctl/shellctl.db"
+printf 'x\n' >"$DV/docker_dify_agent_local_sandbox_workspace/_data/out.txt"
+run fwvolumes; check "frameworks volumes exit 0" "[ $? -eq 0 ]"
+check "n8n_data volume collected as n8n" "row \"$FV/database.sqlite\" | grep -q '\"user\":\"docker\",\"home\":\"$FV\",\"agent\":\"n8n\".*\"status\":\"collected\"'"
+check "n8n volume config flagged secret (volume-relative)" "row \"$FV/config\" | grep -q '\"secret\":true,\"status\":\"collected\"'"
+check "n8n volume ssh key flagged secret (volume-relative)" "row \"$FV/ssh/key\" | grep -q '\"secret\":true,\"status\":\"collected\"'"
+check "n8n volume nodes/node_modules excluded (volume-relative)" "[ \"\$(status_of \"$FV/nodes/node_modules\")\" = skipped_excluded ]"
+check "n8n volume node-definitions excluded (volume-relative)" "[ \"\$(status_of \"$FV/node-definitions\")\" = skipped_excluded ]"
+check "n8n volume n8n-sdk-templates excluded (volume-relative)" "[ \"\$(status_of \"$FV/n8n-sdk-templates\")\" = skipped_excluded ]"
+check "n8n_n8n-data volume collected as n8n" "row \"$DV/n8n_n8n-data/_data/database.sqlite\" | grep -q '\"agent\":\"n8n\".*\"status\":\"collected\"'"
+check "langflow-data volume secret_key flagged (volume-relative)" "row \"$DV/langflow_langflow-data/_data/secret_key\" | grep -q '\"agent\":\"langflow\".*\"secret\":true,\"status\":\"collected\"'"
+check "langflow-data volume cache_secret_key flagged (volume-relative)" "row \"$DV/langflow_langflow-data/_data/cache_secret_key\" | grep -q '\"secret\":true,\"status\":\"collected\"'"
+check "langflow-data volume profile_pictures excluded (volume-relative)" "[ \"\$(status_of \"$DV/langflow_langflow-data/_data/profile_pictures\")\" = skipped_excluded ]"
+check "dify sandbox home volume collected as dify" "row \"$DV/docker_dify_agent_local_sandbox_home/_data/.local/share/shellctl/shellctl.db\" | grep -q '\"agent\":\"dify\".*\"status\":\"collected\"'"
+check "dify sandbox workspace volume collected as dify" "row \"$DV/docker_dify_agent_local_sandbox_workspace/_data/out.txt\" | grep -q '\"agent\":\"dify\".*\"status\":\"collected\"'"
+rm -rf "$DV/n8n_data" "$DV/n8n_n8n-data" "$DV/langflow_langflow-data" "$DV/docker_dify_agent_local_sandbox_home" "$DV/docker_dify_agent_local_sandbox_workspace"
 
 # ---- --inventory (1.6.0, 2026-10-04) ---------------------------------------
 # Stat-only fleet inventory: JSON Lines on stdout, nothing written anywhere.

@@ -9,6 +9,25 @@ named volume rather than a home directory: Agent Zero's README runs it with
 `-v a0_usr:/a0/usr`, Local Deep Research's compose file keeps its data in
 `ldr_data`, and Ollama's Docker instructions use a volume named `ollama`.
 
+The volume name patterns in `DOCKER_VOLUMES`, in table order (the first
+match wins):
+
+| Pattern | Agent | Source of the name | Mounted at |
+| --- | --- | --- | --- |
+| `*a0_usr`, `a0-launcher-*-usr` | `agent-zero` | README `docker run`; A0 Launcher named-volume mode | `/a0/usr` |
+| `*ldr_data` | `local-deep-research` | `docker-compose.yml` | `/data` |
+| `ollama`, `*ollama*` | `ollama` | `docs/docker.mdx`; the Local Deep Research compose file (`ollama_data`) | `/root/.ollama` |
+| `*dify_agent_local_sandbox_home`, `*dify_agent_local_sandbox_workspace` | `dify` | `docker/docker-compose.yaml` (Compose names them `docker_...`) | `/home/dify`, `/workspace` |
+| `*langflow-data` | `langflow` | `docker_example/docker-compose.yml` | `/app/langflow`, the config directory |
+| `*n8n_data`, `*n8n-data` | `n8n` | README `docker run`; the `get-n8n.sh` compose file (`n8n_n8n-data`) | `/home/node/.n8n` |
+| `*tabby*`, `*local-deep-research*`, `*openhands*`, `*letta*`, `*hermes*`, `*openclaw*`, `*clawdbot*`, `*nanobot*` | as named | inferred: these tools' documentation bind-mounts the home directory, and a named volume replacing it has the same layout | the tool's state directory |
+
+Dify keeps most of its state, including its PostgreSQL database, in bind
+mounts beside its compose file rather than in named volumes, and Langflow's
+`langflow-postgres` and LangGraph's `<project>_langgraph-data` volumes are
+whole PostgreSQL clusters; none of these is matched. See
+[coverage.md](coverage.md#agent-frameworks-and-self-hosted-platforms).
+
 ## Where volumes are found
 
 The collectors enumerate volumes themselves, from the filesystem and never

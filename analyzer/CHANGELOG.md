@@ -9,6 +9,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- The bundled catalog copy follows collector 1.10.0: the agents
+  `autogen-studio`, `camel-ai`, `crewai`, `dify`, `flowise`, `langflow`,
+  `metagpt`, `n8n` and `pydantic-clai`, the project entry `.clai`, the
+  legacy Open Interpreter directories under `open-interpreter`, and the
+  Dify, Langflow and n8n Docker volume patterns are detected; none is
+  parsed yet (#64).
+
 ## [0.10.0] - 2026-10-06
 
 ### Changed

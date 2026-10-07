@@ -106,7 +106,10 @@ Muse Code and Ollama; [docs/parsers.md](docs/parsers.md) lists the files
 each one reads and the evidence it was validated against. Every other agent
 in the catalog (Claude Desktop, ChatGPT Desktop, Copilot CLI and the Copilot
 editor token store, Cursor, Windsurf, Amp, Factory Droid, Augment, Local
-Deep Research) is detected and reported but not yet parsed. Thinking and
+Deep Research, AutoGen Studio, CAMEL, CrewAI, Dify, Flowise, Langflow,
+MetaGPT, n8n and the Pydantic AI CLIs) is detected and reported but not yet
+parsed, as are the legacy Open Interpreter Python tool's conversation
+files. Thinking and
 reasoning blocks are left out unless `--include-thinking` is passed.
 
 ## Documentation

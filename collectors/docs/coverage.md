@@ -193,6 +193,9 @@ are not discovered; they are left to the analyst-side parser:
 - Tabby `ee/db.sqlite`
 - the PearAI Roo fork in `state.vscdb`
 - Codex and Open Interpreter rollouts compressed with zstd
+- CLAI 2.0 `sessions.db` (`conversations.metadata` key `workspace`), whose
+  projects' `.clai` directories are collected only when another source or
+  `-p` names the project
 
 ## Agents outside dot directories
 
@@ -228,6 +231,29 @@ copied by hand:
   read as `/Library/Application Support/muse/` on macOS; the Linux location
   is not known.
 - On Windows, the elevated shell-sandbox setup root under `%ProgramData%`.
+
+## Agent frameworks and self-hosted platforms
+
+Agent frameworks are libraries inside someone else's application, so most
+write nothing to a fixed place in the home; the catalog covers the ones
+that do (AutoGen Studio, CrewAI, CAMEL, MetaGPT, the Pydantic AI CLIs, the
+legacy Open Interpreter Python tool) and the self-hosted platforms Dify,
+Flowise, Langflow and n8n, in the home and in their Docker volumes (see
+[docker.md](docker.md)). The sweep behind this, with the reason each
+framework got a catalog line or not, is
+[research/frameworks.md](../research/frameworks.md).
+
+Some of their state has no fixed home-relative name and is not collected.
+Copy it by hand when the framework was in use:
+
+| Framework | State not collected | Where to look |
+| --- | --- | --- |
+| TaskWeaver | Session transcripts and prompt logs (`workspace/sessions/<id>/`), logs, and `taskweaver_config.json`, which holds the LLM API key. | The project directory: the directory holding `taskweaver_config.json`, which TaskWeaver finds by walking up from where it was started. Nothing under the home records it. |
+| LangGraph | `langgraph dev` runs, threads and checkpoints, as Python pickles in `.langgraph_api/`; `langgraph up` keeps them in PostgreSQL. | `.langgraph_api/` in the project directory; the Docker volume `<project dir name>_langgraph-data`, a PostgreSQL data directory, which is recorded as `skipped_unmatched_volume`. Never unpickle the files to read them. |
+| Dify | The PostgreSQL database with conversations, messages and agent tool calls, uploaded files, tenant RSA keys and `docker/.env` (`SECRET_KEY`). | The bind mounts under `docker/volumes/` beside Dify's compose file, in wherever Dify was cloned. Only its two agent sandbox named volumes and the `difyctl` config are collected. |
+| Langflow (pip or uv install) | `langflow.db` (`langflow-pre.db` for a pre-release), with messages, run history and encrypted credentials. | The installed package directory, `site-packages/langflow/`, inside the virtual environment Langflow runs from, unless the `database_url` or `save_db_in_config_dir` setting moved it (the second puts it in the collected config directory). Langflow Desktop's database is under `.langflow/data` or `AppData/Roaming/com.LangflowDesktop` and is collected. |
+| CrewAI (Linux and macOS) | Opt-in agent memory (`memory/`) and knowledge stores (Chroma, `qdrant/`). | The directory that holds a collected `latest_kickoff_task_outputs.db`, which is named after the project folder (`~/.local/share/<project>`, `~/Library/Application Support/<project>`). Only CrewAI's own files in it are collected, because the directory name is not fixed. On Windows the whole `AppData/Local/CrewAI` directory is collected. |
+| IntentKit | Agent state in PostgreSQL, Redis and RustFS. It is not in the catalog, because it runs no tools on the host. | Its Compose named volumes, such as `intentkit_postgres_data`, recorded as `skipped_unmatched_volume`, and `.env` in its checkout. |
 
 ## Remote development servers
 
@@ -311,7 +337,11 @@ credential pattern.
   case-sensitive. The PowerShell collector converts the patterns to regular
   expressions and matches them, and the catalog globs, without regard to
   case.
-- **Classes:** `[!...]` negated classes work in both collectors.
+- **Classes:** `[...]` classes and `[!...]` negated classes work in both
+  collectors, in catalog globs too: CrewAI's Windows directory is the
+  single line `AppData/Local/[Cc]rew[Aa][Ii]`, which matches `CrewAI` and
+  `crewai` on a case-sensitive filesystem without two lines that differ
+  only by case.
 
 An excluded directory is pruned from the walk before any file in it is
 looked at, so a credential file inside it is never collected or flagged; it

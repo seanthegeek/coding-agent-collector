@@ -20,7 +20,10 @@ home directory is therefore the Codex layout described in
 [codex-cli.md](codex-cli.md), moved to a different directory. The current
 source contains no reference to the Python-era paths (`platformdirs`
 `open-interpreter` config, `profiles/*.yaml`, `conversations/*.json`); a
-grep of the tree for them finds nothing, so they are out of scope here.
+grep of the tree for them finds nothing. Those paths are still on disk
+wherever the Python tool was used, so they were researched separately in
+the agent framework sweep for issue #64 (see [frameworks.md](frameworks.md))
+and are described at the end of section 2.
 
 ## 2. Per-user storage
 
@@ -84,6 +87,76 @@ Executables are installed to `~/.local/bin` and
 above and [`install.ps1:941`](https://github.com/openinterpreter/openinterpreter/blob/2767e5f20d6927500b8f1938c773c61afb823245/scripts/install/install.ps1#L941)); the package itself lands in
 `~/.openinterpreter/packages/standalone`.
 
+**Legacy Python SDK and CLI (0.x).** Checked at tag `v0.4.2`, commit
+[`13061d2ce0ac35344f04c5285e795415cccf259d`](https://github.com/openinterpreter/openinterpreter/commit/13061d2ce0ac35344f04c5285e795415cccf259d)
+(2024-10-24), AGPL-3.0 at that tag. PyPI's last release, 0.4.3, has no git
+tag; its sdist was downloaded and its path calls (`platformdirs.user_*`,
+`expanduser("~")`, `get_storage_path(...)`) are identical to v0.4.2. The
+base directory is `platformdirs.user_config_dir("open-interpreter")`
+([oi_dir.py:3](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/utils/oi_dir.py#L3),
+[local_storage_path.py:6-13](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/utils/local_storage_path.py#L6-L13);
+pin `platformdirs = "^4.2.0"`,
+[pyproject.toml:58](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/pyproject.toml#L58)),
+which is `~/.config/open-interpreter` on Linux
+([platformdirs unix.py:49-51](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/unix.py#L49-L51)),
+`~/Library/Application Support/open-interpreter` on macOS
+([macos.py:22-23](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/macos.py#L22-L23),
+[40-42](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/macos.py#L40-L42)),
+and `%LOCALAPPDATA%\open-interpreter\open-interpreter` on Windows (the
+config directory is the local data directory, with the app name doubled as
+author;
+[windows.py:32-44](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/windows.py#L32-L44),
+[60-62](https://github.com/tox-dev/platformdirs/blob/960ff632eb575deb6f0d5bf49519d5a2ee2098b6/src/platformdirs/windows.py#L60-L62)).
+Under it:
+
+- `conversations/<first words>__<Month_DD_YYYY_HH-MM-SS>.json`: the full
+  message list, a JSON array, of every chat from the CLI and from the SDK's
+  `interpreter.chat()`, by default (`conversation_history=True`)
+  ([core.py:62-64](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/core/core.py#L62-L64),
+  [261-290](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/core/core.py#L261-L290)).
+  This is not a Codex rollout, and the analyzer's Open Interpreter parser
+  does not read it.
+- `profiles/default.yaml` and other `profiles/*.yaml`, `.py` or `.json`,
+  created on first run; they may hold `llm.api_key`
+  ([profiles.py:19-20](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/profiles/profiles.py#L19-L20),
+  [613-626](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/profiles/profiles.py#L613-L626),
+  [default.yaml:9](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/profiles/defaults/default.yaml#L9)).
+- `skills/`: agent-saved Python skills in OS mode
+  ([skills.py:26](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/core/computer/skills/skills.py#L26)).
+- `models/`: downloaded `.llamafile` weights, gigabytes, only after the
+  `--local` setup
+  ([local_setup.py:393-398](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/local_setup.py#L393-L398),
+  [51-63](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/local_setup.py#L51-L63)).
+- `*.png` at the root: temporary HTML render images
+  ([html_to_png_base64.py:21-29](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/core/computer/utils/html_to_png_base64.py#L21-L29)).
+
+Outside the base directory, `~/.cache/open-interpreter/telemetry_user_id`
+and `contribute.json` (`expanduser`, every OS) hold the telemetry UUID and
+the contribution opt-in
+([telemetry.py:24-29](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/core/utils/telemetry.py#L24-L29),
+[contributing_conversations.py:14-16](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/contributing_conversations.py#L14-L16)).
+Older layouts stay in place, because the migration copies and never
+deletes: `user_config_dir("Open Interpreter")` before 0.2.0 and
+`user_config_dir("Open Interpreter Terminal")` in 0.2.0, each with
+`conversations/`, `profiles/` and `config.yaml`
+([profiles.py:682-686](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/profiles/profiles.py#L682-L686),
+[709-739](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/profiles/profiles.py#L709-L739),
+[756-765](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/terminal_interface/profiles/profiles.py#L756-L765)).
+The catalog covers all of these since collector 1.10.0
+(`.config/Open Interpreter*` and its macOS and Windows equivalents);
+`open-interpreter` and `Open Interpreter` differ by hyphen and space, not
+only by case, so issue 29 does not apply. The legacy tool runs shell
+commands through a subprocess, with `auto_run=False` by default
+([shell.py:8-20](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/core/computer/terminal/languages/shell.py#L8-L20),
+[core.py:46](https://github.com/openinterpreter/openinterpreter/blob/13061d2ce0ac35344f04c5285e795415cccf259d/interpreter/core/core.py#L46)).
+The unreleased `development` branch (1.0.0, commit
+`fa06bfda18b70546baa85b9d314873e048f70c99`) uses
+`~/.openinterpreter/default_profile.py`
+([profiles.py:29-30](https://github.com/openinterpreter/openinterpreter/blob/fa06bfda18b70546baa85b9d314873e048f70c99/interpreter/profiles.py#L29-L30)),
+inside the current catalog entry; its `api_key` field
+([profiles.py:44](https://github.com/openinterpreter/openinterpreter/blob/fa06bfda18b70546baa85b9d314873e048f70c99/interpreter/profiles.py#L44))
+is not flagged, since that branch was never released to PyPI.
+
 ## 3. Credentials
 
 - `auth.json`: OpenAI API key and ChatGPT OAuth tokens
@@ -104,6 +177,8 @@ above and [`install.ps1:941`](https://github.com/openinterpreter/openinterpreter
 - `config.toml` can embed `experimental_bearer_token` per provider
   ([`model-provider-info/src/lib.rs:171`](https://github.com/openinterpreter/openinterpreter/blob/2767e5f20d6927500b8f1938c773c61afb823245/codex-rs/model-provider-info/src/lib.rs#L171)).
 - `.sandbox-secrets/` on Windows, as in Codex.
+- Legacy Python tool: `profiles/*` in the base directory, and the older
+  `Open Interpreter*/config.yaml`, which can hold `llm.api_key`.
 
 ## 4. Exclusions
 
@@ -115,6 +190,8 @@ Same as Codex: `packages/` (managed binaries), `cache/`, `.tmp/`, `tmp/`,
 plus the fork's `models-cache/`. `.zcode/cli/plugins/cache` is only referenced
 as a display path for the emulated skill ([`harness_aliases.rs:2853-2858`](https://github.com/openinterpreter/openinterpreter/blob/2767e5f20d6927500b8f1938c773c61afb823245/codex-rs/core/src/tools/handlers/harness_aliases.rs#L2853-L2858));
 nothing writes it. Keep `.zcode/cli/artifacts`: it holds full tool output.
+For the legacy Python tool, `models/` in the base directory (llamafile
+weights).
 
 ## 5. Project-local files
 
@@ -152,5 +229,9 @@ exclusion (written per provider by the app server, contents not inspected);
 the tool shell, not traced). Not determined: whether `device_id` is
 sensitive (an identifier sent to Kimi, not a secret, flagged here for
 caution); whether the desktop or IDE surfaces of Open Interpreter exist and
-write elsewhere (none found in this repository); the Python-era layout,
-excluded by the brief because current source no longer reads it.
+write elsewhere (none found in this repository). Legacy Python tool:
+high for 0.4.x (source and the 0.4.3 sdist); medium for pre-0.2 installs
+on macOS, because platformdirs before 3.x put `user_config_dir` under
+`~/Library/Preferences` and that history was not read, so a
+`Library/Preferences/Open Interpreter*` location is unverified and has no
+catalog line.

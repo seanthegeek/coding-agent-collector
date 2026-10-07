@@ -10,6 +10,50 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-06
+
+### Added
+
+- Catalog agent `autogen-studio`: `~/.autogenstudio`, with `.env` and
+  `temp_env_vars.env` flagged as credentials (#64).
+- Catalog agent `crewai`: `~/.config/crewai`, `~/.crewai`, the `crewai`
+  data directory, and CrewAI's run databases (`latest_kickoff_task_outputs.db*`,
+  `flow_states.db*`) and `.crewai_user.json` inside the data directory named
+  after the project folder (`.local/share/*/...`,
+  `Library/Application Support/*/...`), plus `AppData/Local/[Cc]rew[Aa][Ii]`;
+  `settings.json` and the `credentials/` token files flagged (#64).
+- Catalog agent `camel-ai`: `.camel/gmail_token.json` (flagged),
+  `.camel/skills` and `.config/camel`, leaving the rest of `~/.camel`,
+  which Apache Camel JBang shares, uncollected (#64).
+- Catalog agent `dify`: the `difyctl` config directories, with `tokens.yml`
+  flagged, and the Docker volumes `*dify_agent_local_sandbox_home` and
+  `*dify_agent_local_sandbox_workspace` (#64).
+- Catalog agent `flowise`: `~/.flowise`, with `encryption.key` and
+  `*_secret.key` flagged and `vectorstore` excluded (#64).
+- Catalog agent `langflow`: the config directory (`.cache/langflow`,
+  `Library/Caches/langflow`, `AppData/Local/langflow/langflow/Cache`),
+  `~/.langflow` and the Langflow Desktop directories; `secret_key`,
+  `cache_secret_key` and the Desktop `data/.env` flagged; knowledge bases,
+  Desktop virtual environments and caches, and `profile_pictures`
+  excluded; the Docker volume `*langflow-data` (#64).
+- Catalog agent `metagpt`: `~/.metagpt`, with `config2.yaml` and
+  `config2.bak` flagged (#64).
+- Catalog agent `n8n`: `~/.n8n`, `~/.n8n-local-gateway` and
+  `~/.n8n-gateway`; `.n8n/config` and `.n8n/ssh/*` flagged; node modules,
+  node definitions and SDK templates excluded; the Docker volumes
+  `*n8n_data` and `*n8n-data` (#64).
+- Catalog agent `pydantic-clai`: `~/.pydantic-ai` and
+  `~/.config/pydantic-clai2` (CLAI 2.0), with `credentials-*` and the
+  Logfire credentials flagged, and the project entry `.clai` (#64).
+- `open-interpreter`: the legacy Python tool's platformdirs
+  `open-interpreter` directories, the older `Open Interpreter*` directories
+  and `.cache/open-interpreter`, with `profiles/*` and `config.yaml`
+  flagged and the downloaded `models/` excluded (#64).
+- Volume-relative exclusions `profile_pictures`, `nodes/node_modules`,
+  `node-definitions` and `n8n-sdk-templates`, and secret globs
+  `secret_key`, `cache_secret_key`, `config` and `ssh/*`, at the end of
+  `EXCLUDES` and `SECRET_GLOBS` (#64).
+
 ## [1.9.0] - 2026-10-06
 
 ### Changed
@@ -366,7 +410,8 @@ stdout `errors:` line now reads `errors:     N (X error_copy, Y error_read)`.
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.9.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.0...HEAD
+[1.10.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.9.0...collector-v1.10.0
 [1.9.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.8.1...collector-v1.9.0
 [1.8.1]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.8.0...collector-v1.8.1
 [1.8.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.7.0...collector-v1.8.0

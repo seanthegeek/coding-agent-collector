@@ -2,9 +2,13 @@
 
 Forensic analysis of AI agent use on a system, for incident responders.
 It covers agents that execute tools or shell commands on a host and leave
-transcripts, configuration or credentials on disk: Claude Code, Gemini CLI,
-Antigravity, Codex CLI, Copilot CLI, Cursor, Windsurf, Aider, Ollama, VS
-Code chat extensions, Hermes, Agent Zero, OpenClaw and others. It has two
+transcripts, configuration or credentials on disk: coding agents such as
+Claude Code, Gemini CLI, Antigravity, Codex CLI, Copilot CLI, Cursor,
+Windsurf, Aider and VS Code chat extensions; autonomous agents such as
+Hermes, Agent Zero and OpenClaw; agent framework studios and CLIs such as
+AutoGen Studio, CrewAI and MetaGPT; self-hosted agent and workflow
+automation platforms such as n8n, Flowise, Langflow and Dify; Ollama; and
+others. It has two
 parts, kept in separate directories because they run in different places and
 have different dependency rules, and a Docker lab for developers.
 
@@ -50,7 +54,8 @@ little-coder, Letta, Hermes, Agent Zero, Open Interpreter, OpenClaw, nanobot,
 Sourcegraph Cody, Twinny, PearAI, Muse Code and Ollama. Every other agent in
 the catalog (Claude Desktop, ChatGPT Desktop, Copilot CLI and the Copilot
 editor token store, Cursor, Windsurf, Amp, Factory Droid, Augment,
-Local Deep Research) is detected and reported but not yet parsed. Parsing never happens
+Local Deep Research, and the agent frameworks and platforms) is detected
+and reported but not yet parsed. Parsing never happens
 on the host, so the analyzer is free to carry its own requirements. It needs
 Python 3.10 or later; `pip install ./analyzer` installs the `doubleagent`
 command and the packages in `analyzer/requirements.txt`:

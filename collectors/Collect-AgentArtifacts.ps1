@@ -76,7 +76,7 @@ param(
 
 Set-StrictMode -Version 2
 $ErrorActionPreference = 'Continue'
-$ToolVersion = '1.9.0'
+$ToolVersion = '1.10.0'
 $TOOL = 'collect-agent-artifacts'
 
 # ---------------------------------------------------------------------------
@@ -361,6 +361,13 @@ tabby|Library/Application Support/JetBrains/*/options/intellij-tabby*.xml
 tabby|AppData/Roaming/JetBrains/*/options/intellij-tabby*.xml
 # Open Interpreter (a Codex CLI fork with the Codex layout under ~/.openinterpreter)
 open-interpreter|.openinterpreter
+open-interpreter|.config/open-interpreter
+open-interpreter|.config/Open Interpreter*
+open-interpreter|Library/Application Support/open-interpreter
+open-interpreter|Library/Application Support/Open Interpreter*
+open-interpreter|AppData/Local/open-interpreter
+open-interpreter|AppData/Local/Open Interpreter*
+open-interpreter|.cache/open-interpreter
 # OpenHands (CLI and Agent Server under ~/.openhands; Agent Canvas desktop app)
 openhands|.openhands
 openhands|Library/Application Support/OpenHands Agent Canvas
@@ -419,6 +426,48 @@ local-deep-research|.local/share/local-deep-research
 local-deep-research|Library/Application Support/local-deep-research
 local-deep-research|AppData/Local/local-deep-research
 local-deep-research|Documents/LocalDeepResearch
+# AutoGen Studio (~/.autogenstudio on every OS; the SQLite db settings table can hold API keys)
+autogen-studio|.autogenstudio
+# CrewAI (appdirs; run data dir is named after the project folder, so file-anchored lines)
+crewai|.config/crewai
+crewai|.crewai
+crewai|.local/share/crewai
+crewai|.local/share/*/latest_kickoff_task_outputs.db*
+crewai|.local/share/*/flow_states.db*
+crewai|.local/share/*/.crewai_user.json
+crewai|Library/Application Support/crewai
+crewai|Library/Application Support/*/latest_kickoff_task_outputs.db*
+crewai|Library/Application Support/*/flow_states.db*
+crewai|Library/Application Support/*/.crewai_user.json
+crewai|AppData/Local/[Cc]rew[Aa][Ii]
+# CAMEL (camel-ai; ~/.camel is shared with Apache Camel JBang, so only CAMEL-specific names)
+camel-ai|.camel/gmail_token.json
+camel-ai|.camel/skills
+camel-ai|.config/camel
+# Dify (server state is in bind mounts beside the compose file; difyctl client config)
+dify|.config/difyctl
+dify|AppData/Roaming/difyctl
+dify|AppData/Local/difyctl
+# Flowise (~/.flowise on every OS; the README compose bind-mounts it)
+flowise|.flowise
+# Langflow (platformdirs cache dir; Desktop paths from docs)
+langflow|.cache/langflow
+langflow|Library/Caches/langflow
+langflow|AppData/Local/langflow/langflow/Cache
+langflow|.langflow
+langflow|Library/Application Support/com.LangflowDesktop
+langflow|Library/Logs/com.LangflowDesktop
+langflow|AppData/Roaming/com.LangflowDesktop
+langflow|AppData/Local/com.LangflowDesktop
+# MetaGPT (~/.metagpt on every OS; config2.yaml holds the LLM API key)
+metagpt|.metagpt
+# n8n (~/.n8n on every OS; computer-use gateway logs every tool call)
+n8n|.n8n
+n8n|.n8n-local-gateway
+n8n|.n8n-gateway
+# Pydantic AI CLIs: clai prompt history and the CLAI 2.0 coding agent (~/.config on every OS)
+pydantic-clai|.pydantic-ai
+pydantic-clai|.config/pydantic-clai2
 # Shared cross-agent directories (skills and instructions read by several agents)
 shared|.agents
 shared|.config/AGENTS.md
@@ -536,6 +585,7 @@ project|.pi
 project|.pi/approved-plan.md
 project|pi-session-*.html
 project|.letta
+project|.clai
 project|.skills
 project|.hermes.md
 project|HERMES.md
@@ -788,6 +838,9 @@ AppData/Local/Programs/muse/.muse-update.*.exe
 .openinterpreter/.sandbox-bin
 .openinterpreter/visualizations
 .openinterpreter/models-cache
+.config/open-interpreter/models
+Library/Application Support/open-interpreter/models
+AppData/Local/open-interpreter/open-interpreter/models
 .openhands/cache
 .openhands/agent-canvas/workspaces
 .openhands/agent-canvas/tmux
@@ -913,6 +966,21 @@ AppData/Local/local-deep-research/local-deep-research/models
 AppData/Local/local-deep-research/local-deep-research/journal_data
 AppData/Local/local-deep-research/local-deep-research/library
 Documents/LocalDeepResearch/Library
+.flowise/vectorstore
+.langflow/knowledge_bases
+AppData/Roaming/com.LangflowDesktop/knowledge_bases
+Library/Application Support/com.LangflowDesktop/venv
+Library/Application Support/com.LangflowDesktop/python_env
+AppData/Local/com.LangflowDesktop/venv
+AppData/Local/com.LangflowDesktop/python_env
+AppData/Local/com.LangflowDesktop/cache
+.cache/langflow/profile_pictures
+Library/Caches/langflow/profile_pictures
+AppData/Local/langflow/langflow/Cache/profile_pictures
+.n8n/nodes/node_modules
+.n8n/custom/node_modules
+.n8n/node-definitions
+.n8n/n8n-sdk-templates
 .ollama/models/blobs
 AppData/Local/Ollama/updates
 Library/Caches/ollama
@@ -964,6 +1032,10 @@ bin
 mod-cache
 tool_execution_dir
 chroma
+profile_pictures
+nodes/node_modules
+node-definitions
+n8n-sdk-templates
 '@
 
 $SECRET_GLOBS = @'
@@ -1163,6 +1235,12 @@ AppData/Roaming/Zed/global_settings.json
 .openinterpreter/.sandbox-secrets/*
 .openinterpreter/.env
 .openinterpreter/config.toml
+.config/open-interpreter/profiles/*
+Library/Application Support/open-interpreter/profiles/*
+AppData/Local/open-interpreter/open-interpreter/profiles/*
+.config/Open Interpreter*/config.yaml
+Library/Application Support/Open Interpreter*/config.yaml
+AppData/Local/Open Interpreter*/Open Interpreter*/config.yaml
 .openhands/agent-canvas/secret-key.txt
 .openhands/agent-canvas/api-key.txt
 .openhands/settings.json
@@ -1299,6 +1377,29 @@ Desktop/agent-zero*/usr/plugins/_desktop/profiles/*/.gnupg/*
 .local/share/local-deep-research/.secret_key
 Library/Application Support/local-deep-research/.secret_key
 AppData/Local/local-deep-research/local-deep-research/.secret_key
+.autogenstudio/.env
+.autogenstudio/temp_env_vars.env
+.config/crewai/settings.json
+.local/share/crewai/credentials/*
+Library/Application Support/crewai/credentials/*
+AppData/Local/[Cc]rew[Aa][Ii]/credentials/*
+.camel/gmail_token.json
+.config/difyctl/tokens.yml
+AppData/Roaming/difyctl/tokens.yml
+AppData/Local/difyctl/tokens.yml
+.flowise/encryption.key
+.flowise/*_secret.key
+.cache/langflow/*secret_key
+Library/Caches/langflow/*secret_key
+AppData/Local/langflow/langflow/Cache/*secret_key
+.langflow/data/.env
+AppData/Roaming/com.LangflowDesktop/data/.env
+.metagpt/config2.yaml
+.metagpt/config2.bak
+.n8n/config
+.n8n/ssh/*
+.config/pydantic-clai2/credentials-*
+.config/pydantic-clai2/logfire/logfire_credentials.json
 .ollama/id_ed25519
 .env
 secrets.env
@@ -1375,6 +1476,10 @@ browser/*/user-data/*/Cookies*
 config.json
 whatsapp-auth/*
 matrix-store/*
+secret_key
+cache_secret_key
+config
+ssh/*
 '@
 
 # Docker and Podman named volumes, agent|glob matched against the volume name.
@@ -1393,6 +1498,18 @@ local-deep-research|*ldr_data
 # compose file; mounted at /root/.ollama
 ollama|ollama
 ollama|*ollama*
+# Dify: dify_agent_local_sandbox_home at /home/dify (shellctl job database and
+# output logs under .local/share/shellctl) and dify_agent_local_sandbox_workspace
+# at /workspace in docker/docker-compose.yaml; Compose prefixes them (docker_)
+dify|*dify_agent_local_sandbox_home
+dify|*dify_agent_local_sandbox_workspace
+# Langflow: langflow-data in docker_example/docker-compose.yml, mounted at
+# /app/langflow, the config dir (LANGFLOW_CONFIG_DIR)
+langflow|*langflow-data
+# n8n: n8n_data in the README docker run and n8n-data in the get-n8n.sh compose
+# file (n8n_n8n-data); both mounted at /home/node/.n8n
+n8n|*n8n_data
+n8n|*n8n-data
 # Inferred names: the documentation of these tools bind-mounts the home directory
 # instead of a named volume; a volume replacing it has the same layout (~/.tabby
 # at /data, ~/.hermes at /opt/data, ~/.openclaw at /home/node/.openclaw, ...)
