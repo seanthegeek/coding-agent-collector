@@ -65,8 +65,9 @@ into it,
 [`archive_read_disk_windows.c`](https://github.com/libarchive/libarchive/blob/7219b0134d771dc4b51bf86b4d01761b87398b1b/libarchive/archive_read_disk_windows.c#L2046-L2050)
 at v3.8.8); the libarchive 3.3.2 `tar.exe` of early Windows 10 builds stores
 the link entry without its target text. `tar.exe` stores a relative target
-with its backslashes turned into forward slashes and an absolute target as
-`\\?\C:\...`
+with its backslashes turned into forward slashes and an absolute target with
+a `\\?\` prefix; the `tar.exe` on the GitHub `windows-latest` runner writes
+that one with forward slashes too, `//?/C:/...`
 ([`archive_read_disk_windows.c`](https://github.com/libarchive/libarchive/blob/7219b0134d771dc4b51bf86b4d01761b87398b1b/libarchive/archive_read_disk_windows.c#L396-L405)),
 so the link in the archive can differ from the manifest row's `target`,
 which keeps the original string.
