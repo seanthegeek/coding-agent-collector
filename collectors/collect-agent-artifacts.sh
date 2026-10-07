@@ -26,7 +26,7 @@
 #               or, with --inventory, the walk ran,
 #             1 usage error, 2 fatal (no output dir, no tar, ...).
 
-VERSION="1.10.0"
+VERSION="1.10.1"
 TOOL="collect-agent-artifacts"
 
 LC_ALL=C
@@ -1528,6 +1528,43 @@ stat_file() {
     *)    printf '%s 0 0 0 0 0 0 0\n' "$(wc -c <"$1" 2>/dev/null | tr -d ' ')" ;;
   esac
 }
+# stat_files FILE... -> one stat_file line per FILE, in order, from a single
+# stat call. The format has no file name, so any name is safe. A file stat
+# cannot read prints no line, so callers use the output only when it has
+# one line per file and fall back to stat_file otherwise. Returns 1 without
+# output when there is no stat.
+stat_files() {
+  case "$STAT_MODE" in
+    gnu)  stat -c '%s %Y %X %Z %W %u %g %a' "$@" 2>/dev/null ;;
+    gnu0) stat -c '%s %Y %X %Z 0 %u %g %a' "$@" 2>/dev/null ;;
+    bsd)  stat -f '%z %m %a %c %B %u %g %Lp' "$@" 2>/dev/null ;;
+    *)    return 1 ;;
+  esac
+}
+# hash_files FILE... -> one "hash name" line per readable FILE, in order, from
+# a single hasher call; hash_match reads a line. The hashers escape a name
+# that contains a backslash, newline or carriage return, so callers hash such
+# names with hash_file instead.
+hash_files() {
+  case "$HASH_TOOL" in
+    sha256sum) sha256sum "$@" 2>/dev/null ;;
+    shasum)    shasum -a 256 "$@" 2>/dev/null ;;
+    sha256)    sha256 -r "$@" 2>/dev/null ;;
+    openssl)   openssl dgst -sha256 -r "$@" 2>/dev/null ;;
+    *)         return 1 ;;
+  esac
+}
+# hash_match LINE FILE -> 0 and the hash in $_h when LINE is hash_files' line
+# for FILE: 64 hex digits, then "  name" or " *name" (sha256sum, shasum,
+# openssl) or " name" (sha256 -r).
+hash_match() {
+  _h=${1%% *}
+  case "$_h" in '' | *[!0-9a-f]*) return 1 ;; esac
+  [ "${#_h}" -eq 64 ] || return 1
+  _hn=${1#* }
+  [ "$HASH_TOOL" = sha256 ] || _hn=${_hn#?}
+  [ "$_hn" = "$2" ]
+}
 _jt=$(printf '\t'); _jr=$(printf '\r'); _jn='
 '
 json_str() {
@@ -1543,19 +1580,38 @@ json_str() {
       else printf "%s", c } }'
 }
 num() { case "$1" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$1" ;; esac; }
+# json_v VALUE / num_v VALUE: what json_str and num print, assigned to $_j
+# and $_n instead, so the common case (nothing to escape) forks nothing.
+json_v() {
+  case "$1" in
+    *\\*|*'"'*|*"$_jt"*|*"$_jr"*|*"$_jn"*) _j=$(json_str "$1") ;;
+    *) _j=$1 ;;
+  esac
+}
+num_v() { case "$1" in ''|*[!0-9]*) _n=0 ;; *) _n=$1 ;; esac; }
 # emit_row manifest user home agent path archive_path type size mtime atime ctime btime uid gid mode sha secret status target error
 emit_row() {
+  json_v "$2"; _e2=$_j; json_v "$3"; _e3=$_j; json_v "$4"; _e4=$_j
+  json_v "$5"; _e5=$_j; json_v "$6"; _e6=$_j; json_v "${19}"; _e19=$_j
+  json_v "${20}"; _e20=$_j
+  num_v "$8"; _e8=$_n; num_v "$9"; _e9=$_n; num_v "${10}"; _e10=$_n
+  num_v "${11}"; _e11=$_n; num_v "${12}"; _e12=$_n; num_v "${13}"; _e13=$_n
+  num_v "${14}"; _e14=$_n
   printf '{"user":"%s","home":"%s","agent":"%s","path":"%s","archive_path":"%s","type":"%s","size":%s,"mtime":%s,"atime":%s,"ctime":%s,"btime":%s,"uid":%s,"gid":%s,"mode":"%s","sha256":"%s","secret":%s,"status":"%s","target":"%s","error":"%s"}\n' \
-    "$(json_str "$2")" "$(json_str "$3")" "$(json_str "$4")" "$(json_str "$5")" \
-    "$(json_str "$6")" "$7" "$(num "$8")" "$(num "$9")" "$(num "${10}")" "$(num "${11}")" \
-    "$(num "${12}")" "$(num "${13}")" "$(num "${14}")" "${15}" "${16}" "${17}" "${18}" \
-    "$(json_str "${19}")" "$(json_str "${20}")" >>"$1"
+    "$_e2" "$_e3" "$_e4" "$_e5" "$_e6" "$7" "$_e8" "$_e9" "$_e10" "$_e11" \
+    "$_e12" "$_e13" "$_e14" "${15}" "${16}" "${17}" "${18}" "$_e19" "$_e20" >>"$1"
 }
 # dir_err DIR -> prints why DIR cannot be walked and returns 0, or returns 1
 # when it can be both listed (-r) and entered (-x). The decision comes from
 # test(1); the text is the first line ls(1) printed for the same access, so
 # it is the OS error (Permission denied, No such file or directory).
+# dir_err_v DIR does the same but assigns the text to $_de instead of
+# printing it, so a walk's per-directory check forks only when it fails.
 dir_err() {
+  dir_err_v "$1" || return 1
+  printf '%s' "$_de"
+}
+dir_err_v() {
   if [ ! -d "$1" ]; then
     if [ -e "$1" ] || [ -L "$1" ]; then _de='Not a directory'
     else _de=$(ls -ld "$1" 2>&1 >/dev/null); [ -n "$_de" ] || _de='No such file or directory'; fi
@@ -1566,7 +1622,7 @@ dir_err() {
   else
     return 1
   fi
-  printf '%s' "${_de%%"$_jn"*}"
+  _de=${_de%%"$_jn"*}
 }
 # read_err_row MANIFEST USER HOME AGENT DIR ERROR: one error_read row for a
 # directory that could not be walked, with its lstat metadata and size 0.
@@ -1584,41 +1640,187 @@ eval "$COMMON"
 
 # Program run by find -exec for every regular file / symlink to collect.
 # args: stage root user home agent manifest files...
+#
+# The files are taken in chunks of at most 256 paths or about 64 KiB of
+# names, so no argument list built here is much longer than the one find
+# passed. Each chunk goes through five passes, in this order, which keeps
+# the per-file order of the forensic rules (lstat before copy, hash of the
+# staged copy, never follow a symlink):
+#   1. lstat every file with one stat call (stat_files), or with stat_file
+#      per file when that output does not have one line per file (a file
+#      vanished, stat failed, or there is no stat);
+#   2. create the staging directories with one mkdir -p, recreate symlinks
+#      (readlink, ln -s) and decide the secret and size skips;
+#   3. copy with one cp -p per run of consecutive files from the same
+#      directory; a run whose cp fails or prints anything is redone per file,
+#      so each failing file gets its own error text and log line;
+#   4. hash the staged copies with one hasher call (hash_files); a name the
+#      hashers would escape, or a file missing from their output, is hashed
+#      per file with hash_file, which gives "" when the copy is unreadable;
+#   5. write the manifest rows, in the order find passed the files.
+# POSIX sh has no arrays, so the chunk is held in numbered variables set by
+# eval: f_N path, st_N stat line, s_N status, sec_N secret, tg_N symlink
+# target, e_N copy error, h_N hash. CAC_NO_BATCH=1, a test hook, takes the
+# per-file path in passes 1, 3 and 4.
 heredoc_var <<'EOF_STAGE'
 stage=$1; root=$2; user=$3; home=$4; agent=$5; manifest=$6; shift 6
+set -f
+if [ "${CAC_NO_BATCH:-0}" = 1 ]; then batch=0; else batch=1; fi
+b_stat=$batch; b_cp=$batch; b_hash=$batch
 lastdir=
-for f in "$@"; do
-  rel=${f#"$root"}
-  hrel=${f#"$home"/}
-  dest="$stage/fs$rel"
-  type=file; target=; status=collected; sha=; err=
-  st=$(stat_file "$f"); [ -n "$st" ] || st='0 0 0 0 0 0 0 0'
-  set -- $st
-  size=$1; mtime=$2; atime=$3; ctime=$4; btime=$5; uid=$6; gid=$7; mode=$8
-  secret=false
-  oifs=$IFS; IFS='
-'
-  for p in $SECRET_GLOBS; do case "$hrel" in $p) secret=true ;; esac; done
-  IFS=$oifs
-  d=${dest%/*}
-  if [ "$d" != "$lastdir" ]; then mkdir -p "$d" 2>>"$LOG"; lastdir=$d; fi
-  if [ -L "$f" ]; then
-    type=symlink; status=symlink
-    target=$(readlink "$f" 2>/dev/null)
-    ln -s "$target" "$dest" 2>/dev/null
-  elif [ "$secret" = true ] && [ "${NO_SECRETS:-0}" = 1 ]; then
-    status=skipped_secret
-  elif [ "${MAX_SIZE:-0}" -gt 0 ] && [ "$(num "$size")" -gt "$MAX_SIZE" ]; then
-    status=skipped_size
-  elif err=$(cp -p "$f" "$dest" 2>&1); then
-    sha=$(hash_file "$dest")
-  else
-    status=error_copy
-    rm -f "$dest" 2>/dev/null
-    log_line "copy failed: $f: $err"
+# copy_run FIRST LAST DIR: copy the files of chunk entries FIRST..LAST still
+# marked "copy" (all from one directory) into DIR, then mark each collected
+# or error_copy.
+copy_run() {
+  cr_a=$1; cr_b=$2; cr_d=$3; cr_ok=0
+  set --
+  j=$cr_a; while [ "$j" -le "$cr_b" ]; do
+    eval "s=\$s_$j"
+    if [ "$s" = copy ]; then eval "set -- \"\$@\" \"\$f_$j\""; fi
+    j=$((j + 1))
+  done
+  if [ "$b_cp" = 1 ] && [ "$#" -gt 1 ]; then
+    if cr_err=$(cp -p "$@" "$cr_d/" 2>&1) && [ -z "$cr_err" ]; then cr_ok=1; fi
   fi
-  case "$status" in collected|symlink) apath="fs$rel" ;; *) apath= ;; esac
-  emit_row "$manifest" "$user" "$home" "$agent" "$f" "$apath" "$type" "$size" "$mtime" "$atime" "$ctime" "$btime" "$uid" "$gid" "$mode" "$sha" "$secret" "$status" "$target" "$err"
+  j=$cr_a; while [ "$j" -le "$cr_b" ]; do
+    eval "s=\$s_$j"
+    if [ "$s" = copy ] && [ "$cr_ok" = 1 ]; then
+      eval "s_$j=collected"
+    elif [ "$s" = copy ]; then
+      eval "f=\$f_$j"; dest="$stage/fs${f#"$root"}"
+      if err=$(cp -p "$f" "$dest" 2>&1); then
+        s=collected
+      else
+        s=error_copy
+        rm -f "$dest" 2>/dev/null
+        log_line "copy failed: $f: $err"
+      fi
+      eval "s_$j=\$s; e_$j=\$err"
+    fi
+    j=$((j + 1))
+  done
+}
+stage_chunk() {
+  # 1. lstat, before anything is copied
+  ok=0
+  if [ "$b_stat" = 1 ]; then
+    set --
+    i=1; while [ "$i" -le "$n" ]; do eval "set -- \"\$@\" \"\$f_$i\""; i=$((i + 1)); done
+    sts=$(stat_files "$@")
+    oifs=$IFS; IFS=$_jn
+    set -- $sts
+    IFS=$oifs
+    if [ "$#" -eq "$n" ]; then
+      i=1; for st in "$@"; do eval "st_$i=\$st"; i=$((i + 1)); done
+      ok=1
+    fi
+  fi
+  if [ "$ok" = 0 ]; then
+    i=1; while [ "$i" -le "$n" ]; do
+      eval "f=\$f_$i"; st=$(stat_file "$f"); eval "st_$i=\$st"; i=$((i + 1))
+    done
+  fi
+
+  # 2. staging directories, symlinks, secret and size skips
+  set --
+  i=1; while [ "$i" -le "$n" ]; do
+    eval "f=\$f_$i"; d="$stage/fs${f#"$root"}"; d=${d%/*}
+    if [ "$d" != "$lastdir" ]; then set -- "$@" "$d"; lastdir=$d; fi
+    i=$((i + 1))
+  done
+  [ "$#" -eq 0 ] || mkdir -p "$@" 2>>"$LOG"
+  i=1; while [ "$i" -le "$n" ]; do
+    eval "f=\$f_$i; st=\$st_$i"
+    [ -n "$st" ] || st='0 0 0 0 0 0 0 0'
+    set -- $st
+    hrel=${f#"$home"/}
+    secret=false
+    oifs=$IFS; IFS=$_jn
+    for p in $SECRET_GLOBS; do case "$hrel" in $p) secret=true; break ;; esac; done
+    IFS=$oifs
+    target=
+    if [ -L "$f" ]; then
+      status=symlink
+      target=$(readlink "$f" 2>/dev/null)
+      ln -s "$target" "$stage/fs${f#"$root"}" 2>/dev/null
+    elif [ "$secret" = true ] && [ "${NO_SECRETS:-0}" = 1 ]; then
+      status=skipped_secret
+    elif num_v "$1" && [ "${MAX_SIZE:-0}" -gt 0 ] && [ "$_n" -gt "$MAX_SIZE" ]; then
+      status=skipped_size
+    else
+      status=copy
+    fi
+    eval "s_$i=\$status; sec_$i=\$secret; tg_$i=\$target; e_$i=; h_$i="
+    i=$((i + 1))
+  done
+
+  # 3. copy, one cp per run of files from the same directory
+  g0=0; g1=0; gd=
+  i=1; while [ "$i" -le "$n" ]; do
+    eval "s=\$s_$i"
+    if [ "$s" = copy ]; then
+      eval "f=\$f_$i"; d="$stage/fs${f#"$root"}"; d=${d%/*}
+      if [ "$g0" -gt 0 ] && [ "$d" != "$gd" ]; then copy_run "$g0" "$g1" "$gd"; g0=0; fi
+      [ "$g0" -gt 0 ] || { g0=$i; gd=$d; }
+      g1=$i
+    fi
+    i=$((i + 1))
+  done
+  [ "$g0" -eq 0 ] || copy_run "$g0" "$g1" "$gd"
+
+  # 4. hash the staged copies, one hasher call for the chunk
+  [ "$HASH_TOOL" != none ] || return 0
+  set --
+  if [ "$b_hash" = 1 ]; then
+    i=1; while [ "$i" -le "$n" ]; do
+      eval "s=\$s_$i; f=\$f_$i"
+      if [ "$s" = collected ]; then
+        dest="$stage/fs${f#"$root"}"
+        case "$dest" in *\\* | *"$_jn"* | *"$_jr"*) ;; *) set -- "$@" "$dest" ;; esac
+      fi
+      i=$((i + 1))
+    done
+  fi
+  hs=
+  [ "$#" -eq 0 ] || hs=$(hash_files "$@")
+  oifs=$IFS; IFS=$_jn
+  set -- $hs
+  IFS=$oifs
+  # the lines are in file order; a file with no matching line is hashed alone
+  i=1; while [ "$i" -le "$n" ]; do
+    eval "s=\$s_$i; f=\$f_$i"
+    if [ "$s" = collected ]; then
+      dest="$stage/fs${f#"$root"}"
+      if [ "$#" -gt 0 ] && hash_match "$1" "$dest"; then
+        sha=$_h; shift
+      else
+        sha=$(hash_file "$dest")
+      fi
+      eval "h_$i=\$sha"
+    fi
+    i=$((i + 1))
+  done
+}
+emit_chunk() {
+  # 5. manifest rows, in find's order
+  i=1; while [ "$i" -le "$n" ]; do
+    eval "f=\$f_$i; st=\$st_$i; status=\$s_$i; secret=\$sec_$i; target=\$tg_$i; err=\$e_$i; sha=\$h_$i"
+    [ -n "$st" ] || st='0 0 0 0 0 0 0 0'
+    set -- $st
+    rel=${f#"$root"}
+    case "$status" in symlink) type=symlink ;; *) type=file ;; esac
+    case "$status" in collected | symlink) apath="fs$rel" ;; *) apath= ;; esac
+    emit_row "$manifest" "$user" "$home" "$agent" "$f" "$apath" "$type" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$sha" "$secret" "$status" "$target" "$err"
+    i=$((i + 1))
+  done
+}
+while [ "$#" -gt 0 ]; do
+  n=0; len=0
+  while [ "$#" -gt 0 ] && [ "$n" -lt 256 ] && [ "$len" -lt 65536 ]; do
+    n=$((n + 1)); eval "f_$n=\$1"; len=$((len + ${#1})); shift
+  done
+  stage_chunk
+  emit_chunk
 done
 EOF_STAGE
 STAGE_PROG="$COMMON
@@ -1631,7 +1833,7 @@ root=$1; user=$2; home=$3; agent=$4; manifest=$5; shift 5
 for f in "$@"; do
   rel=${f#"$root"}
   if [ -d "$f" ]; then
-    type=dir; kb=$(du -sk "$f" 2>/dev/null | cut -f1); size=$(( $(num "$kb") * 1024 ))
+    type=dir; kb=$(du -sk "$f" 2>/dev/null | cut -f1); num_v "$kb"; size=$((_n * 1024))
     st='0 0 0 0 0 0 0 0'
   else
     type=file; st=$(stat_file "$f"); [ -n "$st" ] || st='0 0 0 0 0 0 0 0'
@@ -1651,7 +1853,7 @@ $_hv"
 heredoc_var <<'EOF_DIRCHK'
 user=$1; home=$2; agent=$3; manifest=$4; shift 4
 for d in "$@"; do
-  if err=$(dir_err "$d"); then read_err_row "$manifest" "$user" "$home" "$agent" "$d" "$err"; fi
+  if dir_err_v "$d"; then read_err_row "$manifest" "$user" "$home" "$agent" "$d" "$_de"; fi
 done
 EOF_DIRCHK
 DIRCHK_PROG="$COMMON
@@ -1660,13 +1862,32 @@ $_hv"
 # Program run by find -exec in --inventory mode for every regular file under a
 # matched path: prints F|agent|size|mtime and copies, hashes and writes nothing.
 # args: agent files...
+# One stat call covers all the files when it prints one line per file;
+# otherwise each file gets its own stat_file, as in the stage worker.
 heredoc_var <<'EOF_INV'
 agent=$1; shift
-for f in "$@"; do
-  st=$(stat_file "$f")
-  set -- $st
-  printf 'F|%s|%s|%s\n' "$agent" "$(num "${1:-}")" "$(num "${2:-}")"
-done
+set -f
+# inv_rows COUNT LINES: the F rows for LINES when there are COUNT of them
+inv_rows() {
+  ir_n=$1; oifs=$IFS; IFS=$_jn
+  set -- $2
+  IFS=$oifs
+  [ "$#" -eq "$ir_n" ] || return 1
+  for st in "$@"; do
+    num_v "${st%% *}"; _s=$_n; st=${st#* }; num_v "${st%% *}"
+    printf 'F|%s|%s|%s\n' "$agent" "$_s" "$_n"
+  done
+}
+sts=
+[ "${CAC_NO_BATCH:-0}" = 1 ] || sts=$(stat_files "$@")
+if ! inv_rows "$#" "$sts"; then
+  for f in "$@"; do
+    st=$(stat_file "$f")
+    set -- $st
+    num_v "${1:-}"; _s=$_n; num_v "${2:-}"
+    printf 'F|%s|%s|%s\n' "$agent" "$_s" "$_n"
+  done
+fi
 EOF_INV
 INV_PROG="$COMMON
 $_hv"
@@ -1696,7 +1917,8 @@ Usage: $0 [options]
   -h, --help              This help
 
 Environment: COLLECTOR_SH overrides the shell used for per-file workers
-(default: sh). Run as root to collect every user's home.
+(default: dash when it is on PATH, otherwise sh). Run as root to collect
+every user's home.
 EOF
 }
 
@@ -1818,7 +2040,12 @@ LOG="$OUTDIR/$NAME.log"
 MANIFEST="$OUTDIR/$NAME.manifest.jsonl"
 SUMMARY="$OUTDIR/$NAME.collection.json"
 TAR_RC="$OUTDIR/.tar-status-$NAME"
-WORKER_SH=${COLLECTOR_SH:-sh}
+# The find -exec workers fork for every batch and do most of the per-file
+# work, so they run under dash when it is installed (Debian and Ubuntu sh,
+# /bin/dash on macOS since 10.15), which starts and loops faster than bash.
+if [ -n "${COLLECTOR_SH:-}" ]; then WORKER_SH=$COLLECTOR_SH
+elif command -v dash >/dev/null 2>&1; then WORKER_SH=dash
+else WORKER_SH='sh'; fi
 if [ "$INVENTORY" = 1 ]; then
   STAGE=; LOG=/dev/null; MANIFEST=/dev/null; TAR_RC=
 fi

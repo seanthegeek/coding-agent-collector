@@ -47,8 +47,13 @@ parameter help.
 ## Environment
 
 The sh collector reads `COLLECTOR_SH`, the shell used to run the per-file
-workers that `find -exec` starts (default `sh`, recorded as
-`capabilities.worker_shell`). It sets `LC_ALL=C` and puts
+workers that `find -exec` starts (recorded as `capabilities.worker_shell`).
+When it is unset or empty the workers run under `dash` if `dash` is on the
+`PATH` (Debian and Ubuntu, and `/bin/dash` on macOS 10.15 and later), and
+under `sh` otherwise; dash runs the workers nearly twice as fast as bash,
+which is macOS's `sh`. `CAC_NO_BATCH=1` is a test hook that makes the
+workers stat, copy and hash one file at a time instead of in batches; the
+manifest is the same either way. It sets `LC_ALL=C` and puts
 `/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin` ahead of the inherited
 `PATH`.
 

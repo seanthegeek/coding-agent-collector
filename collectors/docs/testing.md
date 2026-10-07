@@ -66,6 +66,15 @@ or under `-o`, that stdout stays pure JSON Lines with and without `-q`, and,
 on a POSIX host not run as root, that an unreadable home is counted in
 `users_unreadable`.
 
+The sh test also runs a small separate image through the batched stage
+worker, which lstats, copies and hashes up to 256 files at a time: names
+with a newline, a backslash and a carriage return, an unreadable file
+between readable ones (not when run as root), and 300 files, more than one
+chunk. It checks the hashes against the archived bytes, the `error_copy`
+row and log line, that a run with `CAC_NO_BATCH=1` (the per-file path)
+writes the same manifest in the same order apart from `atime`, and that a
+copy of the collector forced onto `shasum` writes the same manifest.
+
 ## Catalog drift check and CI
 
 `tests/catalog-sync.sh` extracts the five tables from both scripts and fails

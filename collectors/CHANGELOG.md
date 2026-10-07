@@ -10,6 +10,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-10-07
+
+### Changed
+
+- The sh collector's per-file work forks far fewer processes: manifest rows
+  are built without subshells, and files are lstat'ed, copied and hashed in
+  chunks of up to 256 with one `stat`, one hasher call and one `cp -p` per
+  directory, falling back to per-file calls for a chunk or file the batch
+  cannot handle. The manifest is unchanged, rows in the same order; a
+  5,000-file collection takes about a tenth of the time it did, and the
+  `shasum` path (macOS) about a twentieth (#71).
+- The sh collector's `find -exec` workers run under `dash` when it is on
+  `PATH` and `COLLECTOR_SH` is unset, instead of `sh`; on macOS, whose `sh`
+  is bash, this roughly halves the remaining time (#71).
+- `--inventory` stats each batch of files with one `stat` call (#71).
+
 ## [1.10.0] - 2026-10-06
 
 ### Added
@@ -410,7 +426,8 @@ stdout `errors:` line now reads `errors:     N (X error_copy, Y error_read)`.
   overridden by `--full`; credential files collected and flagged
   `secret: true` by default.
 
-[Unreleased]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.0...HEAD
+[Unreleased]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.1...HEAD
+[1.10.1]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.10.0...collector-v1.10.1
 [1.10.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.9.0...collector-v1.10.0
 [1.9.0]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.8.1...collector-v1.9.0
 [1.8.1]: https://github.com/seanthegeek/doubleagent/compare/collector-v1.8.0...collector-v1.8.1

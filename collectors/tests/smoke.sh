@@ -1261,5 +1261,74 @@ else
   printf 'skip #29 x #32 unreadable case-variant check (running as root)\n'
 fi
 
+# 2026-10-07 batched stage worker (#71)
+# The stage worker lstats, copies and hashes a chunk of files with one stat,
+# one cp per directory and one hasher call. A separate image holds one
+# directory with names the hashers escape (newline, backslash, carriage
+# return), an unreadable file between readable ones, and 300 files, more than
+# one 256-file chunk. CAC_NO_BATCH=1 takes the per-file path; the two
+# manifests must match apart from atime, which the first run's reads may move.
+# The shasum run uses a copy of the collector whose sha256sum probe looks for
+# a name that does not exist, the same sed-copy approach as the #31 shims; a
+# PATH shim cannot hide sha256sum, because the collector puts /usr/bin first.
+R71="$WORK/root71"; D71="$R71/home/carol/.claude/projects/-srv-p71"; nl71='
+'
+cr71=$(printf '\r')
+mkdir -p "$R71/etc" "$D71" "$R71/home/carol/.claude/file-history/s1"
+printf 'carol:x:1002:1002::/home/carol:/bin/sh\n' >"$R71/etc/passwd"
+printf 'first\n' >"$D71/a.jsonl"
+printf 'newline name\n' >"$D71/nl${nl71}name.jsonl"
+printf 'backslash name\n' >"$D71/back\\slash.jsonl"
+printf 'cr name\n' >"$D71/cr${cr71}name.jsonl"
+printf 'locked\n' >"$D71/m-locked.jsonl"
+printf 'last\n' >"$D71/z.jsonl"
+_i=0
+while [ "$_i" -lt 300 ]; do printf 'v%s\n' "$_i" >"$R71/home/carol/.claude/file-history/s1/f$_i@v1"; _i=$((_i + 1)); done
+LOCKED71=no
+if [ "$(id -u)" != 0 ]; then chmod 000 "$D71/m-locked.jsonl"; LOCKED71=yes; fi
+# shellcheck disable=SC2317,SC2329 # called from the eval'd check strings
+hash71() { printf '%b' "$1" | sha256sum | cut -d' ' -f1; }
+# shellcheck disable=SC2317,SC2329
+sha71() { row "$1" | sed 's/.*"sha256":"\([^"]*\)".*/\1/'; }
+# shellcheck disable=SC2317,SC2329
+noatime71() { sed 's/"atime":[0-9]*,//' "$1" | sort; }
+_root71=$ROOT; ROOT=$R71
+run batch71 --no-docker; _rc71=$?; M71=$M
+check "#71 batched run exit 0, 306 rows" "[ $_rc71 -eq 0 ] && [ \"\$(wc -l <\"\$M\")\" -eq 306 ]"
+check "#71 plain name in the batch hashed" "[ \"\$(sha71 \"$D71/a.jsonl\")\" = \"\$(hash71 'first\\n')\" ]"
+check "#71 newline name hashed" "[ \"\$(sha71 \"$D71/nl\\\\nname.jsonl\")\" = \"\$(hash71 'newline name\\n')\" ]"
+check "#71 newline name: hash matches the archived bytes" "[ \"\$(tar -xzOf \"\$A\" \"./fs/home/carol/.claude/projects/-srv-p71/nl${nl71}name.jsonl\" | sha256sum | cut -d' ' -f1)\" = \"\$(sha71 \"$D71/nl\\\\nname.jsonl\")\" ]"
+check "#71 backslash name hashed" "[ \"\$(sha71 \"$D71/back\\\\\\\\slash.jsonl\")\" = \"\$(hash71 'backslash name\\n')\" ]"
+check "#71 backslash name: hash matches the archived bytes" "[ \"\$(tar -xzOf \"\$A\" './fs/home/carol/.claude/projects/-srv-p71/back\\slash.jsonl' | sha256sum | cut -d' ' -f1)\" = \"\$(sha71 \"$D71/back\\\\\\\\slash.jsonl\")\" ]"
+check "#71 carriage return name hashed" "[ \"\$(sha71 \"$D71/cr\\\\rname.jsonl\")\" = \"\$(hash71 'cr name\\n')\" ]"
+check "#71 file after the odd names hashed" "[ \"\$(sha71 \"$D71/z.jsonl\")\" = \"\$(hash71 'last\\n')\" ]"
+check "#71 files across two chunks all collected and hashed" "[ \"\$(grep -c '/file-history/s1/f[0-9]*@v1\",.*\"sha256\":\"[0-9a-f]\\{64\\}\",\"secret\":false,\"status\":\"collected\"' \"\$M\")\" -eq 300 ] && [ \"\$(sha71 \"$R71/home/carol/.claude/file-history/s1/f299@v1\")\" = \"\$(hash71 'v299\\n')\" ]"
+if [ "$LOCKED71" = yes ]; then
+  check "#71 unreadable file in the batch: error_copy row with its error" "row \"$D71/m-locked.jsonl\" | grep -q '\"archive_path\":\"\",\"type\":\"file\",\"size\":7,.*\"sha256\":\"\",\"secret\":false,\"status\":\"error_copy\",\"target\":\"\",\"error\":\"[^\"]*Permission denied\"'"
+  check "#71 unreadable file in the batch: logged once" "[ \"\$(grep -c 'copy failed: .*/m-locked.jsonl: ' \"$OUT\"/batch71/*.log)\" = 1 ]"
+  check "#71 unreadable file in the batch: the rest collected" "[ \"\$(grep -c '\"status\":\"collected\"' \"\$M\")\" -eq 305 ] && ! tar -tzf \"\$A\" | grep -q m-locked"
+else
+  printf 'skip #71 unreadable file in a batch (running as root)\n'
+fi
+export CAC_NO_BATCH=1
+run nobatch71 --no-docker; _rc71=$?
+unset CAC_NO_BATCH
+check "#71 per-file run exit 0" "[ $_rc71 -eq 0 ]"
+check "#71 batched and per-file manifests match" "noatime71 \"\$M\" >\"$WORK/nb71.txt\" && noatime71 \"$M71\" | cmp -s - \"$WORK/nb71.txt\""
+check "#71 batched and per-file manifests in the same order" "sed 's/\"atime\":[0-9]*,//' \"\$M\" >\"$WORK/nb71o.txt\" && sed 's/\"atime\":[0-9]*,//' \"$M71\" | cmp -s - \"$WORK/nb71o.txt\""
+if shasum -a 256 /dev/null >/dev/null 2>&1; then
+  mkdir -p "$WORK/shasum71"
+  sed 's/command -v sha256sum /command -v cac-no-sha256sum /' "$SCRIPT" >"$WORK/shasum71/collector.sh"
+  _sc71=$SCRIPT; SCRIPT="$WORK/shasum71/collector.sh"
+  run shasum71 --no-docker; _rc71=$?
+  SCRIPT=$_sc71
+  check "#71 shasum run: exit 0, hash_tool shasum" "[ $_rc71 -eq 0 ] && grep -q '\"hash_tool\": \"shasum\"' \"\$S\""
+  check "#71 shasum run: manifest matches the sha256sum run" "noatime71 \"\$M\" | cmp -s - \"$WORK/nb71.txt\""
+else
+  printf 'skip #71 shasum path (no shasum)\n'
+fi
+ROOT=$_root71
+[ "$LOCKED71" = no ] || chmod 600 "$D71/m-locked.jsonl"
+
 if [ "$fail" = 0 ]; then printf 'ALL PASSED (%s)\n' "$SHELL_UNDER_TEST"; rm -rf "$WORK"; else printf 'FAILURES (%s); work dir kept: %s\n' "$SHELL_UNDER_TEST" "$WORK"; fi
 exit "$fail"
