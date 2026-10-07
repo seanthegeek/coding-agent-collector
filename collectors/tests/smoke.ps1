@@ -1090,8 +1090,8 @@ if ($Lone71) {
   Check '#71 lone surrogate in a name is written as U+FFFD' { @($um71.rows | Where-Object { $_.path -ceq $w71 -and $_.status -eq 'collected' -and $_.sha256 -eq $sha71 }).Count -eq 1 }
 }
 
-# 2026-10-07 (#72): Windows tar.exe exits 0xC0000005 on a name outside the
-# ANSI code page. The collector logs the exit code, notes the fallback, and
+# 2026-10-07 (#72): some Windows tar.exe builds exit 0xC0000005 on a name
+# outside the ANSI code page. The collector logs the exit code, notes the fallback, and
 # writes the .tar.gz with its own tar writer, which keeps every name and the
 # staged links. Elsewhere the system tar writes it. Read with .NET, since
 # tar.exe cannot list these names either.
@@ -1099,10 +1099,18 @@ $a71 = Get-ChildItem -LiteralPath $o71 | Where-Object { $_.Name -match '\.(tar\.
 $s71 = Get-Content -LiteralPath (Get-ChildItem -LiteralPath $o71 -Filter '*.collection.json' | Select-Object -First 1).FullName -Raw | ConvertFrom-Json
 $l71 = [System.IO.File]::ReadAllText((Get-ChildItem -LiteralPath $o71 -Filter '*.log' | Select-Object -First 1).FullName)
 Check '#72 non-ASCII image archived as a .tar.gz named in collection.json' { $a71 -and $a71.Name -like '*.tar.gz' -and $s71.archive -eq $a71.Name }
+# Not every tar.exe build crashes (the windows-latest runner's stores these
+# names), so the fallback checks follow the archiver that ran; the forced tar
+# failure further down tests the fallback on every host.
 if ($env:OS -eq 'Windows_NT' -and (Get-Command tar.exe -ErrorAction SilentlyContinue)) {
-  Check '#72 Windows: the PowerShell tar writer wrote it after tar.exe failed' { $s71.capabilities.archiver -eq 'PowerShell tar writer' }
-  Check '#72 Windows: notes give the tar.exe exit code and the fallback' { @($s71.notes | Where-Object { $_ -match '^tar\.exe failed \(exit code 0x[0-9A-F]{8}\); fell back to PowerShell tar writer$' }).Count -eq 1 }
-  Check '#72 Windows: the log gives the tar.exe exit code' { $l71 -match '(?m)^tar\.exe failed: exit code 0x[0-9A-F]{8}\r?$' }
+  if ($s71.capabilities.archiver -eq 'tar.exe') {
+    Write-Output 'note: tar.exe stored the non-ASCII names here; #72 fallback checked through the forced tar failure only'
+    Check '#72 Windows: tar.exe wrote it, so no fallback note' { @($s71.notes | Where-Object { $_ -match '^tar\.exe failed' }).Count -eq 0 }
+  } else {
+    Check '#72 Windows: the PowerShell tar writer wrote it after tar.exe failed' { $s71.capabilities.archiver -eq 'PowerShell tar writer' }
+    Check '#72 Windows: notes give the tar.exe exit code and the fallback' { @($s71.notes | Where-Object { $_ -match '^tar\.exe failed \(exit code 0x[0-9A-F]{8}\); fell back to PowerShell tar writer$' }).Count -eq 1 }
+    Check '#72 Windows: the log gives the tar.exe exit code' { $l71 -match '(?m)^tar\.exe failed: exit code 0x[0-9A-F]{8}\r?$' }
+  }
 }
 # Checked for the default run and for one with the writer forced, so the pax
 # records are tested on every platform; the forced one is also extracted with
@@ -1117,7 +1125,8 @@ $a72 = Get-ChildItem -LiteralPath $o72 | Where-Object { $_.Name -match '\.tar\.g
 $um72 = Read-Manifest71 (Get-ChildItem -LiteralPath $o72 -Filter '*.manifest.jsonl' | Select-Object -First 1).FullName
 Check '#72 non-ASCII image, writer forced: exit 0 and a .tar.gz' { $rc72 -eq 0 -and $a72 }
 $want71 = @($UNames71); if ($Lone71) { $want71 += $Lone71.Replace([string][char]0xD800, [string][char]0xFFFD) }
-foreach ($pair in @(@('', $a71, $um71), @(' [writer]', $a72, $um72))) {
+# tar.exe stores an absolute link target with a \\?\ prefix (docs/windows.md).
+foreach ($pair in @(@('', $a71, $um71, [string]$s71.capabilities.archiver), @(' [writer]', $a72, $um72, 'PowerShell tar writer'))) {
   $tag = $pair[0]; $t71 = Read-TarGz $pair[1].FullName; $rows72 = $pair[2].rows
   Check ('#72 non-ASCII archive: header checksums valid, two zero blocks at the end' + $tag) { $t71.badsum -eq 0 -and $t71.end -and $t71.members.Count -gt 3 }
   foreach ($n71 in $want71) {
@@ -1126,7 +1135,7 @@ foreach ($pair in @(@('', $a71, $um71), @(' [writer]', $a72, $um72))) {
   }
   if ($Link72) {
     $row72 = @($rows72 | Where-Object { $_.path -ceq ([System.IO.Path]::Combine($UDir71, $Link72)) }) | Select-Object -First 1
-    Check ('#72 non-ASCII symlink kept in the archive with its target' + $tag) { $row72 -and $row72.status -eq 'symlink' -and $row72.archive_path -and @($t71.members | Where-Object { $_.name -ceq ('./' + $row72.archive_path) -and $_.type -eq '2' -and $_.link -ceq $Link72Target }).Count -eq 1 }
+    Check ('#72 non-ASCII symlink kept in the archive with its target' + $tag) { $row72 -and $row72.status -eq 'symlink' -and $row72.archive_path -and @($t71.members | Where-Object { $_.name -ceq ('./' + $row72.archive_path) -and $_.type -eq '2' -and ($_.link -ceq $Link72Target -or ($pair[3] -eq 'tar.exe' -and $_.link -ceq ('\\?\' + $Link72Target))) }).Count -eq 1 }
   }
 }
 if ($Sep -eq '/') {

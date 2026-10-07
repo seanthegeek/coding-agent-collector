@@ -15,10 +15,11 @@ an archive wins:
 | the PowerShell tar writer in the script | `PowerShell tar writer` | `.tar.gz` | `tar.exe` is not on the `PATH`, exits non-zero or leaves no archive |
 | `System.IO.Compression.ZipArchive` | `ZipFile` | `.zip` | the PowerShell tar writer failed too |
 
-The built-in `tar.exe` (bsdtar 3.8.8, `tar.exe` 10.0.26100) exits `0xC0000005`,
-an access violation, when the staging tree holds a name outside the ANSI
-code page, such as a CJK or Cyrillic one; no option or format makes it
-store such names. When `tar.exe` fails, the log has a line
+Some builds of the built-in `tar.exe` exit `0xC0000005`, an access
+violation, when the staging tree holds a name outside the ANSI code page,
+such as a CJK or Cyrillic one. This was seen with bsdtar 3.8.8 (`tar.exe`
+10.0.26100) on Windows 11, where no option or format makes it store such
+names; the `tar.exe` on the GitHub `windows-latest` runner stores them. When `tar.exe` fails, the log has a line
 `tar.exe failed: exit code 0xC0000005` (hex for a negative exit code,
 decimal otherwise), its partial archive is removed, and `collection.json`
 `notes` gets `tar.exe failed (exit code 0xC0000005); fell back to PowerShell

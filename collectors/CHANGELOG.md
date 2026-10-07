@@ -26,7 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - On Windows, a collection with a file name outside the ANSI code page
   (CJK, Cyrillic) no longer falls back to a zip without saying why:
-  `tar.exe` crashes on such names, and the collector now logs its exit
+  some `tar.exe` builds crash on such names, and the collector now logs its exit
   code (`tar.exe failed: exit code 0xC0000005`), adds a `notes` entry to
   `collection.json` for each fallback, and writes the `.tar.gz` with its
   own tar writer (#72).
