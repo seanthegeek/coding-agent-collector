@@ -1125,7 +1125,9 @@ $a72 = Get-ChildItem -LiteralPath $o72 | Where-Object { $_.Name -match '\.tar\.g
 $um72 = Read-Manifest71 (Get-ChildItem -LiteralPath $o72 -Filter '*.manifest.jsonl' | Select-Object -First 1).FullName
 Check '#72 non-ASCII image, writer forced: exit 0 and a .tar.gz' { $rc72 -eq 0 -and $a72 }
 $want71 = @($UNames71); if ($Lone71) { $want71 += $Lone71.Replace([string][char]0xD800, [string][char]0xFFFD) }
-# tar.exe stores an absolute link target with a \\?\ prefix (docs/windows.md).
+# tar.exe rewrites a link target (\\?\ prefix, / separators, and on a runner
+# a resolved short path; docs/windows.md), so for its archive only the target's
+# file name is compared, and the stored target is printed for diagnosis.
 foreach ($pair in @(@('', $a71, $um71, [string]$s71.capabilities.archiver), @(' [writer]', $a72, $um72, 'PowerShell tar writer'))) {
   $tag = $pair[0]; $t71 = Read-TarGz $pair[1].FullName; $rows72 = $pair[2].rows
   Check ('#72 non-ASCII archive: header checksums valid, two zero blocks at the end' + $tag) { $t71.badsum -eq 0 -and $t71.end -and $t71.members.Count -gt 3 }
@@ -1135,7 +1137,8 @@ foreach ($pair in @(@('', $a71, $um71, [string]$s71.capabilities.archiver), @(' 
   }
   if ($Link72) {
     $row72 = @($rows72 | Where-Object { $_.path -ceq ([System.IO.Path]::Combine($UDir71, $Link72)) }) | Select-Object -First 1
-    Check ('#72 non-ASCII symlink kept in the archive with its target' + $tag) { $row72 -and $row72.status -eq 'symlink' -and $row72.archive_path -and @($t71.members | Where-Object { $_.name -ceq ('./' + $row72.archive_path) -and $_.type -eq '2' -and ($_.link -ceq $Link72Target -or ($pair[3] -eq 'tar.exe' -and $_.link -ceq ('\\?\' + $Link72Target))) }).Count -eq 1 }
+    if ($pair[3] -eq 'tar.exe' -and $row72) { $lk72 = @($t71.members | Where-Object { $_.name -ceq ('./' + $row72.archive_path) }) | Select-Object -First 1; if ($lk72) { Write-Output ('note: tar.exe stored the #72 link target as ' + ([string]$lk72.link -replace '[^\x20-\x7e]', '?')) } }
+    Check ('#72 non-ASCII symlink kept in the archive with its target' + $tag) { $row72 -and $row72.status -eq 'symlink' -and $row72.archive_path -and @($t71.members | Where-Object { $_.name -ceq ('./' + $row72.archive_path) -and $_.type -eq '2' -and ($_.link -ceq $Link72Target -or ($pair[3] -eq 'tar.exe' -and $_.link.Replace('\', '/').EndsWith('/' + $UNames71[1], [System.StringComparison]::Ordinal))) }).Count -eq 1 }
   }
 }
 if ($Sep -eq '/') {
